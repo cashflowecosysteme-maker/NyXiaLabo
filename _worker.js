@@ -354,7 +354,7 @@ export default {
       try {
         const groupsRes = await fetch("https://api.heygen.com/v2/avatar_group.list", { headers: { "X-Api-Key": env.HEYGEN_API_KEY } });
         const groupsData = await groupsRes.json();
-        const groups = (groupsData.data && groupsData.data.avatar_groups) || groupsData.avatar_groups || [];
+        const groups = (groupsData.data && groupsData.data.avatar_group_list) || groupsData.avatar_group_list || [];
 
         const avatars = [];
         for (const g of groups) {
@@ -370,10 +370,10 @@ export default {
               }));
             } else {
               // Fallback : au moins montrer le groupe si le détail des looks échoue
-              avatars.push({ id: g.id, name: g.name || "Avatar", preview: g.preview_image_url });
+              avatars.push({ id: g.id, name: g.name || "Avatar", preview: g.preview_image || g.preview_image_url });
             }
           } catch (e) {
-            avatars.push({ id: g.id, name: g.name || "Avatar", preview: g.preview_image_url });
+            avatars.push({ id: g.id, name: g.name || "Avatar", preview: g.preview_image || g.preview_image_url });
           }
         }
         return json({ avatars, raw_groups_count: groups.length, debug_raw: avatars.length === 0 ? groupsData : undefined });
