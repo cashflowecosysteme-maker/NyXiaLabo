@@ -504,6 +504,11 @@
         heygenVoices = results[1].voices || []
         heygenLoaded = true
         renderHeygenForm()
+        if (!heygenAvatars.length && results[0].debug_raw) {
+          document.getElementById('heygen-body').insertAdjacentHTML('afterbegin',
+            '<div class="result-box result-error" style="margin-bottom:16px">Aucun avatar reconnu (' + results[0].raw_groups_count + ' groupe(s) trouvé(s) côté HeyGen). Réponse brute pour diagnostic :<br><br>' +
+            esc(JSON.stringify(results[0].debug_raw, null, 2)).substring(0, 3000) + '</div>')
+        }
       }).catch(function (e) { document.getElementById('heygen-body').innerHTML = 'Erreur : ' + e.message })
     }
 
@@ -512,11 +517,51 @@
       var voiceOptions = heygenVoices.map(function (v) { return '<option value="' + v.id + '">' + esc(v.name) + (v.language ? ' (' + esc(v.language) + ')' : '') + '</option>' }).join('')
 
       document.getElementById('heygen-body').innerHTML =
+        '<div class="form-card" style="max-width:600px;margin:0 0 24px">' +
+        '<div class="panel-header-sub" style="margin-bottom:12px">✨ Créer un nouvel avatar (Photo Avatar) — à partir d\'une photo de toi ou d\'une praticienne</div>' +
+        '<div class="field"><label class="f-label">Nom de l\'avatar</label><input type="text" id="hg-new-name" placeholder="ex: Diane Coach"></div>' +
+        '<div class="field"><label class="f-label">Photo (visage net, bonne lumière)</label><input type="file" id="hg-new-photo" accept="image/*"></div>' +
+        '<button class="btn-primary" id="hg-create-btn" onclick="heygenCreateAvatar()">🧬 Créer l\'avatar</button>' +
+        '<div id="hg-create-result" style="margin-top:12px;font-size:12px;color:var(--t3)"></div>' +
+        '</div>' +
         '<div class="field-row"><div class="field"><label class="f-label">Avatar (' + heygenAvatars.length + ')</label><select id="hg-avatar">' + avatarOptions + '</select></div>' +
         '<div class="field"><label class="f-label">Voix (' + heygenVoices.length + ')</label><select id="hg-voice">' + voiceOptions + '</select></div></div>' +
         '<div class="field"><label class="f-label">Script (ce que l\'avatar va dire)</label><textarea id="hg-script" style="min-height:120px" placeholder="Bonjour, je suis..."></textarea></div>' +
         '<button class="btn-primary" id="hg-generate" onclick="heygenGenerate()">🎬 Générer la vidéo</button>' +
         '<div id="hg-result" style="margin-top:20px"></div>'
+    }
+
+    function heygenCreateAvatar() {
+      var name = document.getElementById('hg-new-name').value.trim()
+      var fileInput = document.getElementById('hg-new-photo')
+      var file = fileInput.files[0]
+      var resultEl = document.getElementById('hg-create-result')
+      var btn = document.getElementById('hg-create-btn')
+      if (!name) { alert('Donne un nom à l\'avatar.'); return }
+      if (!file) { alert('Choisis une photo.'); return }
+
+      btn.disabled = true; btn.textContent = 'Envoi de la photo...'
+      resultEl.textContent = ''
+
+      var reader = new FileReader()
+      reader.onload = function () {
+        fetch('/api/heygen/create-avatar', {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({ name: name, image_base64: reader.result })
+        })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          btn.disabled = false; btn.textContent = '🧬 Créer l\'avatar'
+          if (data.error) { resultEl.innerHTML = '<span style="color:#ff8fab">Erreur : ' + esc(data.error) + '</span>'; return }
+          resultEl.innerHTML = '<span style="color:var(--green)">✓ Avatar "' + esc(name) + '" créé — il apparaît dans la liste ci-dessous.</span>'
+          heygenView()
+        })
+        .catch(function (e) {
+          btn.disabled = false; btn.textContent = '🧬 Créer l\'avatar'
+          resultEl.innerHTML = '<span style="color:#ff8fab">Erreur réseau : ' + e.message + '</span>'
+        })
+      }
+      reader.readAsDataURL(file)
     }
 
     function heygenGenerate() {
