@@ -44,13 +44,23 @@ const DEFAULT_TOOLS = [
   { id: "grok", name: "Grok 4.3", icon: "🤖", category: "conversation", providerId: "openrouter", model: "x-ai/grok-4.3", system_prompt: "", max_tokens: 2000, temperature: 0.7 },
   { id: "livre-claude", name: "Chapitre — Claude Opus 4.8", icon: "📖", category: "livre", providerId: "openrouter", model: "anthropic/claude-opus-4.8", system_prompt: "Tu écris un chapitre complet et cohérent en français, dans un style romanesque immersif. Vise environ 30 000 caractères sauf indication contraire.", max_tokens: 8000, temperature: 0.85 },
   { id: "livre-grok", name: "Chapitre — Grok 4.3", icon: "📖", category: "livre", providerId: "openrouter", model: "x-ai/grok-4.3", system_prompt: "Tu écris un chapitre complet et cohérent en français, dans un style romanesque immersif. Vise environ 30 000 caractères sauf indication contraire.", max_tokens: 8000, temperature: 0.85 },
-  { id: "narration-1", name: "Continuité personnages", icon: "🎭", category: "narration", providerId: "openrouter", model: "anthropic/claude-sonnet-5", system_prompt: "Tu es gardien de la continuité narrative de l'univers des Terres de Brume. Garde la cohérence des personnages, de leurs voix, et de la chronologie.", max_tokens: 3000, temperature: 0.9 }
+  { id: "narration-1", name: "Continuité personnages", icon: "🎭", category: "narration", providerId: "openrouter", model: "anthropic/claude-sonnet-5", system_prompt: "Tu es gardien de la continuité narrative de l'univers des Terres de Brume. Garde la cohérence des personnages, de leurs voix, et de la chronologie.", max_tokens: 3000, temperature: 0.9 },
+  { id: "img-gpt2", name: "GPT Image 2", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "openai/gpt-image-2" },
+  { id: "img-gpt15", name: "GPT Image 1.5", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "openai/gpt-image-1-5" },
+  { id: "img-grok", name: "Grok Imagine Image Pro", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "x-ai/grok-imagine-image-pro", aspect_ratio: "16:9" },
+  { id: "img-imagen4u", name: "Imagen 4.0 Ultra", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "imagen-4.0-ultra-generate-preview-06-06", aspect_ratio: "1:1" },
+  { id: "img-imagen4ug", name: "Imagen 4.0 Ultra Generate", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "google/imagen-4.0-ultra-generate-001", aspect_ratio: "1:1" },
+  { id: "img-recraft", name: "Recraft V3", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "recraft-v3" },
+  { id: "img-wan27", name: "Wan 2.7 Pro", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "alibaba/wan-2-7-image-pro" },
+  { id: "img-gemini25", name: "Gemini 2.5 Flash Image", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "google/gemini-2.5-flash-image" },
+  { id: "img-zturbo", name: "Z-Image Turbo", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "alibaba/z-image-turbo" }
 ];
 
 const CATEGORY_LABELS = {
   conversation: { icon: "💬", name: "Conversation" },
   livre: { icon: "📖", name: "Écriture de livre" },
   narration: { icon: "🎭", name: "Narration & personnages" },
+  image: { icon: "🎨", name: "Génération d'image" },
   consultation: { icon: "🧭", name: "Outils Consultation" },
   exercices: { icon: "✨", name: "Générateur d'exercices" },
   contenu: { icon: "🖋️", name: "Outils création contenu" },
@@ -109,6 +119,27 @@ async function callOpenAiCompatible(provider, env, { model, messages, max_tokens
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error?.message || `Erreur ${provider.id}: ${res.status}`);
   return { text: data.choices?.[0]?.message?.content ?? "", usage: data.usage || null, elapsedMs };
+}
+
+async function callImageGeneration(provider, env, { model, prompt, aspect_ratio }) {
+  const apiKey = provider.api_key_secret ? env[provider.api_key_secret] : null;
+  if (!apiKey) throw new Error(`Clé API manquante pour ${provider.id} (secret: ${provider.api_key_secret})`);
+
+  const started = Date.now();
+  const payload = { model, prompt };
+  if (aspect_ratio) payload.aspect_ratio = aspect_ratio;
+
+  const res = await fetch(`${provider.base_url}/images/generations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+    body: JSON.stringify(payload)
+  });
+  const elapsedMs = Date.now() - started;
+  const data = await res.json();
+  if (!res.ok) throw new Error((data.error && (data.error.message || JSON.stringify(data.error))) || `Erreur ${provider.id}: ${res.status}`);
+
+  const images = (data.data || []).map(d => d.url || (d.b64_json ? "data:image/png;base64," + d.b64_json : null)).filter(Boolean);
+  return { images, elapsedMs };
 }
 
 // ---- Helpers KV ----
@@ -177,9 +208,11 @@ export default {
         const id = uniqueId(slugify(body.name), tools.map(t => t.id));
         const tool = {
           id, name: body.name, icon: body.icon || "⚙️", category: body.category || "conversation",
+          kind: body.kind || "chat",
           providerId: body.providerId, model: body.model,
           system_prompt: body.system_prompt || "", max_tokens: Number(body.max_tokens) || 2000,
-          temperature: body.temperature !== undefined ? Number(body.temperature) : 0.7
+          temperature: body.temperature !== undefined ? Number(body.temperature) : 0.7,
+          aspect_ratio: body.aspect_ratio || undefined
         };
         tools.push(tool);
         await saveTools(env, tools);
@@ -299,6 +332,23 @@ export default {
         return { id: v.id, thumb: v.image, preview: sd ? sd.link : null, full: hd ? hd.link : null, duration: v.duration, photographer: v.user ? v.user.name : "", url: v.url };
       });
       return json({ videos });
+    }
+
+    // --- Génération d'image (outils de type "image") ---
+    if (request.method === "POST" && url.pathname === "/api/generate-image") {
+      try {
+        const body = await request.json();
+        const tools = await getTools(env);
+        const tool = tools.find(t => t.id === body.toolId);
+        if (!tool) return json({ error: "Outil introuvable" }, 400);
+        const providers = await getProviders(env);
+        const provider = providers.find(p => p.id === tool.providerId);
+        if (!provider) return json({ error: `Fournisseur inconnu: ${tool.providerId}` }, 400);
+        const result = await callImageGeneration(provider, env, { model: tool.model, prompt: body.prompt, aspect_ratio: body.aspect_ratio || tool.aspect_ratio });
+        return json(result);
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
     }
 
     // --- HeyGen : créer un nouvel avatar (Photo Avatar) à partir d'une image ---
