@@ -13,91 +13,85 @@
   <style>
     :root {
       --bg1: #0A1628; --bg2: #0F1C3F; --bg3: #1A2554; --sidebar: #080f22;
-      --p: #7B5CFF; --p2: #5A6CFF; --p3: #4FA3FF; --glow: rgba(123,92,255,0.4);
+      --p: #7B5CFF; --p2: #5A6CFF; --p3: #4FA3FF;
       --t: #FFFFFF; --t2: #D6D9F0; --t3: #8891B8; --t4: #4a5278;
-      --green: #00E676; --gold: #F4C842; --red: #FF4B6E; --r: 14px;
+      --green: #00E676; --gold: #F4C842; --red: #FF4B6E;
     }
     *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
     html, body { height: 100%; overflow: hidden; }
     body { background: var(--bg1); color: var(--t2); font-family: 'Outfit', sans-serif; display: flex; flex-direction: column; }
     #starry-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 
-    header {
-      position: relative; z-index: 100; height: 56px;
-      background: rgba(8,15,34,0.95); border-bottom: 1px solid rgba(123,92,255,0.12);
-      backdrop-filter: blur(20px); display: flex; align-items: center; justify-content: space-between; padding: 0 20px 0 0; flex-shrink: 0;
-    }
+    header { position: relative; z-index: 100; height: 56px; background: rgba(8,15,34,0.95); border-bottom: 1px solid rgba(123,92,255,0.12); backdrop-filter: blur(20px); display: flex; align-items: center; justify-content: space-between; padding: 0 20px 0 0; flex-shrink: 0; }
     .header-brand { width: 240px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-right: 1px solid rgba(123,92,255,0.1); height: 100%; }
-    .header-brand .badge {
-      width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-      font-size: 15px; background: linear-gradient(135deg, var(--p), var(--p2));
-      box-shadow: 0 0 20px rgba(123,92,255,0.4); animation: breathe 3s ease-in-out infinite; flex-shrink: 0;
-    }
-    @keyframes breathe { 0%,100% { box-shadow: 0 0 20px rgba(123,92,255,0.4); } 50% { box-shadow: 0 0 35px rgba(123,92,255,0.7), 0 0 60px rgba(123,92,255,0.2); } }
-    .brand-info { line-height: 1.2; }
+    .header-brand .badge { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; background: linear-gradient(135deg, var(--p), var(--p2)); box-shadow: 0 0 20px rgba(123,92,255,0.4); }
     .brand-name { font-size: 15px; font-weight: 700; background: linear-gradient(135deg, #a78bfa, var(--p3)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-    .brand-status { font-size: 11px; color: var(--green); display: flex; align-items: center; gap: 4px; }
-    .brand-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse-green 2s ease-in-out infinite; }
-    @keyframes pulse-green { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+    .brand-status { font-size: 11px; color: var(--green); }
     .header-center { flex: 1; display: flex; align-items: center; justify-content: center; }
     .welcome-text { font-family: 'Cormorant Garamond', serif; font-size: 17px; font-style: italic; color: var(--t3); }
     .welcome-text strong { color: var(--gold); font-style: normal; font-weight: 600; }
-    .header-actions { display: flex; align-items: center; gap: 10px; }
-    .btn-header { padding: 6px 16px; border-radius: 50px; border: none; font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .2s; text-decoration: none; }
+    .btn-header { padding: 6px 16px; border-radius: 50px; border: none; font-size: 12px; font-weight: 600; cursor: pointer; }
     .btn-logout { background: rgba(255,75,110,0.1); border: 1px solid rgba(255,75,110,0.25); color: #ff8fab; }
-    .btn-logout:hover { background: rgba(255,75,110,0.2); }
 
     .app-body { display: flex; flex: 1; overflow: hidden; position: relative; z-index: 1; }
-    aside { width: 240px; flex-shrink: 0; background: rgba(8,15,34,0.97); border-right: 1px solid rgba(123,92,255,0.1); display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; }
-    .sidebar-section { padding: 20px 12px 8px; }
+    aside { width: 250px; flex-shrink: 0; background: rgba(8,15,34,0.97); border-right: 1px solid rgba(123,92,255,0.1); display: flex; flex-direction: column; overflow-y: auto; }
+    .sidebar-section { padding: 16px 12px 6px; }
     .sidebar-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; color: var(--t4); text-transform: uppercase; padding: 0 8px; margin-bottom: 6px; }
-    .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: all .2s; color: var(--t3); font-size: 14px; font-weight: 500; border: 1px solid transparent; margin-bottom: 2px; user-select: none; }
-    .nav-item:hover { background: rgba(123,92,255,0.08); color: var(--t2); border-color: rgba(123,92,255,0.1); }
-    .nav-item.active { background: rgba(123,92,255,0.15); color: var(--t); border-color: rgba(123,92,255,0.3); box-shadow: 0 0 16px rgba(123,92,255,0.1); }
-    .nav-item .nav-icon { font-size: 16px; flex-shrink: 0; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; cursor: pointer; color: var(--t3); font-size: 13.5px; font-weight: 500; border: 1px solid transparent; margin-bottom: 2px; }
+    .nav-item:hover { background: rgba(123,92,255,0.08); color: var(--t2); }
+    .nav-item.active { background: rgba(123,92,255,0.15); color: var(--t); border-color: rgba(123,92,255,0.3); }
     .sidebar-divider { height: 1px; background: rgba(123,92,255,0.08); margin: 8px 12px; }
 
-    .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
-    .panel-header { padding: 16px 24px; border-bottom: 1px solid rgba(123,92,255,0.1); background: rgba(10,22,40,0.6); backdrop-filter: blur(10px); flex-shrink: 0; }
-    .panel-header-name { font-family: 'Cormorant Garamond', serif; font-size: 20px; font-weight: 600; background: linear-gradient(135deg, #a78bfa, var(--p3)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .panel-header { padding: 14px 24px; border-bottom: 1px solid rgba(123,92,255,0.1); background: rgba(10,22,40,0.6); flex-shrink: 0; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .panel-header-name { font-family: 'Cormorant Garamond', serif; font-size: 19px; font-weight: 600; background: linear-gradient(135deg, #a78bfa, var(--p3)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
     .panel-header-sub { font-size: 12px; color: var(--t3); margin-top: 2px; }
+    .panel-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
 
-    .test-area { flex: 1; overflow-y: auto; padding: 24px; max-width: 780px; width: 100%; margin: 0 auto; }
-    .row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-    .field { flex: 1; min-width: 180px; }
-    .field.small { flex: 0 0 120px; min-width: 120px; }
+    .btn-mini { padding: 7px 14px; border-radius: 8px; border: 1px solid rgba(123,92,255,0.25); background: rgba(123,92,255,0.08); color: var(--t2); font-size: 12px; font-weight: 600; cursor: pointer; }
+    .btn-mini:hover { background: rgba(123,92,255,0.16); }
+    .btn-primary { padding: 10px 20px; border-radius: 50px; border: none; background: linear-gradient(135deg, var(--p), var(--p2)); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 0 20px rgba(123,92,255,0.35); }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-danger { padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,75,110,0.3); background: rgba(255,75,110,0.08); color: #ff8fab; font-size: 12px; cursor: pointer; }
+
+    /* Chat */
+    .chat-messages { display: flex; flex-direction: column; gap: 14px; max-width: 760px; margin: 0 auto; }
+    .msg { display: flex; gap: 10px; max-width: 82%; }
+    .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+    .msg.bot { align-self: flex-start; }
+    .msg-bubble { padding: 11px 15px; border-radius: 14px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+    .msg.bot .msg-bubble { background: rgba(26,37,84,0.7); border: 1px solid rgba(123,92,255,0.12); border-top-left-radius: 4px; }
+    .msg.user .msg-bubble { background: linear-gradient(135deg, var(--p), var(--p2)); color: #fff; border-top-right-radius: 4px; }
+    .chat-input-wrap { max-width: 760px; margin: 16px auto 0; display: flex; gap: 10px; align-items: flex-end; }
+    .chat-input { flex: 1; background: rgba(15,28,63,0.7); border: 1px solid rgba(123,92,255,0.2); border-radius: 14px; color: var(--t); font-size: 14px; padding: 12px 16px; outline: none; resize: none; min-height: 46px; max-height: 140px; font-family: inherit; }
+    .btn-send { width: 44px; height: 44px; border-radius: 12px; border: none; background: linear-gradient(135deg, var(--p), var(--p2)); color: #fff; cursor: pointer; font-size: 16px; flex-shrink:0; }
+    .btn-send:disabled { opacity: .5; }
+    .chat-empty { max-width: 760px; margin: 40px auto; text-align: center; color: var(--t4); font-size: 13px; }
+    .tool-settings-toggle { max-width: 760px; margin: 0 auto 16px; }
+    .tool-settings { max-width: 760px; margin: 0 auto 16px; background: rgba(26,37,84,0.4); border: 1px solid rgba(123,92,255,0.12); border-radius: 12px; padding: 14px; display: none; }
+    .tool-settings.open { display: block; }
+    .tool-settings textarea { width: 100%; min-height: 90px; }
+
+    /* Forms & tables */
     label.f-label { font-size: 11px; font-weight: 600; color: var(--t3); text-transform: uppercase; letter-spacing: 0.6px; display: block; margin-bottom: 6px; }
-    select, textarea, input[type=number] {
-      width: 100%; background: rgba(15,28,63,0.7); border: 1px solid rgba(123,92,255,0.2); border-radius: 12px;
-      color: var(--t); font-family: 'Outfit', sans-serif; font-size: 14px; padding: 11px 14px; outline: none;
-      transition: border-color .2s;
-    }
-    select:focus, textarea:focus, input:focus { border-color: rgba(123,92,255,0.5); }
-    textarea { min-height: 130px; resize: vertical; line-height: 1.5; }
+    select, textarea, input[type=text], input[type=number] { width: 100%; background: rgba(15,28,63,0.7); border: 1px solid rgba(123,92,255,0.2); border-radius: 10px; color: var(--t); font-size: 14px; padding: 10px 13px; outline: none; font-family: inherit; }
+    .field { margin-bottom: 14px; }
+    .field-row { display: flex; gap: 12px; }
+    .field-row .field { flex: 1; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; color: var(--t4); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 10px; border-bottom: 1px solid rgba(123,92,255,0.15); }
+    td { padding: 10px; border-bottom: 1px solid rgba(123,92,255,0.06); color: var(--t2); }
+    .row-actions { display: flex; gap: 6px; }
+    .form-card { background: rgba(26,37,84,0.4); border: 1px solid rgba(123,92,255,0.15); border-radius: 14px; padding: 20px; max-width: 600px; margin-top: 16px; }
 
-    .btn-run {
-      padding: 13px 28px; border-radius: 50px; border: none; background: linear-gradient(135deg, var(--p), var(--p2));
-      color: #fff; font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 700; cursor: pointer;
-      box-shadow: 0 0 24px rgba(123,92,255,0.4); transition: all .25s; display: flex; align-items: center; gap: 8px;
-    }
-    .btn-run:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 0 36px rgba(123,92,255,0.6); }
-    .btn-run:disabled { opacity: .5; cursor: not-allowed; }
-    .spinner-sm { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; display: none; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .result-box { background: rgba(26,37,84,0.5); border: 1px solid rgba(123,92,255,0.15); border-radius: 14px; padding: 16px; white-space: pre-wrap; font-size: 13px; line-height: 1.6; max-height: 500px; overflow-y: auto; }
+    .pexels-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 12px; margin-top: 16px; }
+    .pexels-item img { width: 100%; border-radius: 10px; display: block; }
+    .pexels-item { font-size: 11px; color: var(--t4); }
+    .pexels-item a { color: var(--t3); text-decoration: none; }
 
-    .result-card {
-      margin-top: 24px; background: rgba(26,37,84,0.5); border: 1px solid rgba(123,92,255,0.15);
-      border-radius: 16px; padding: 20px; white-space: pre-wrap; font-size: 14px; line-height: 1.65; min-height: 60px;
-    }
-    .result-meta { display: flex; gap: 18px; margin-top: 12px; font-size: 12px; color: var(--t4); flex-wrap: wrap; }
-    .result-meta b { color: var(--t3); }
-    .result-error { color: #ff8fab; }
-
-    @media (max-width: 768px) {
-      aside { width: 200px; } .header-brand { width: 200px; } .header-center { display: none; }
-      .test-area { padding: 16px; }
-    }
-    @media (max-width: 600px) { aside { display: none; } .header-brand { width: auto; border: none; } }
+    @media (max-width: 768px) { aside { width: 210px; } .header-center { display: none; } }
+    @media (max-width: 600px) { aside { display: none; } }
   </style>
 </head>
 <body>
@@ -107,75 +101,23 @@
   <header>
     <div class="header-brand">
       <div class="badge">🧪</div>
-      <div class="brand-info">
-        <div class="brand-name">Sandbox IA</div>
-        <div class="brand-status">En ligne</div>
-      </div>
+      <div><div class="brand-name">Sandbox IA</div><div class="brand-status">● En ligne</div></div>
     </div>
-    <div class="header-center">
-      <div class="welcome-text">Espace de test ✦ <strong>Diane</strong></div>
-    </div>
-    <div class="header-actions">
-      <button class="btn-header btn-logout" onclick="logout()">Déconnexion</button>
-    </div>
+    <div class="header-center"><div class="welcome-text">Espace de test ✦ <strong>Diane</strong></div></div>
+    <div><button class="btn-header btn-logout" onclick="logout()">Déconnexion</button></div>
   </header>
 
   <div class="app-body">
-    <aside>
-      <div class="sidebar-section">
-        <div class="sidebar-label">Divisions</div>
-        <div id="nav-list"></div>
-      </div>
-      <div class="sidebar-divider"></div>
-      <div class="sidebar-section">
-        <div class="sidebar-label">Outils</div>
-        <div class="nav-item" id="nav-explore" onclick="showExplore()">
-          <span class="nav-icon">🔎</span> Explorer les modèles
-        </div>
-      </div>
-    </aside>
-
+    <aside id="sidebar"></aside>
     <div class="main-content">
       <div class="panel-header">
-        <div class="panel-header-name" id="panel-title">Conversation</div>
-        <div class="panel-header-sub" id="panel-sub">Teste un prompt sur n'importe quel modèle de cette division</div>
+        <div>
+          <div class="panel-header-name" id="panel-title">—</div>
+          <div class="panel-header-sub" id="panel-sub"></div>
+        </div>
+        <div id="panel-actions"></div>
       </div>
-
-      <div class="test-area">
-        <div class="row">
-          <div class="field">
-            <label class="f-label">Fournisseur</label>
-            <select id="provider"></select>
-          </div>
-          <div class="field">
-            <label class="f-label">Modèle</label>
-            <select id="model"></select>
-          </div>
-        </div>
-        <div class="row">
-          <div class="field small">
-            <label class="f-label">Max tokens</label>
-            <input type="number" id="maxTokens" value="2000">
-          </div>
-          <div class="field small">
-            <label class="f-label">Température</label>
-            <input type="number" id="temperature" value="0.7" step="0.1" min="0" max="2">
-          </div>
-        </div>
-
-        <label class="f-label">Prompt</label>
-        <textarea id="prompt" placeholder="Écris ton prompt de test ici..."></textarea>
-
-        <div style="margin-top:16px">
-          <button class="btn-run" id="btn-run" onclick="runTest()">
-            <div class="spinner-sm" id="spinner"></div>
-            <span id="run-text">Lancer le test</span>
-          </button>
-        </div>
-
-        <div class="result-card" id="result">—</div>
-        <div class="result-meta" id="result-meta"></div>
-      </div>
+      <div class="panel-body" id="panel-body"></div>
     </div>
   </div>
 
@@ -183,172 +125,331 @@
 
   <script>
     var sessionToken = sessionStorage.getItem('sandbox_token') || ''
-    var config = { providers: [] }
-    var currentDivision = 'conversation'
-    var exploreMode = false
+    var tools = [], providers = []
+    var chatHistories = {} // toolId -> [{role, content}]
+    var currentView = 'chat', currentToolId = null
 
-    var DIVISION_LABELS = {
-      conversation: { icon: '💬', name: 'Conversation', sub: "Chat libre — Claude, GPT, Gemini, Z (GLM)" },
-      livre: { icon: '📖', name: 'Écriture de livre', sub: "Génération longue — jusqu'à un chapitre complet" },
-      narration: { icon: '🎭', name: 'Narration & personnages', sub: "Continuité narrative, univers, dialogues" },
-      image: { icon: '🎨', name: "Génération d'image", sub: "À configurer — division en attente d'intégration" },
-      video: { icon: '🎬', name: 'Génération vidéo', sub: "À configurer — division en attente d'intégration" }
+    var CATEGORY_LABELS = {
+      conversation: { icon: '💬', name: 'Conversation' },
+      livre: { icon: '📖', name: 'Écriture de livre' },
+      narration: { icon: '🎭', name: 'Narration & personnages' },
+      consultation: { icon: '🧭', name: 'Outils Consultation' },
+      exercices: { icon: '✨', name: "Générateur d'exercices" },
+      contenu: { icon: '🖋️', name: 'Outils création contenu' },
+      publication: { icon: '📣', name: 'Publication de contenu' }
     }
 
     ;(function checkAuth() {
       if (!sessionToken) { window.location.href = '/login.html'; return }
-      fetch('/api/check-auth', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: sessionToken })
+      fetch('/api/check-auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: sessionToken }) })
+        .then(function (r) { return r.json() })
+        .then(function (data) { if (!data.valid) { window.location.href = '/login.html'; return } loadAll() })
+        .catch(function () { window.location.href = '/login.html' })
+    })()
+
+    function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + sessionToken } }
+    function logout() { sessionStorage.removeItem('sandbox_token'); window.location.href = '/login.html' }
+    function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML }
+
+    function loadAll() {
+      Promise.all([
+        fetch('/api/tools', { headers: authHeaders() }).then(function(r){ return r.json() }),
+        fetch('/api/providers', { headers: authHeaders() }).then(function(r){ return r.json() })
+      ]).then(function (results) {
+        tools = results[0].tools || []
+        providers = results[1].providers || []
+        renderSidebar()
+        if (tools.length) selectTool(tools[0].id)
+        else showToolsManager()
+      })
+    }
+
+    /* ═══════ SIDEBAR ═══════ */
+    function renderSidebar() {
+      var el = document.getElementById('sidebar')
+      var byCategory = {}
+      tools.forEach(function (t) { (byCategory[t.category] = byCategory[t.category] || []).push(t) })
+
+      var html = ''
+      Object.keys(byCategory).forEach(function (cat) {
+        var meta = CATEGORY_LABELS[cat] || { icon: '⚙️', name: cat.charAt(0).toUpperCase() + cat.slice(1) }
+        html += '<div class="sidebar-section"><div class="sidebar-label">' + meta.icon + ' ' + esc(meta.name) + '</div>'
+        byCategory[cat].forEach(function (t) {
+          var active = (currentView === 'chat' && currentToolId === t.id)
+          html += '<div class="nav-item' + (active ? ' active' : '') + '" onclick="selectTool(\'' + t.id + '\')">' +
+            '<span>' + t.icon + '</span> ' + esc(t.name) + '</div>'
+        })
+        html += '</div>'
+      })
+
+      html += '<div class="sidebar-divider"></div><div class="sidebar-section"><div class="sidebar-label">Gestion</div>' +
+        navBtn('tools', '🧰 Outils') + navBtn('providers', '🔌 Fournisseurs') +
+        navBtn('explore', '🔎 Explorer modèles') + navBtn('pexels', '🖼️ Banque Pexels') + '</div>'
+
+      el.innerHTML = html
+    }
+    function navBtn(view, label) {
+      var active = currentView === view
+      return '<div class="nav-item' + (active ? ' active' : '') + '" onclick="' + view + 'View()">' + label + '</div>'
+    }
+
+    /* ═══════ CHAT ═══════ */
+    function selectTool(id) {
+      currentView = 'chat'; currentToolId = id
+      renderSidebar()
+      var tool = tools.find(function (t) { return t.id === id })
+      document.getElementById('panel-title').textContent = tool.name
+      document.getElementById('panel-sub').textContent = (providers.find(function(p){return p.id===tool.providerId}) || {}).name + ' · ' + tool.model
+      document.getElementById('panel-actions').innerHTML = '<button class="btn-mini" onclick="toggleToolSettings()">⚙️ Réglages</button> <button class="btn-mini" onclick="clearChat()">🗑️ Effacer</button>'
+
+      var history = chatHistories[id] || []
+      var body = '<div class="tool-settings" id="tool-settings">' +
+        '<label class="f-label">Prompt système</label>' +
+        '<textarea id="settings-prompt" onchange="updateToolField(\'system_prompt\', this.value)">' + esc(tool.system_prompt) + '</textarea>' +
+        '<div class="field-row" style="margin-top:10px">' +
+          '<div class="field"><label class="f-label">Max tokens</label><input type="number" id="settings-maxtokens" value="' + tool.max_tokens + '" onchange="updateToolField(\'max_tokens\', Number(this.value))"></div>' +
+          '<div class="field"><label class="f-label">Température</label><input type="number" step="0.1" id="settings-temp" value="' + tool.temperature + '" onchange="updateToolField(\'temperature\', Number(this.value))"></div>' +
+        '</div></div>' +
+        '<div class="chat-messages" id="chat-messages">' +
+        (history.length ? history.map(renderMsg).join('') : '<div class="chat-empty">Écris un message pour commencer la conversation avec ' + esc(tool.name) + '.</div>') +
+        '</div>' +
+        '<div class="chat-input-wrap">' +
+          '<textarea class="chat-input" id="chat-input" rows="1" placeholder="Écris ton message..."></textarea>' +
+          '<button class="btn-send" id="btn-send" onclick="sendMessage()">➤</button>' +
+        '</div>'
+      document.getElementById('panel-body').innerHTML = body
+
+      var input = document.getElementById('chat-input')
+      input.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 140) + 'px' })
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } })
+      input.focus()
+    }
+
+    function toggleToolSettings() { document.getElementById('tool-settings').classList.toggle('open') }
+
+    function updateToolField(field, value) {
+      var tool = tools.find(function (t) { return t.id === currentToolId })
+      tool[field] = value
+      fetch('/api/tools/' + currentToolId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(tool) })
+    }
+
+    function renderMsg(m) {
+      return '<div class="msg ' + (m.role === 'user' ? 'user' : 'bot') + '"><div class="msg-bubble">' + esc(m.content) + '</div></div>'
+    }
+
+    function clearChat() {
+      chatHistories[currentToolId] = []
+      selectTool(currentToolId)
+    }
+
+    function sendMessage() {
+      var input = document.getElementById('chat-input')
+      var text = input.value.trim()
+      if (!text) return
+      var tool = tools.find(function (t) { return t.id === currentToolId })
+      chatHistories[currentToolId] = chatHistories[currentToolId] || []
+      chatHistories[currentToolId].push({ role: 'user', content: text })
+      input.value = ''; input.style.height = 'auto'
+
+      var msgsEl = document.getElementById('chat-messages')
+      msgsEl.innerHTML = chatHistories[currentToolId].map(renderMsg).join('') + '<div class="msg bot" id="typing"><div class="msg-bubble">…</div></div>'
+      msgsEl.scrollTop = msgsEl.scrollHeight
+      document.getElementById('btn-send').disabled = true
+
+      fetch('/api/chat', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ toolId: currentToolId, messages: chatHistories[currentToolId] })
       })
       .then(function (r) { return r.json() })
       .then(function (data) {
-        if (!data.valid) { window.location.href = '/login.html'; return }
-        loadConfig()
+        var typing = document.getElementById('typing'); if (typing) typing.remove()
+        if (data.error) {
+          chatHistories[currentToolId].push({ role: 'assistant', content: '⚠️ Erreur : ' + data.error })
+        } else {
+          chatHistories[currentToolId].push({ role: 'assistant', content: data.text || '(réponse vide)' })
+        }
+        msgsEl.innerHTML = chatHistories[currentToolId].map(renderMsg).join('')
+        msgsEl.scrollTop = msgsEl.scrollHeight
       })
-      .catch(function () { window.location.href = '/login.html' })
-    })()
-
-    function authHeaders() {
-      return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + sessionToken }
-    }
-
-    function logout() {
-      sessionStorage.removeItem('sandbox_token')
-      window.location.href = '/login.html'
-    }
-
-    function loadConfig() {
-      fetch('/api/config', { headers: authHeaders() })
-        .then(function (r) { return r.json() })
-        .then(function (data) {
-          config = data
-          renderNav()
-          renderProviders()
-        })
-    }
-
-    function allDivisions() {
-      var set = {}
-      config.providers.forEach(function (p) {
-        (p.featured_models || []).forEach(function (m) { set[m.division || 'autre'] = true })
+      .catch(function (e) {
+        var typing = document.getElementById('typing'); if (typing) typing.remove()
+        chatHistories[currentToolId].push({ role: 'assistant', content: '⚠️ Erreur réseau : ' + e.message })
+        msgsEl.innerHTML = chatHistories[currentToolId].map(renderMsg).join('')
       })
-      return Object.keys(set)
+      .finally(function () { document.getElementById('btn-send').disabled = false })
     }
 
-    function renderNav() {
-      var navList = document.getElementById('nav-list')
-      navList.innerHTML = ''
-      var divisions = allDivisions()
-      if (divisions.indexOf(currentDivision) === -1) currentDivision = divisions[0] || 'conversation'
-      divisions.forEach(function (d) {
-        var meta = DIVISION_LABELS[d] || { icon: '⚙️', name: d, sub: '' }
-        var el = document.createElement('div')
-        el.className = 'nav-item' + (!exploreMode && d === currentDivision ? ' active' : '')
-        el.innerHTML = '<span class="nav-icon">' + meta.icon + '</span> ' + meta.name
-        el.onclick = function () { exploreMode = false; currentDivision = d; renderNav(); renderProviders(); updateHeader() }
-        navList.appendChild(el)
-      })
-      document.getElementById('nav-explore').classList.toggle('active', exploreMode)
-      updateHeader()
+    /* ═══════ OUTILS (gestion) ═══════ */
+    function toolsView() { currentView = 'tools'; renderSidebar(); showToolsManager() }
+    function showToolsManager(editId) {
+      document.getElementById('panel-title').textContent = 'Outils'
+      document.getElementById('panel-sub').textContent = 'Ajoute, modifie ou retire un outil — aucun code requis'
+      document.getElementById('panel-actions').innerHTML = ''
+
+      var rows = tools.map(function (t) {
+        return '<tr><td>' + t.icon + ' ' + esc(t.name) + '</td><td>' + esc((CATEGORY_LABELS[t.category]||{name:t.category}).name) + '</td><td>' + esc(t.model) + '</td>' +
+          '<td class="row-actions"><button class="btn-mini" onclick="editTool(\'' + t.id + '\')">Modifier</button>' +
+          '<button class="btn-danger" onclick="deleteTool(\'' + t.id + '\')">Supprimer</button></td></tr>'
+      }).join('')
+
+      var body = '<button class="btn-primary" onclick="editTool(null)">+ Nouvel outil</button>' +
+        '<table style="margin-top:16px"><tr><th>Nom</th><th>Catégorie</th><th>Modèle</th><th></th></tr>' + rows + '</table>' +
+        '<div id="tool-form-slot"></div>'
+      document.getElementById('panel-body').innerHTML = body
+      if (editId !== undefined) editTool(editId)
     }
 
-    function updateHeader() {
-      if (exploreMode) {
-        document.getElementById('panel-title').textContent = 'Explorer les modèles'
-        document.getElementById('panel-sub').textContent = "Catalogue brut d'un fournisseur (ex. les 600+ modèles OpenRouter)"
-        return
+    function editTool(id) {
+      var tool = id ? tools.find(function (t) { return t.id === id }) : { name:'', icon:'⚙️', category:'conversation', providerId: providers[0] ? providers[0].id : '', model:'', system_prompt:'', max_tokens:2000, temperature:0.7 }
+      var catOptions = Object.keys(CATEGORY_LABELS).map(function (c) {
+        return '<option value="' + c + '"' + (tool.category === c ? ' selected' : '') + '>' + CATEGORY_LABELS[c].icon + ' ' + CATEGORY_LABELS[c].name + '</option>'
+      }).join('') + '<option value="custom"' + (!CATEGORY_LABELS[tool.category] ? ' selected' : '') + '>➕ Autre (nouvelle catégorie)</option>'
+
+      var provOptions = providers.map(function (p) { return '<option value="' + p.id + '"' + (tool.providerId === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>' }).join('')
+
+      var html = '<div class="form-card">' +
+        '<div class="field-row"><div class="field"><label class="f-label">Icône (emoji)</label><input type="text" id="f-icon" value="' + esc(tool.icon) + '"></div>' +
+        '<div class="field" style="flex:3"><label class="f-label">Nom</label><input type="text" id="f-name" value="' + esc(tool.name) + '"></div></div>' +
+        '<div class="field-row"><div class="field"><label class="f-label">Catégorie</label><select id="f-category" onchange="document.getElementById(\'f-category-custom\').style.display = this.value===\'custom\'?\'block\':\'none\'">' + catOptions + '</select>' +
+        '<input type="text" id="f-category-custom" placeholder="nom-de-la-categorie" style="margin-top:6px;display:' + (!CATEGORY_LABELS[tool.category] ? 'block' : 'none') + '" value="' + (!CATEGORY_LABELS[tool.category] ? esc(tool.category) : '') + '"></div>' +
+        '<div class="field"><label class="f-label">Fournisseur</label><select id="f-provider">' + provOptions + '</select></div></div>' +
+        '<div class="field"><label class="f-label">Modèle (id technique)</label><input type="text" id="f-model" value="' + esc(tool.model) + '" placeholder="ex: anthropic/claude-sonnet-5"></div>' +
+        '<div class="field"><label class="f-label">Prompt système (optionnel)</label><textarea id="f-prompt" style="min-height:90px">' + esc(tool.system_prompt) + '</textarea></div>' +
+        '<div class="field-row"><div class="field"><label class="f-label">Max tokens</label><input type="number" id="f-maxtokens" value="' + tool.max_tokens + '"></div>' +
+        '<div class="field"><label class="f-label">Température</label><input type="number" step="0.1" id="f-temp" value="' + tool.temperature + '"></div></div>' +
+        '<button class="btn-primary" onclick="saveTool(' + (id ? "'" + id + "'" : 'null') + ')">Enregistrer</button> ' +
+        '<button class="btn-mini" onclick="showToolsManager()">Annuler</button>' +
+        '</div>'
+      document.getElementById('tool-form-slot').innerHTML = html
+    }
+
+    function saveTool(id) {
+      var category = document.getElementById('f-category').value
+      if (category === 'custom') category = document.getElementById('f-category-custom').value.trim().toLowerCase().replace(/\s+/g,'-') || 'autre'
+      var payload = {
+        name: document.getElementById('f-name').value.trim(),
+        icon: document.getElementById('f-icon').value.trim() || '⚙️',
+        category: category,
+        providerId: document.getElementById('f-provider').value,
+        model: document.getElementById('f-model').value.trim(),
+        system_prompt: document.getElementById('f-prompt').value,
+        max_tokens: Number(document.getElementById('f-maxtokens').value) || 2000,
+        temperature: Number(document.getElementById('f-temp').value)
       }
-      var meta = DIVISION_LABELS[currentDivision] || { name: currentDivision, sub: '' }
-      document.getElementById('panel-title').textContent = meta.name
-      document.getElementById('panel-sub').textContent = meta.sub
+      if (!payload.name || !payload.model) { alert('Nom et modèle sont requis.'); return }
+
+      var req = id ? fetch('/api/tools/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) })
+                   : fetch('/api/tools', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
+      req.then(function (r) { return r.json() }).then(function () { loadAll(); currentView='tools'; setTimeout(function(){ toolsView() }, 50) })
     }
 
-    function showExplore() {
-      exploreMode = true
-      renderNav()
-      // simple : redirige la liste de modèles vers l'endpoint brut
-      var out = document.getElementById('result')
-      out.textContent = 'Chargement du catalogue...'
-      var providerId = document.getElementById('provider').value || 'openrouter'
+    function deleteTool(id) {
+      if (!confirm('Supprimer cet outil ?')) return
+      fetch('/api/tools/' + id, { method: 'DELETE', headers: authHeaders() })
+        .then(function () { loadAll(); setTimeout(function(){ toolsView() }, 50) })
+    }
+
+    /* ═══════ FOURNISSEURS (gestion) ═══════ */
+    function providersView() { currentView = 'providers'; renderSidebar(); showProvidersManager() }
+    function showProvidersManager(editId) {
+      document.getElementById('panel-title').textContent = 'Fournisseurs'
+      document.getElementById('panel-sub').textContent = 'OpenRouter, AIMLAPI, ou tout autre fournisseur compatible OpenAI'
+      document.getElementById('panel-actions').innerHTML = ''
+
+      var rows = providers.map(function (p) {
+        return '<tr><td>' + esc(p.name) + '</td><td>' + esc(p.base_url) + '</td><td>' + esc(p.api_key_secret) + '</td>' +
+          '<td class="row-actions"><button class="btn-mini" onclick="editProvider(\'' + p.id + '\')">Modifier</button>' +
+          '<button class="btn-danger" onclick="deleteProvider(\'' + p.id + '\')">Supprimer</button></td></tr>'
+      }).join('')
+
+      document.getElementById('panel-body').innerHTML =
+        '<button class="btn-primary" onclick="editProvider(null)">+ Nouveau fournisseur</button>' +
+        '<table style="margin-top:16px"><tr><th>Nom</th><th>URL de base</th><th>Secret</th><th></th></tr>' + rows + '</table>' +
+        '<div id="provider-form-slot"></div>'
+      if (editId !== undefined) editProvider(editId)
+    }
+
+    function editProvider(id) {
+      var p = id ? providers.find(function (x) { return x.id === id }) : { name: '', base_url: '', api_key_secret: '' }
+      var html = '<div class="form-card">' +
+        '<div class="field"><label class="f-label">Nom affiché</label><input type="text" id="p-name" value="' + esc(p.name) + '"></div>' +
+        '<div class="field"><label class="f-label">URL de base (format OpenAI-compatible)</label><input type="text" id="p-url" value="' + esc(p.base_url) + '" placeholder="https://api.exemple.com/v1"></div>' +
+        '<div class="field"><label class="f-label">Nom du secret Cloudflare</label><input type="text" id="p-secret" value="' + esc(p.api_key_secret) + '" placeholder="EXEMPLE_API_KEY"></div>' +
+        '<div style="font-size:12px;color:var(--t4);margin-bottom:14px">Crée ce secret dans Settings → Variables and Secrets avec ce nom exact avant d\'utiliser ce fournisseur.</div>' +
+        '<button class="btn-primary" onclick="saveProvider(' + (id ? "'" + id + "'" : 'null') + ')">Enregistrer</button> ' +
+        '<button class="btn-mini" onclick="showProvidersManager()">Annuler</button></div>'
+      document.getElementById('provider-form-slot').innerHTML = html
+    }
+
+    function saveProvider(id) {
+      var payload = {
+        name: document.getElementById('p-name').value.trim(),
+        base_url: document.getElementById('p-url').value.trim(),
+        api_key_secret: document.getElementById('p-secret').value.trim()
+      }
+      if (!payload.name || !payload.base_url || !payload.api_key_secret) { alert('Tous les champs sont requis.'); return }
+      var req = id ? fetch('/api/providers/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) })
+                   : fetch('/api/providers', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
+      req.then(function (r) { return r.json() }).then(function () { loadAll(); setTimeout(function(){ providersView() }, 50) })
+    }
+
+    function deleteProvider(id) {
+      if (!confirm('Supprimer ce fournisseur ? Les outils qui l\'utilisent cesseront de fonctionner.')) return
+      fetch('/api/providers/' + id, { method: 'DELETE', headers: authHeaders() })
+        .then(function () { loadAll(); setTimeout(function(){ providersView() }, 50) })
+    }
+
+    /* ═══════ EXPLORER ═══════ */
+    function exploreView() {
+      currentView = 'explore'; renderSidebar()
+      document.getElementById('panel-title').textContent = 'Explorer les modèles'
+      document.getElementById('panel-sub').textContent = "Catalogue brut d'un fournisseur"
+      document.getElementById('panel-actions').innerHTML = ''
+
+      var provOptions = providers.map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>' }).join('')
+      document.getElementById('panel-body').innerHTML =
+        '<div class="field-row"><div class="field"><select id="explore-provider">' + provOptions + '</select></div>' +
+        '<div><button class="btn-primary" onclick="runExplore()">Charger le catalogue</button></div></div>' +
+        '<div class="result-box" id="explore-result">—</div>'
+    }
+    function runExplore() {
+      var providerId = document.getElementById('explore-provider').value
+      var out = document.getElementById('explore-result')
+      out.textContent = 'Chargement...'
       fetch('/api/models?provider=' + providerId, { headers: authHeaders() })
         .then(function (r) { return r.json() })
         .then(function (data) {
-          var list = (data.data || []).map(function (m) { return m.id }).slice(0, 200)
-          out.textContent = list.length ? list.join('\\n') : JSON.stringify(data, null, 2)
+          var list = (data.data || []).map(function (m) { return m.id })
+          out.textContent = list.length ? list.join('\n') : JSON.stringify(data, null, 2)
         })
         .catch(function (e) { out.textContent = 'Erreur : ' + e.message })
     }
 
-    function renderProviders() {
-      var providerSel = document.getElementById('provider')
-      providerSel.innerHTML = ''
-      config.providers.forEach(function (p) {
-        var opt = document.createElement('option')
-        opt.value = p.id; opt.textContent = p.name
-        providerSel.appendChild(opt)
-      })
-      providerSel.onchange = renderModels
-      renderModels()
+    /* ═══════ PEXELS ═══════ */
+    function pexelsView() {
+      currentView = 'pexels'; renderSidebar()
+      document.getElementById('panel-title').textContent = 'Banque Pexels'
+      document.getElementById('panel-sub').textContent = 'Recherche de photos libres de droits'
+      document.getElementById('panel-actions').innerHTML = ''
+      document.getElementById('panel-body').innerHTML =
+        '<div class="field-row"><div class="field"><input type="text" id="pexels-q" placeholder="ex: méditation, forêt, femme sereine" onkeydown="if(event.key===\'Enter\') runPexels()"></div>' +
+        '<div><button class="btn-primary" onclick="runPexels()">Rechercher</button></div></div>' +
+        '<div class="pexels-grid" id="pexels-grid"></div>'
     }
-
-    function renderModels() {
-      var providerId = document.getElementById('provider').value
-      var provider = config.providers.find(function (p) { return p.id === providerId })
-      var modelSel = document.getElementById('model')
-      modelSel.innerHTML = ''
-      var models = (provider && provider.featured_models || []).filter(function (m) { return m.division === currentDivision })
-      if (!models.length) models = (provider && provider.featured_models) || []
-      models.forEach(function (m) {
-        var opt = document.createElement('option')
-        opt.value = m.id; opt.textContent = m.label
-        modelSel.appendChild(opt)
-      })
-    }
-
-    function runTest() {
-      var btn = document.getElementById('btn-run')
-      var spinner = document.getElementById('spinner')
-      var runText = document.getElementById('run-text')
-      var result = document.getElementById('result')
-      var meta = document.getElementById('result-meta')
-      var prompt = document.getElementById('prompt').value.trim()
-      if (!prompt) return
-
-      btn.disabled = true; spinner.style.display = 'block'; runText.textContent = 'En cours...'
-      result.textContent = '…'; result.className = 'result-card'; meta.innerHTML = ''
-
-      fetch('/api/chat', {
-        method: 'POST', headers: authHeaders(),
-        body: JSON.stringify({
-          providerId: document.getElementById('provider').value,
-          model: document.getElementById('model').value,
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: Number(document.getElementById('maxTokens').value) || 2000,
-          temperature: Number(document.getElementById('temperature').value)
+    function runPexels() {
+      var q = document.getElementById('pexels-q').value.trim()
+      if (!q) return
+      var grid = document.getElementById('pexels-grid')
+      grid.innerHTML = 'Chargement...'
+      fetch('/api/pexels-search?q=' + encodeURIComponent(q), { headers: authHeaders() })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          if (data.error) { grid.innerHTML = 'Erreur : ' + esc(data.error); return }
+          grid.innerHTML = (data.photos || []).map(function (p) {
+            return '<div class="pexels-item"><a href="' + p.full + '" target="_blank"><img src="' + p.thumb + '" loading="lazy"></a>' + esc(p.photographer) + '</div>'
+          }).join('') || 'Aucun résultat.'
         })
-      })
-      .then(function (r) { return r.json() })
-      .then(function (data) {
-        if (data.error) {
-          result.textContent = 'Erreur : ' + data.error
-          result.className = 'result-card result-error'
-        } else {
-          result.textContent = data.text || '(réponse vide)'
-          var u = data.usage
-          meta.innerHTML =
-            '<span>Temps : <b>' + (data.elapsedMs / 1000).toFixed(1) + 's</b></span>' +
-            (u ? '<span>Tokens entrée : <b>' + (u.prompt_tokens ?? '?') + '</b></span><span>Tokens sortie : <b>' + (u.completion_tokens ?? '?') + '</b></span>' : '') +
-            '<span>Caractères sortie : <b>' + (data.text || '').length + '</b></span>'
-        }
-      })
-      .catch(function (e) {
-        result.textContent = 'Erreur réseau : ' + e.message
-        result.className = 'result-card result-error'
-      })
-      .finally(function () {
-        btn.disabled = false; spinner.style.display = 'none'; runText.textContent = 'Lancer le test'
-      })
+        .catch(function (e) { grid.innerHTML = 'Erreur : ' + e.message })
     }
   </script>
 
