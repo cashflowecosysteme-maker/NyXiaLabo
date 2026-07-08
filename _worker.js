@@ -105,7 +105,19 @@ const DEFAULT_TOOLS = [
   { id: "apy-pdf-watermark", name: "Filigrane sur PDF", icon: "📄", category: "utilites", kind: "apyhub", source: "pdf-watermark" },
   { id: "apy-pdf-watermark-footer", name: "PDF — en-tête/pied de page", icon: "📄", category: "utilites", kind: "apyhub", source: "pdf-watermark-footer" },
   { id: "apy-summarize", name: "Résumer un texte", icon: "📋", category: "utilites", kind: "apyhub", source: "summarize-text" },
-  { id: "apy-paraphrase", name: "Paraphraser un texte", icon: "🔄", category: "utilites", kind: "apyhub", source: "paraphrase-text" }
+  { id: "apy-paraphrase", name: "Paraphraser un texte", icon: "🔄", category: "utilites", kind: "apyhub", source: "paraphrase-text" },
+  { id: "dl-yt-audio", name: "YouTube — Langues/Audio", icon: "📺", category: "downloader", kind: "rapidapi", source: "yt-download" },
+  { id: "dl-tiktok-user", name: "TikTok — Vidéos d'un profil", icon: "🎵", category: "downloader", kind: "rapidapi", source: "tiktok-user" },
+  { id: "dl-instagram-reels", name: "Instagram — Télécharger Reel", icon: "📷", category: "downloader", kind: "rapidapi", source: "instagram-reels" },
+  { id: "dl-tiktok-nowm", name: "TikTok — Sans filigrane", icon: "🎵", category: "downloader", kind: "rapidapi", source: "tiktok-nowm" },
+  { id: "dl-yt-fast-audio", name: "YouTube — Audio rapide", icon: "📺", category: "downloader", kind: "rapidapi", source: "yt-fast-audio" },
+  { id: "dl-yt-transcript", name: "YouTube — Transcription", icon: "📺", category: "downloader", kind: "rapidapi", source: "yt-transcript" },
+  { id: "dl-all-media", name: "Télécharger média (universel)", icon: "⬇️", category: "downloader", kind: "rapidapi", source: "all-media" },
+  { id: "dl-spotify", name: "Spotify — Télécharger MP3", icon: "🎧", category: "downloader", kind: "rapidapi", source: "spotify-download" },
+  { id: "dl-all-video", name: "Télécharger vidéo (universel)", icon: "⬇️", category: "downloader", kind: "rapidapi", source: "all-video" },
+  { id: "dl-tiktok-comments", name: "TikTok — Réponses aux commentaires", icon: "💬", category: "downloader", kind: "rapidapi", source: "tiktok-comments" },
+  { id: "dl-bg-removal", name: "Supprimer l'arrière-plan", icon: "🖼️", category: "downloader", kind: "rapidapi", source: "bg-removal" },
+  { id: "dl-media2text", name: "Média → Texte", icon: "📝", category: "downloader", kind: "rapidapi", source: "media2text" }
 ];
 
 const CATEGORY_LABELS = {
@@ -122,6 +134,7 @@ const CATEGORY_LABELS = {
   esoterisme: { icon: "🔮", name: "Ésotérisme" },
   transcription: { icon: "🎙️", name: "Transcription" },
   utilites: { icon: "🧩", name: "Utilités" },
+  downloader: { icon: "⬇️", name: "Downloader" },
   consultation: { icon: "🧭", name: "Outils Consultation" },
   exercices: { icon: "✨", name: "Générateur d'exercices" },
   contenu: { icon: "🖋️", name: "Outils création contenu" },
@@ -306,6 +319,53 @@ async function callApyHub(env, source, fields, files) {
     headers: { "apy-token": env.ApyHub_KEY },
     body: form
   });
+  return await res.json();
+}
+
+const RAPIDAPI_TOOLS = {
+  "yt-download": { host: "youtube-mp3-audio-video-downloader.p.rapidapi.com", method: "GET", pathTemplate: "/language_list/{videoId}", query: { response_mode: "default" } },
+  "tiktok-user": { host: "tiktok-video-downloader-api.p.rapidapi.com", method: "GET", pathTemplate: "/user/{username}" },
+  "instagram-reels": { host: "instagram-reels-downloader-api.p.rapidapi.com", method: "GET", pathTemplate: "/download", queryFromFields: ["url"] },
+  "tiktok-nowm": { host: "tiktok-download-video-no-watermark.p.rapidapi.com", method: "GET", pathTemplate: "/tiktok/info", queryFromFields: ["url"] },
+  "yt-fast-audio": { host: "youtube-video-fast-downloader-24-7.p.rapidapi.com", method: "GET", pathTemplate: "/download_audio/{videoId}", query: { quality: "251" } },
+  "yt-transcript": { host: "youtube-transcripts.p.rapidapi.com", method: "GET", pathTemplate: "/youtube/transcript", queryFromFields: ["url", "videoId"], query: { chunkSize: "500", text: "false", lang: "en" } },
+  "all-media": { host: "all-media-downloader1.p.rapidapi.com", method: "POST", pathTemplate: "/all", bodyType: "form", bodyFields: ["url", "cookies", "cookies_file"] },
+  "spotify-download": { host: "spotify-music-mp3-downloader-api.p.rapidapi.com", method: "GET", pathTemplate: "/download", queryFromFields: ["link"] },
+  "all-video": { host: "all-video-downloader1.p.rapidapi.com", method: "POST", pathTemplate: "/all", bodyType: "form", bodyFields: ["url", "cookies", "cookies_file"] },
+  "tiktok-comments": { host: "tiktok-download5.p.rapidapi.com", method: "GET", pathTemplate: "/commentReply", queryFromFields: ["comment_id", "count", "cursor", "video_id"] },
+  "bg-removal": { host: "background-removal.p.rapidapi.com", method: "POST", pathTemplate: "/remove", bodyType: "form", bodyFields: ["image_url", "image_base64", "output_format", "to_remove", "color_removal"] },
+  "media2text": { host: "media2text.p.rapidapi.com", method: "POST", pathTemplate: "/", bodyType: "json", bodyFields: ["file_url", "api_key"] }
+};
+
+async function callRapidApi(env, source, fields) {
+  const config = RAPIDAPI_TOOLS[source];
+  if (!config) throw new Error(`Outil inconnu: ${source}`);
+  const apiKey = env["X-RapidAPI-Key"];
+  if (!apiKey) throw new Error("Clé X-RapidAPI-Key manquante");
+
+  let path = config.pathTemplate.replace(/\{(\w+)\}/g, (_, name) => encodeURIComponent(fields[name] || ""));
+  const queryParams = new URLSearchParams(config.query || {});
+  (config.queryFromFields || []).forEach(f => { if (fields[f]) queryParams.set(f, fields[f]); });
+  const qs = queryParams.toString();
+  const fullUrl = `https://${config.host}${path}${qs ? "?" + qs : ""}`;
+
+  const headers = { "x-rapidapi-host": config.host, "x-rapidapi-key": apiKey };
+  let body;
+  if (config.bodyType === "form") {
+    const form = new URLSearchParams();
+    (config.bodyFields || []).forEach(f => form.set(f, fields[f] || ""));
+    headers["Content-Type"] = "application/x-www-form-urlencoded";
+    body = form.toString();
+  } else if (config.bodyType === "json") {
+    const obj = {};
+    (config.bodyFields || []).forEach(f => { if (fields[f]) obj[f] = fields[f]; });
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify(obj);
+  } else {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const res = await fetch(fullUrl, { method: config.method, headers, body: config.method === "GET" ? undefined : body });
   return await res.json();
 }
 
@@ -688,6 +748,17 @@ export default {
         const res = await fetch(`${provider.base_url}/generations/${genId}`, { headers: { "Authorization": `Bearer ${apiKey}` } });
         const data = await res.json();
         return json({ status: data.status, output_url: data.output_url, thumbnail_url: data.thumbnail_url, error: data.error });
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
+    }
+
+    // --- RapidAPI (Downloaders) : appel générique vers l'un des 12 outils ---
+    if (request.method === "POST" && url.pathname === "/api/rapidapi") {
+      try {
+        const body = await request.json();
+        const data = await callRapidApi(env, body.source, body.fields || {});
+        return json(data);
       } catch (err) {
         return json({ error: err.message || String(err) }, 500);
       }
