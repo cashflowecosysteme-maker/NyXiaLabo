@@ -192,7 +192,6 @@
         { view: 'tools', icon: '🧰', label: 'Outils' },
         { view: 'providers', icon: '🔌', label: 'Fournisseurs' },
         { view: 'explore', icon: '🔎', label: 'Explorer modèles' },
-        { view: 'pexels', icon: '🖼️', label: 'Banque Pexels' },
         { view: 'heygen', icon: '🧑\u200d🎤', label: 'Clone IA (HeyGen)' },
         { view: 'wan-video', icon: '🎬', label: 'Wan — Vidéo' },
         { view: 'wan-image', icon: '🎨', label: 'Wan — Image' }
@@ -212,7 +211,7 @@
     }
     function goToManagement(view) {
       var fnMap = {
-        tools: toolsView, providers: providersView, explore: exploreView, pexels: pexelsView,
+        tools: toolsView, providers: providersView, explore: exploreView,
         heygen: heygenView, 'wan-video': wanVideoView, 'wan-image': wanImageView
       }
       if (fnMap[view]) fnMap[view]()
@@ -228,6 +227,10 @@
       if (tool && tool.kind === 'audio') { renderAudioTool(tool); return }
       if (tool && tool.kind === 'audio-search') { renderAudioSearchTool(tool); return }
       if (tool && tool.kind === 'video') { renderVideoTool(tool); return }
+      if (tool && tool.kind === 'pexels') { pexelsView(); return }
+      if (tool && tool.kind === 'unsplash') { renderUnsplashTool(tool); return }
+      if (tool && tool.kind === 'esoteric') { renderEsotericTool(tool); return }
+      if (tool && tool.kind === 'transcribe') { renderTranscribeTool(tool); return }
       renderChatTool(tool)
     }
 
@@ -732,7 +735,6 @@
     /* ═══════ PEXELS ═══════ */
     var pexelsMode = 'photo'
     function pexelsView() {
-      currentView = 'pexels'; renderSidebar()
       document.getElementById('panel-title').textContent = 'Banque Pexels'
       document.getElementById('panel-sub').textContent = 'Photos et vidéos libres de droits'
       document.getElementById('panel-actions').innerHTML = ''
@@ -867,6 +869,138 @@
     }
 
     /* ═══════ MUSIQUE — FREESOUND (recherche, libre de droit) ═══════ */
+    /* ═══════ UNSPLASH (banque gratuite, photos) ═══════ */
+    function renderUnsplashTool(tool) {
+      document.getElementById('panel-title').textContent = tool.name
+      document.getElementById('panel-sub').textContent = 'Recherche de photos libres de droits'
+      document.getElementById('panel-actions').innerHTML = ''
+      document.getElementById('panel-body').innerHTML =
+        '<div class="field-row" style="max-width:760px;margin:0 auto 16px">' +
+          '<div class="field"><input type="text" id="unsplash-q" placeholder="ex: montagne, méditation, bureau minimaliste" onkeydown="if(event.key===\'Enter\') runUnsplashSearch()"></div>' +
+          '<div><button class="btn-primary" onclick="runUnsplashSearch()">Rechercher</button></div>' +
+        '</div>' +
+        '<div class="pexels-grid" id="unsplash-grid"></div>'
+    }
+    function runUnsplashSearch() {
+      var q = document.getElementById('unsplash-q').value.trim()
+      if (!q) return
+      var grid = document.getElementById('unsplash-grid')
+      grid.innerHTML = 'Recherche en cours...'
+      fetch('/api/unsplash-search?q=' + encodeURIComponent(q), { headers: authHeaders() })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          if (data.error) { grid.innerHTML = 'Erreur : ' + esc(data.error); return }
+          grid.innerHTML = (data.results || []).map(function (p) {
+            return '<div class="pexels-item"><a href="' + p.full + '" target="_blank"><img src="' + p.thumb + '" loading="lazy"></a>' + esc(p.photographer) + '</div>'
+          }).join('') || 'Aucun résultat.'
+        })
+        .catch(function (e) { grid.innerHTML = 'Erreur : ' + e.message })
+    }
+
+    /* ═══════ ÉSOTÉRISME ═══════ */
+    var ZODIAC_SIGNS = ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces']
+    function renderEsotericTool(tool) {
+      document.getElementById('panel-title').textContent = tool.name
+      document.getElementById('panel-sub').textContent = ''
+      document.getElementById('panel-actions').innerHTML = ''
+
+      var extraInput = ''
+      if (tool.source === 'horoscope') {
+        extraInput = '<div class="field" style="max-width:300px;margin:0 auto 12px"><select id="eso-sign">' +
+          ZODIAC_SIGNS.map(function (s) { return '<option value="' + s + '">' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>' }).join('') + '</select></div>'
+      }
+      if (tool.source === 'sunrise') {
+        extraInput = '<div class="field-row" style="max-width:400px;margin:0 auto 12px">' +
+          '<div class="field"><input type="text" id="eso-lat" placeholder="Latitude" value="45.7"></div>' +
+          '<div class="field"><input type="text" id="eso-lng" placeholder="Longitude" value="-74.0"></div></div>'
+      }
+
+      document.getElementById('panel-body').innerHTML =
+        '<div style="max-width:600px;margin:0 auto;text-align:center">' + extraInput +
+        '<button class="btn-primary" onclick="runEsoteric()">✨ Charger</button>' +
+        '<div class="result-box" id="eso-result" style="margin-top:20px;text-align:left">—</div></div>'
+    }
+
+    function runEsoteric() {
+      var tool = tools.find(function (t) { return t.id === currentToolId })
+      var out = document.getElementById('eso-result')
+      out.textContent = 'Chargement...'
+      var endpoint = '/api/esoteric/' + tool.source
+      var params = ''
+      if (tool.source === 'horoscope') params = '?sign=' + document.getElementById('eso-sign').value
+      if (tool.source === 'sunrise') params = '?lat=' + document.getElementById('eso-lat').value + '&lng=' + document.getElementById('eso-lng').value
+
+      fetch(endpoint + params, { headers: authHeaders() })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          if (data.error) { out.textContent = 'Erreur : ' + data.error; out.className = 'result-box result-error'; return }
+          out.className = 'result-box'
+          out.textContent = JSON.stringify(data, null, 2)
+        })
+        .catch(function (e) { out.textContent = 'Erreur réseau : ' + e.message })
+    }
+
+    /* ═══════ TRANSCRIPTION (Whisper) ═══════ */
+    function renderTranscribeTool(tool) {
+      document.getElementById('panel-title').textContent = tool.name
+      document.getElementById('panel-sub').textContent = 'Transcrit un fichier audio ou vidéo en texte'
+      document.getElementById('panel-actions').innerHTML = ''
+      document.getElementById('panel-body').innerHTML =
+        '<div style="max-width:600px;margin:0 auto;text-align:center">' +
+        '<input type="file" id="stt-file" accept="audio/*,video/*" style="margin-bottom:16px">' +
+        '<div><button class="btn-primary" id="stt-btn" onclick="runTranscribe()">🎙️ Transcrire</button></div>' +
+        '<div class="result-box" id="stt-result" style="margin-top:20px;text-align:left;white-space:pre-wrap">—</div>' +
+        '<div id="stt-actions" style="margin-top:8px"></div></div>'
+    }
+
+    function runTranscribe() {
+      var tool = tools.find(function (t) { return t.id === currentToolId })
+      var file = document.getElementById('stt-file').files[0]
+      if (!file) { alert('Choisis un fichier audio ou vidéo.'); return }
+      var btn = document.getElementById('stt-btn')
+      var out = document.getElementById('stt-result')
+      btn.disabled = true; btn.textContent = 'Envoi...'
+      out.textContent = 'Envoi du fichier...'
+
+      var reader = new FileReader()
+      reader.onload = function () {
+        fetch('/api/transcribe', {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({ toolId: tool.id, audio_base64: reader.result })
+        })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          if (data.error) { btn.disabled = false; btn.textContent = '🎙️ Transcrire'; out.textContent = 'Erreur : ' + data.error; return }
+          out.textContent = 'Transcription en cours...'
+          pollTranscribe(data.generation_id, btn, out)
+        })
+        .catch(function (e) { btn.disabled = false; btn.textContent = '🎙️ Transcrire'; out.textContent = 'Erreur réseau : ' + e.message })
+      }
+      reader.readAsDataURL(file)
+    }
+
+    function pollTranscribe(genId, btn, out, attempt) {
+      attempt = attempt || 0
+      if (attempt > 40) { out.textContent = 'Timeout — réessaie.'; btn.disabled = false; btn.textContent = '🎙️ Transcrire'; return }
+      fetch('/api/transcribe/status?id=' + encodeURIComponent(genId), { headers: authHeaders() })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          var text = data.results && data.results[0] && data.results[0].transcript
+          if (!text && data.status === 'completed') text = JSON.stringify(data)
+          if (text) {
+            out.textContent = text
+            document.getElementById('stt-actions').innerHTML = '<button class="btn-mini" onclick="navigator.clipboard.writeText(document.getElementById(\'stt-result\').textContent)">📋 Copier</button>'
+            btn.disabled = false; btn.textContent = '🎙️ Transcrire'
+          } else if (data.error) {
+            out.textContent = 'Erreur : ' + JSON.stringify(data.error)
+            btn.disabled = false; btn.textContent = '🎙️ Transcrire'
+          } else {
+            setTimeout(function () { pollTranscribe(genId, btn, out, attempt + 1) }, 4000)
+          }
+        })
+        .catch(function () { setTimeout(function () { pollTranscribe(genId, btn, out, attempt + 1) }, 6000) })
+    }
+
     function renderAudioSearchTool(tool) {
       document.getElementById('panel-title').textContent = tool.name
       document.getElementById('panel-sub').textContent = 'Recherche par mots-clés — sons et musiques libres de droit'
