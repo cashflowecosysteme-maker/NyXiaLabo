@@ -1,17 +1,22 @@
-name = "nyxia-sandbox-hub"
-main = "worker.js"
+name = "nyxialabo"
+main = "_worker.js"
 compatibility_date = "2026-07-01"
 
-# Namespace KV pour stocker la config des fournisseurs.
-# Crée-le avec : wrangler kv namespace create HUB_CONFIG
-# puis colle l'id retourné ci-dessous.
+# Sert les fichiers statiques (login.html, dashboard.html, js/) via env.ASSETS.fetch()
+# dans _worker.js. "directory" pointe vers la racine du repo où sont ces fichiers.
+[assets]
+directory = "./"
+binding = "ASSETS"
+
+# Remplace "COLLE_ICI_TON_VRAI_ID" par l'ID copié depuis
+# Stockage et bases de données → KV → HUB_CONFIG dans le dashboard Cloudflare.
 [[kv_namespaces]]
 binding = "HUB_CONFIG"
-id = "COLLE_ICI_L_ID_RETOURNE_PAR_WRANGLER"
+id = "COLLE_ICI_TON_VRAI_ID"
 
-# Secrets à définir séparément (jamais dans ce fichier, jamais commit) :
-#   wrangler secret put OPENROUTER_API_KEY
-#   wrangler secret put ADMIN_TOKEN
-#
-# ADMIN_TOKEN protège l'endpoint PUT /api/config (mise à jour des fournisseurs).
-# Choisis une chaîne aléatoire longue, garde-la seulement pour toi.
+# Secrets à définir dans le dashboard de CE Worker (nyxialabo) :
+# Settings → Variables and Secrets → Add variable → type "Secret"
+#   ADMIN_PASSWORD
+#   SESSION_SECRET
+#   OPENROUTER_API_KEY
+#   AIMLAPI_API_KEY
