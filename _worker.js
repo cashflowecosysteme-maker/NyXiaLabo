@@ -358,6 +358,144 @@ export default {
       return json({ status: d.status, video_url: d.video_url, error: d.error });
     }
 
+    // --- Wan (DashScope) : génération d'images ---
+    if (request.method === "POST" && url.pathname === "/api/wan-image") {
+      const DASHSCOPE_KEY = env.DASHSCOPE_API_KEY || "";
+      if (!DASHSCOPE_KEY) return json({ success: false, error: "Clé DASHSCOPE_API_KEY non configurée." }, 500);
+      try {
+        const body = await request.json();
+        const prompt = body.prompt || "";
+        const model = body.model || "wan2.7-image";
+        const sizeSpec = body.size || "2K";
+        const format = body.format || "";
+        const n = Math.min(body.n || 1, 4);
+        if (!prompt) return json({ success: false, error: "Prompt requis." }, 400);
+
+        const DASHSCOPE_BASE = "https://dashscope-intl.aliyuncs.com/api/v1";
+        const endpoint = `${DASHSCOPE_BASE}/services/aigc/multimodal-generation/generation`;
+
+        let finalSize = sizeSpec;
+        if (format) {
+          const IMG_SIZE_MAP = {
+            "1K": { "1:1": "1024*1024", "4:5": "896*1120", "9:16": "768*1344", "16:9": "1344*768" },
+            "2K": { "1:1": "2048*2048", "4:5": "1792*2240", "9:16": "1536*2688", "16:9": "2688*1536" },
+            "4K": { "1:1": "4096*4096", "4:5": "3584*4480", "9:16": "3072*5376", "16:9": "5376*3072" }
+          };
+          const group = IMG_SIZE_MAP[sizeSpec] || IMG_SIZE_MAP["2K"];
+          finalSize = group[format] || sizeSpec;
+        }
+
+        const payload = {
+          model, input: { messages: [{ role: "user", content: [{ text: prompt }] }] },
+          parameters: { size: finalSize, n, watermark: false }
+        };
+        if (model === "wan2.7-image-pro") payload.parameters.thinking_mode = true;
+
+        const imgRes = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${DASHSCOPE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const imgData = await imgRes.json();
+        if (!imgRes.ok) return json({ success: false, error: imgData.message || "Erreur lors de la génération d'image" }, 500);
+
+        const choices = imgData.output?.choices || [];
+        const images = [];
+        for (const choice of choices) for (const item of (choice.message?.content || [])) if (item.image) images.push(item.image);
+        if (!images.length) return json({ success: false, error: imgData.output?.choices?.[0]?.message?.content?.[0]?.text || "Aucune image générée — essaie un autre prompt" }, 500);
+
+        return json({ success: true, images });
+      } catch (e) {
+        return json({ success: false, error: "Erreur serveur : " + e.message }, 500);
+      }
+    }
+
+    // --- Wan (DashScope) : génération vidéo (T2V / I2V) — soumission async ---
+    if (request.method === "POST" && url.pathname === "/api/wan-video") {
+      const DASHSCOPE_KEY = env.DASHSCOPE_API_KEY || "";
+      if (!DASHSCOPE_KEY) return json({ success: false, error: "Clé DASHSCOPE_API_KEY non configurée." }, 500);
+      try {
+        const body = await request.json();
+        const prompt = body.prompt || "";
+        const model = body.model || "wan2.6-t2v";
+        const resolution = body.resolution || "720p";
+        const duration = body.duration || 5;
+        const mode = body.mode || "t2v";
+        const imageB64 = body.image_base64 || "";
+        if (!prompt) return json({ success: false, error: "Prompt requis." }, 400);
+        if (mode === "i2v" && !imageB64) return json({ success: false, error: "Image requise pour le mode Image → Vidéo." }, 400);
+
+        const DASHSCOPE_BASE = "https://dashscope-intl.aliyuncs.com/api/v1";
+        const format = body.format || "16:9";
+        const SIZE_MAP = {
+          "480p": { "16:9": "832*480", "9:16": "480*832", "1:1": "624*624" },
+          "720p": { "16:9": "1280*720", "9:16": "720*1280", "1:1": "960*960" },
+          "1080p": { "16:9": "1920*1080", "9:16": "1080*1920", "1:1": "1440*1440" }
+        };
+        const sizeGroup = SIZE_MAP[resolution] || SIZE_MAP["720p"];
+        const size = sizeGroup[format] || sizeGroup["16:9"];
+
+        let endpoint = `${DASHSCOPE_BASE}/services/aigc/video-generation/video-synthesis`;
+        let payload;
+        if (mode === "i2v") {
+          let imgUrlValue = imageB64;
+          if (imageB64 && !imageB64.startsWith("data:") && !imageB64.startsWith("http")) imgUrlValue = "data:image/jpeg;base64," + imageB64;
+          payload = {
+            model: model || "wan2.6-i2v-flash",
+            input: { prompt, img_url: imgUrlValue },
+            parameters: { resolution: resolution.toUpperCase(), prompt_extend: true, watermark: false, duration: parseInt(duration) }
+          };
+        } else {
+          payload = {
+            model: model || "wan2.6-t2v",
+            input: { prompt },
+            parameters: { size, prompt_extend: true, watermark: false, duration: parseInt(duration) }
+          };
+        }
+
+        const wanRes = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${DASHSCOPE_KEY}`, "Content-Type": "application/json", "X-DashScope-Async": "enable" },
+          body: JSON.stringify(payload)
+        });
+        const wanData = await wanRes.json();
+        if (!wanRes.ok || !wanData.output || !wanData.output.task_id) {
+          return json({ success: false, error: wanData.message || wanData.output?.message || "Erreur lors de la génération vidéo" }, 500);
+        }
+        return json({ success: true, taskId: wanData.output.task_id, status: wanData.output.task_status });
+      } catch (e) {
+        return json({ success: false, error: "Erreur serveur : " + e.message }, 500);
+      }
+    }
+
+    // --- Wan (DashScope) : statut d'une tâche vidéo ---
+    if (request.method === "POST" && url.pathname === "/api/wan-video/status") {
+      const DASHSCOPE_KEY = env.DASHSCOPE_API_KEY || "";
+      if (!DASHSCOPE_KEY) return json({ success: false, error: "Clé DASHSCOPE_API_KEY non configurée." }, 500);
+      try {
+        const body = await request.json();
+        const taskId = body.taskId || "";
+        if (!taskId) return json({ success: false, error: "taskId requis." }, 400);
+
+        const DASHSCOPE_BASE = "https://dashscope-intl.aliyuncs.com/api/v1";
+        const pollRes = await fetch(`${DASHSCOPE_BASE}/tasks/${taskId}`, { headers: { "Authorization": `Bearer ${DASHSCOPE_KEY}` } });
+        const pollData = await pollRes.json();
+        if (!pollRes.ok || !pollData.output) return json({ success: false, error: pollData.message || "Erreur lors du polling" }, 500);
+
+        const status = pollData.output.task_status;
+        let videoUrl = null, errorMsg = null;
+        if (status === "SUCCEEDED") {
+          videoUrl = pollData.output.video_url || (pollData.output.results && pollData.output.results[0] && pollData.output.results[0].url) || null;
+        }
+        if (status === "FAILED") {
+          errorMsg = pollData.output.message || pollData.output.task_metrics?.error || "Génération échouée";
+        }
+        return json({ success: true, status, videoUrl, errorMsg, taskId });
+      } catch (e) {
+        return json({ success: false, error: "Erreur serveur : " + e.message }, 500);
+      }
+    }
+
     // --- Fichiers statiques ---
     return env.ASSETS.fetch(request);
   }
