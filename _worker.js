@@ -65,7 +65,16 @@ const DEFAULT_TOOLS = [
   { id: "music-stable-audio", name: "Stable Audio", icon: "🎼", category: "musique-ambiance", kind: "audio", providerId: "aimlapi", model: "stable-audio" },
   { id: "music-eleven", name: "Eleven Music", icon: "🎼", category: "musique-ambiance", kind: "audio", providerId: "aimlapi", model: "elevenlabs/eleven_music" },
   { id: "music-lyria2", name: "Lyria 2", icon: "🎼", category: "musique-ambiance", kind: "audio", providerId: "aimlapi", model: "google/lyria2" },
-  { id: "music-minimax", name: "MiniMax Music 2.6", icon: "🎤", category: "musique-chanson", kind: "audio", needs_lyrics: true, providerId: "aimlapi", model: "minimax/music-2.6" }
+  { id: "music-minimax", name: "MiniMax Music 2.6", icon: "🎤", category: "musique-chanson", kind: "audio", needs_lyrics: true, providerId: "aimlapi", model: "minimax/music-2.6" },
+  { id: "video-luma-ray2", name: "Luma Ray 2", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "luma/ray-2" },
+  { id: "video-gen4-turbo", name: "Runway Gen4 Turbo", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "runway/gen4_turbo" },
+  { id: "video-gen3a-turbo", name: "Runway Gen3a Turbo", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "runway/gen3a_turbo" },
+  { id: "video-ltxv2", name: "LTXV 2", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "ltxv/ltxv-2" },
+  { id: "video-pixverse", name: "PixVerse V5", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "pixverse/v5/text-to-video" },
+  { id: "video-veo31-t2v", name: "Veo 3.1 (Texte → Vidéo)", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "google/veo-3.1-t2v" },
+  { id: "video-veo31-i2v", name: "Veo 3.1 (Image → Vidéo)", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "google/veo-3.1-i2v" },
+  { id: "video-kling", name: "Kling 2.6 Pro (à confirmer)", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "kling-video/v2.6-pro/text-to-video" },
+  { id: "video-minimax", name: "MiniMax Hailuo 2.3 Fast (à confirmer)", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "minimax/hailuo-2.3-fast" }
 ];
 
 const CATEGORY_LABELS = {
@@ -76,6 +85,7 @@ const CATEGORY_LABELS = {
   "musique-libre": { icon: "🆓", name: "Musique libre de droit" },
   "musique-ambiance": { icon: "🎼", name: "Ambiances instrumentales" },
   "musique-chanson": { icon: "🎤", name: "Chansons complètes" },
+  video: { icon: "🎬", name: "Génération vidéo" },
   consultation: { icon: "🧭", name: "Outils Consultation" },
   exercices: { icon: "✨", name: "Générateur d'exercices" },
   contenu: { icon: "🖋️", name: "Outils création contenu" },
@@ -392,6 +402,54 @@ export default {
         return { id: v.id, thumb: v.image, preview: sd ? sd.link : null, full: hd ? hd.link : null, duration: v.duration, photographer: v.user ? v.user.name : "", url: v.url };
       });
       return json({ videos });
+    }
+
+    // --- Vidéo (AIMLAPI) : soumission ---
+    if (request.method === "POST" && url.pathname === "/api/generate-video") {
+      try {
+        const body = await request.json();
+        const tools = await getTools(env);
+        const tool = tools.find(t => t.id === body.toolId);
+        if (!tool) return json({ error: "Outil introuvable" }, 400);
+        const providers = await getProviders(env);
+        const provider = providers.find(p => p.id === tool.providerId);
+        if (!provider) return json({ error: `Fournisseur inconnu: ${tool.providerId}` }, 400);
+        const apiKey = env[provider.api_key_secret];
+        if (!apiKey) return json({ error: `Clé manquante (${provider.api_key_secret})` }, 500);
+
+        const v2Base = provider.base_url.replace(/\/v1$/, "/v2");
+        const payload = { model: tool.model, prompt: body.prompt };
+        if (body.image_url) payload.image_url = body.image_url;
+
+        const res = await fetch(`${v2Base}/video/generations`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
+        return json({ id: data.id, status: data.status });
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
+    }
+
+    // --- Vidéo (AIMLAPI) : statut ---
+    if (request.method === "GET" && url.pathname === "/api/generate-video/status") {
+      try {
+        const genId = url.searchParams.get("id");
+        if (!genId) return json({ error: "Paramètre id requis" }, 400);
+        const providers = await getProviders(env);
+        const provider = providers.find(p => p.id === "aimlapi");
+        const apiKey = env[provider.api_key_secret];
+        const v2Base = provider.base_url.replace(/\/v1$/, "/v2");
+
+        const res = await fetch(`${v2Base}/video/generations?generation_id=${encodeURIComponent(genId)}`, { headers: { "Authorization": `Bearer ${apiKey}` } });
+        const data = await res.json();
+        return json({ status: data.status, video_url: data.video ? data.video.url : null, error: data.error });
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
     }
 
     // --- Freesound : recherche par mots-clés (libre de droit) ---
