@@ -376,7 +376,7 @@ export default {
             avatars.push({ id: g.id, name: g.name || "Avatar", preview: g.preview_image_url });
           }
         }
-        return json({ avatars, raw_groups_count: groups.length });
+        return json({ avatars, raw_groups_count: groups.length, debug_raw: avatars.length === 0 ? groupsData : undefined });
       } catch (err) {
         return json({ error: err.message || String(err) }, 500);
       }
