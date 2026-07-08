@@ -128,13 +128,14 @@ async function callOpenAiCompatible(provider, env, { model, messages, max_tokens
   return { text: data.choices?.[0]?.message?.content ?? "", usage: data.usage || null, elapsedMs };
 }
 
-async function callImageGeneration(provider, env, { model, prompt, aspect_ratio }) {
+async function callImageGeneration(provider, env, { model, prompt, aspect_ratio, image_urls }) {
   const apiKey = provider.api_key_secret ? env[provider.api_key_secret] : null;
   if (!apiKey) throw new Error(`Clé API manquante pour ${provider.id} (secret: ${provider.api_key_secret})`);
 
   const started = Date.now();
   const payload = { model, prompt };
   if (aspect_ratio) payload.aspect_ratio = aspect_ratio;
+  if (image_urls && image_urls.length) payload.image_urls = image_urls;
 
   const res = await fetch(`${provider.base_url}/images/generations`, {
     method: "POST",
@@ -408,7 +409,7 @@ export default {
         const providers = await getProviders(env);
         const provider = providers.find(p => p.id === tool.providerId);
         if (!provider) return json({ error: `Fournisseur inconnu: ${tool.providerId}` }, 400);
-        const result = await callImageGeneration(provider, env, { model: tool.model, prompt: body.prompt, aspect_ratio: body.aspect_ratio || tool.aspect_ratio });
+        const result = await callImageGeneration(provider, env, { model: tool.model, prompt: body.prompt, aspect_ratio: body.aspect_ratio || tool.aspect_ratio, image_urls: body.image_urls });
         return json(result);
       } catch (err) {
         return json({ error: err.message || String(err) }, 500);
