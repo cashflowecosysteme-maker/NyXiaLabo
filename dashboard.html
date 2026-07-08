@@ -224,6 +224,9 @@
       renderSidebar()
       var tool = tools.find(function (t) { return t.id === id })
       if (tool && tool.kind === 'image') { renderImageTool(tool); return }
+      if (tool && tool.kind === 'image-async') { renderImageTool(tool); return }
+      if (tool && tool.kind === 'audio') { renderAudioTool(tool); return }
+      if (tool && tool.kind === 'audio-search') { renderAudioSearchTool(tool); return }
       renderChatTool(tool)
     }
 
@@ -779,6 +782,121 @@
       document.getElementById('panel-actions').innerHTML = ''
       document.getElementById('panel-body').innerHTML = '<iframe src="/wan-image.html" style="width:100%;height:100%;min-height:640px;border:none;display:block;border-radius:12px"></iframe>'
     }
+
+    /* ═══════ MUSIQUE — GÉNÉRATION (AIMLAPI, async) ═══════ */
+    var audioHistories = {} // toolId -> [{prompt, lyrics, url, pending, errorMsg}]
+
+    function renderAudioTool(tool) {
+      document.getElementById('panel-title').textContent = tool.name
+      document.getElementById('panel-sub').textContent = (providers.find(function (p) { return p.id === tool.providerId }) || {}).name + ' · ' + tool.model
+      document.getElementById('panel-actions').innerHTML = '<button class="btn-mini" onclick="clearAudioHistory()">🗑️ Effacer</button>'
+
+      var history = audioHistories[tool.id] || []
+      var body =
+        '<div style="max-width:760px;margin:0 auto 12px">' +
+          '<label class="f-label">Prompt (style, ambiance, instruments...)</label>' +
+          '<textarea id="audio-prompt" style="min-height:80px" placeholder="ex: piano solo apaisant, ambiance méditation, tempo lent"></textarea>' +
+        '</div>' +
+        (tool.needs_lyrics ? '<div style="max-width:760px;margin:0 auto 12px">' +
+          '<label class="f-label">Paroles</label>' +
+          '<textarea id="audio-lyrics" style="min-height:120px" placeholder="[Couplet]\nÉcris tes paroles ici...\n[Refrain]\n..."></textarea>' +
+        '</div>' : '') +
+        '<div style="max-width:760px;margin:0 auto 20px"><button class="btn-primary" id="audio-gen-btn" onclick="generateAudio()">🎵 Générer</button></div>' +
+        '<div id="audio-history" style="max-width:760px;margin:0 auto">' +
+        (history.length ? history.map(renderAudioEntry).reverse().join('') : '<div class="chat-empty">Aucune piste générée avec ' + esc(tool.name) + ' pour l\'instant.</div>') +
+        '</div>'
+      document.getElementById('panel-body').innerHTML = body
+    }
+
+    function renderAudioEntry(entry) {
+      if (entry.pending) return '<div class="result-box" style="margin-bottom:16px">⏳ ' + esc(entry.prompt) + ' — génération en cours...</div>'
+      if (entry.errorMsg) return '<div class="result-box result-error" style="margin-bottom:16px">' + esc(entry.prompt) + ' — ' + esc(entry.errorMsg) + '</div>'
+      return '<div style="margin-bottom:16px"><div style="font-size:13px;color:var(--t3);margin-bottom:6px">' + esc(entry.prompt) + '</div>' +
+        '<audio controls src="' + entry.url + '" style="width:100%"></audio>' +
+        '<div style="margin-top:4px"><a class="btn-mini" href="' + entry.url + '" target="_blank" download>⬇️ Télécharger</a></div></div>'
+    }
+
+    function generateAudio() {
+      var tool = tools.find(function (t) { return t.id === currentToolId })
+      var prompt = document.getElementById('audio-prompt').value.trim()
+      var lyrics = tool.needs_lyrics ? document.getElementById('audio-lyrics').value.trim() : ''
+      if (!prompt) return
+      var btn = document.getElementById('audio-gen-btn')
+      btn.disabled = true; btn.textContent = 'Génération en cours...'
+
+      fetch('/api/generate-audio', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ toolId: tool.id, prompt: prompt, lyrics: lyrics || undefined })
+      })
+      .then(function (r) { return r.json() })
+      .then(function (data) {
+        if (data.error) { btn.disabled = false; btn.textContent = '🎵 Générer'; alert('Erreur : ' + data.error); return }
+        audioHistories[tool.id] = audioHistories[tool.id] || []
+        var entry = { prompt: prompt, pending: true }
+        audioHistories[tool.id].push(entry)
+        renderAudioTool(tool)
+        pollAudio(data.id, tool, entry, btn)
+      })
+      .catch(function (e) { btn.disabled = false; btn.textContent = '🎵 Générer'; alert('Erreur réseau : ' + e.message) })
+    }
+
+    function pollAudio(genId, tool, entry, btn, attempt) {
+      attempt = attempt || 0
+      if (attempt > 40) { entry.pending = false; entry.errorMsg = 'Timeout — vérifie ton dashboard AIMLAPI.'; renderAudioTool(tool); btn.disabled = false; btn.textContent = '🎵 Générer'; return }
+      fetch('/api/generate-audio/status?id=' + encodeURIComponent(genId), { headers: authHeaders() })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          if (data.status === 'completed' && data.audio_url) {
+            entry.pending = false; entry.url = data.audio_url
+            renderAudioTool(tool); btn.disabled = false; btn.textContent = '🎵 Générer'
+          } else if (data.status === 'error' || data.error) {
+            entry.pending = false; entry.errorMsg = data.error ? JSON.stringify(data.error) : 'Échec de la génération'
+            renderAudioTool(tool); btn.disabled = false; btn.textContent = '🎵 Générer'
+          } else {
+            setTimeout(function () { pollAudio(genId, tool, entry, btn, attempt + 1) }, 5000)
+          }
+        })
+        .catch(function () { setTimeout(function () { pollAudio(genId, tool, entry, btn, attempt + 1) }, 7000) })
+    }
+
+    function clearAudioHistory() {
+      audioHistories[currentToolId] = []
+      var tool = tools.find(function (t) { return t.id === currentToolId })
+      renderAudioTool(tool)
+    }
+
+    /* ═══════ MUSIQUE — FREESOUND (recherche, libre de droit) ═══════ */
+    function renderAudioSearchTool(tool) {
+      document.getElementById('panel-title').textContent = tool.name
+      document.getElementById('panel-sub').textContent = 'Recherche par mots-clés — sons et musiques libres de droit'
+      document.getElementById('panel-actions').innerHTML = ''
+      document.getElementById('panel-body').innerHTML =
+        '<div class="field-row" style="max-width:760px;margin:0 auto 16px">' +
+          '<div class="field"><input type="text" id="freesound-q" placeholder="ex: pluie, piano, ambiance forêt" onkeydown="if(event.key===\'Enter\') runFreesoundSearch()"></div>' +
+          '<div><button class="btn-primary" onclick="runFreesoundSearch()">Rechercher</button></div>' +
+        '</div>' +
+        '<div id="freesound-results" style="max-width:760px;margin:0 auto"></div>'
+    }
+
+    function runFreesoundSearch() {
+      var q = document.getElementById('freesound-q').value.trim()
+      if (!q) return
+      var out = document.getElementById('freesound-results')
+      out.innerHTML = 'Recherche en cours...'
+      fetch('/api/freesound-search?q=' + encodeURIComponent(q), { headers: authHeaders() })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          if (data.error) { out.innerHTML = '<div class="result-box result-error">' + esc(data.error) + '</div>'; return }
+          out.innerHTML = (data.results || []).map(function (s) {
+            return '<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(123,92,255,0.08)">' +
+              '<div style="font-size:13px;margin-bottom:4px">' + esc(s.name) + ' <span style="color:var(--t4)">— ' + esc(s.username) + ' · ' + Math.round(s.duration) + 's</span></div>' +
+              (s.preview ? '<audio controls src="' + s.preview + '" style="width:100%"></audio>' : '<div style="color:var(--t4);font-size:12px">Aperçu indisponible</div>') +
+              '</div>'
+          }).join('') || 'Aucun résultat.'
+        })
+        .catch(function (e) { out.innerHTML = 'Erreur : ' + e.message })
+    }
+
     var heygenAvatars = [], heygenVoices = [], heygenLoaded = false
     function heygenView() {
       currentView = 'heygen'; renderSidebar()
