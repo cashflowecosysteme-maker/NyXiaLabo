@@ -664,7 +664,7 @@
   <script>
     /* Protection NyXia — vérifie la session */
     ;(function() {
-      var token = sessionStorage.getItem('nyxia_token')
+      var token = sessionStorage.getItem('sandbox_token')
       if (!token) { window.location.href = '/login.html'; return }
       fetch('/api/check-auth', {
         method: 'POST',
@@ -1044,7 +1044,7 @@
 
       fetch('/api/wan-video', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + sessionStorage.getItem('sandbox_token') },
         body: JSON.stringify(payload)
       })
       .then(function(r) { return r.json() })
@@ -1090,7 +1090,7 @@
 
         fetch('/api/wan-video/status', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + sessionStorage.getItem('sandbox_token') },
           body: JSON.stringify({ taskId: taskId })
         })
         .then(function(r) { return r.json() })
