@@ -8,7 +8,7 @@ compatibility_date = "2026-07-01"
 directory = "./"
 binding = "ASSETS"
 
-# Remplace "COLLE_ICI_TON_VRAI_ID" par l'ID copié depuis
+# Remplace "75b93baac0974f8cb8d1f2089eceb4e6" par l'ID copié depuis
 # Stockage et bases de données → KV → HUB_CONFIG dans le dashboard Cloudflare.
 [[kv_namespaces]]
 binding = "HUB_CONFIG"
