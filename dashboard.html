@@ -208,6 +208,11 @@
       currentView = 'chat'; currentToolId = id
       renderSidebar()
       var tool = tools.find(function (t) { return t.id === id })
+      if (tool && tool.kind === 'image') { renderImageTool(tool); return }
+      renderChatTool(tool)
+    }
+
+    function renderChatTool(tool) {
       document.getElementById('panel-title').textContent = tool.name
       document.getElementById('panel-sub').textContent = (providers.find(function(p){return p.id===tool.providerId}) || {}).name + ' · ' + tool.model
       document.getElementById('panel-actions').innerHTML =
@@ -215,7 +220,7 @@
         '<button class="btn-mini" onclick="toggleToolSettings()">⚙️ Réglages</button> ' +
         '<button class="btn-mini" onclick="clearChat()">🗑️ Effacer</button>'
 
-      var history = chatHistories[id] || []
+      var history = chatHistories[tool.id] || []
       var body = '<div class="tool-settings" id="tool-settings">' +
         '<label class="f-label">Prompt système</label>' +
         '<textarea id="settings-prompt" onchange="updateToolField(\'system_prompt\', this.value)">' + esc(tool.system_prompt) + '</textarea>' +
@@ -242,6 +247,71 @@
       input.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 140) + 'px' })
       input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } })
       input.focus()
+    }
+
+    /* ═══════ GÉNÉRATION D'IMAGE (même logique que les chats : switch de modèle, historique) ═══════ */
+    var imageHistories = {} // toolId -> [{prompt, images, time}]
+
+    function renderImageTool(tool) {
+      document.getElementById('panel-title').textContent = tool.name
+      document.getElementById('panel-sub').textContent = (providers.find(function (p) { return p.id === tool.providerId }) || {}).name + ' · ' + tool.model
+      document.getElementById('panel-actions').innerHTML = '<button class="btn-mini" onclick="clearImageHistory()">🗑️ Effacer</button>'
+
+      var history = imageHistories[tool.id] || []
+      var body =
+        '<div class="field-row" style="max-width:760px;margin:0 auto 12px">' +
+          '<div class="field" style="flex:3"><label class="f-label">Prompt</label><textarea id="img-prompt" style="min-height:80px" placeholder="Décris l\'image que tu veux générer..."></textarea></div>' +
+          '<div class="field" style="flex:1"><label class="f-label">Format</label><select id="img-ratio">' +
+            ['1:1', '16:9', '9:16', '4:3', '3:4'].map(function (r) { return '<option value="' + r + '"' + (tool.aspect_ratio === r ? ' selected' : '') + '>' + r + '</option>' }).join('') +
+          '</select></div>' +
+        '</div>' +
+        '<div style="max-width:760px;margin:0 auto 20px"><button class="btn-primary" id="img-gen-btn" onclick="generateImage()">🎨 Générer</button></div>' +
+        '<div id="img-history" style="max-width:900px;margin:0 auto">' +
+        (history.length ? history.map(renderImageEntry).reverse().join('') : '<div class="chat-empty">Aucune image générée avec ' + esc(tool.name) + ' pour l\'instant.</div>') +
+        '</div>'
+      document.getElementById('panel-body').innerHTML = body
+    }
+
+    function renderImageEntry(entry) {
+      var imgs = entry.images.map(function (url) {
+        return '<a href="' + url + '" target="_blank" download><img src="' + url + '" style="width:100%;border-radius:10px;display:block"></a>'
+      }).join('')
+      return '<div style="margin-bottom:24px">' +
+        '<div style="font-size:13px;color:var(--t3);margin-bottom:8px">' + esc(entry.prompt) + '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">' + imgs + '</div></div>'
+    }
+
+    function generateImage() {
+      var tool = tools.find(function (t) { return t.id === currentToolId })
+      var prompt = document.getElementById('img-prompt').value.trim()
+      var ratio = document.getElementById('img-ratio').value
+      if (!prompt) return
+      var btn = document.getElementById('img-gen-btn')
+      btn.disabled = true; btn.textContent = 'Génération en cours...'
+
+      fetch('/api/generate-image', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ toolId: tool.id, prompt: prompt, aspect_ratio: ratio })
+      })
+      .then(function (r) { return r.json() })
+      .then(function (data) {
+        btn.disabled = false; btn.textContent = '🎨 Générer'
+        if (data.error) { alert('Erreur : ' + data.error); return }
+        imageHistories[tool.id] = imageHistories[tool.id] || []
+        imageHistories[tool.id].push({ prompt: prompt, images: data.images, time: Date.now() })
+        document.getElementById('img-prompt').value = ''
+        renderImageTool(tool)
+      })
+      .catch(function (e) {
+        btn.disabled = false; btn.textContent = '🎨 Générer'
+        alert('Erreur réseau : ' + e.message)
+      })
+    }
+
+    function clearImageHistory() {
+      imageHistories[currentToolId] = []
+      var tool = tools.find(function (t) { return t.id === currentToolId })
+      renderImageTool(tool)
     }
 
     function toggleToolSettings() { document.getElementById('tool-settings').classList.toggle('open') }
@@ -419,7 +489,8 @@
     }
 
     function editTool(id) {
-      var tool = id ? tools.find(function (t) { return t.id === id }) : { name:'', icon:'⚙️', category:'conversation', providerId: providers[0] ? providers[0].id : '', model:'', system_prompt:'', max_tokens:2000, temperature:0.7 }
+      var tool = id ? tools.find(function (t) { return t.id === id }) : { name:'', icon:'⚙️', category:'conversation', kind:'chat', providerId: providers[0] ? providers[0].id : '', model:'', system_prompt:'', max_tokens:2000, temperature:0.7, aspect_ratio:'1:1' }
+      var isImage = tool.kind === 'image'
       var catOptions = Object.keys(CATEGORY_LABELS).map(function (c) {
         return '<option value="' + c + '"' + (tool.category === c ? ' selected' : '') + '>' + CATEGORY_LABELS[c].icon + ' ' + CATEGORY_LABELS[c].name + '</option>'
       }).join('') + '<option value="custom"' + (!CATEGORY_LABELS[tool.category] ? ' selected' : '') + '>➕ Autre (nouvelle catégorie)</option>'
@@ -427,33 +498,56 @@
       var provOptions = providers.map(function (p) { return '<option value="' + p.id + '"' + (tool.providerId === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>' }).join('')
 
       var html = '<div class="form-card">' +
+        '<div class="field"><label class="f-label">Type d\'outil</label><select id="f-kind" onchange="toggleToolKindFields()">' +
+          '<option value="chat"' + (!isImage ? ' selected' : '') + '>💬 Chat (conversation, écriture, etc.)</option>' +
+          '<option value="image"' + (isImage ? ' selected' : '') + '>🎨 Génération d\'image</option>' +
+        '</select></div>' +
         '<div class="field-row"><div class="field"><label class="f-label">Icône (emoji)</label><input type="text" id="f-icon" value="' + esc(tool.icon) + '"></div>' +
         '<div class="field" style="flex:3"><label class="f-label">Nom</label><input type="text" id="f-name" value="' + esc(tool.name) + '"></div></div>' +
         '<div class="field-row"><div class="field"><label class="f-label">Catégorie</label><select id="f-category" onchange="document.getElementById(\'f-category-custom\').style.display = this.value===\'custom\'?\'block\':\'none\'">' + catOptions + '</select>' +
         '<input type="text" id="f-category-custom" placeholder="nom-de-la-categorie" style="margin-top:6px;display:' + (!CATEGORY_LABELS[tool.category] ? 'block' : 'none') + '" value="' + (!CATEGORY_LABELS[tool.category] ? esc(tool.category) : '') + '"></div>' +
         '<div class="field"><label class="f-label">Fournisseur</label><select id="f-provider">' + provOptions + '</select></div></div>' +
-        '<div class="field"><label class="f-label">Modèle (id technique)</label><input type="text" id="f-model" value="' + esc(tool.model) + '" placeholder="ex: anthropic/claude-sonnet-5"></div>' +
-        '<div class="field"><label class="f-label">Prompt système (optionnel)</label><textarea id="f-prompt" style="min-height:90px">' + esc(tool.system_prompt) + '</textarea></div>' +
-        '<div class="field-row"><div class="field"><label class="f-label">Max tokens</label><input type="number" id="f-maxtokens" value="' + tool.max_tokens + '"></div>' +
-        '<div class="field"><label class="f-label">Température</label><input type="number" step="0.1" id="f-temp" value="' + tool.temperature + '"></div></div>' +
+        '<div class="field"><label class="f-label">Modèle (id technique)</label><input type="text" id="f-model" value="' + esc(tool.model) + '" placeholder="ex: anthropic/claude-sonnet-5 ou openai/gpt-image-2"></div>' +
+        '<div id="f-chat-fields" style="display:' + (isImage ? 'none' : 'block') + '">' +
+          '<div class="field"><label class="f-label">Prompt système (optionnel)</label><textarea id="f-prompt" style="min-height:90px">' + esc(tool.system_prompt || '') + '</textarea></div>' +
+          '<div class="field-row"><div class="field"><label class="f-label">Max tokens</label><input type="number" id="f-maxtokens" value="' + (tool.max_tokens || 2000) + '"></div>' +
+          '<div class="field"><label class="f-label">Température</label><input type="number" step="0.1" id="f-temp" value="' + (tool.temperature != null ? tool.temperature : 0.7) + '"></div></div>' +
+        '</div>' +
+        '<div id="f-image-fields" style="display:' + (isImage ? 'block' : 'none') + '">' +
+          '<div class="field"><label class="f-label">Format par défaut</label><select id="f-aspect">' +
+            ['1:1', '16:9', '9:16', '4:3', '3:4'].map(function (r) { return '<option value="' + r + '"' + (tool.aspect_ratio === r ? ' selected' : '') + '>' + r + '</option>' }).join('') +
+          '</select></div>' +
+        '</div>' +
         '<button class="btn-primary" onclick="saveTool(' + (id ? "'" + id + "'" : 'null') + ')">Enregistrer</button> ' +
         '<button class="btn-mini" onclick="showToolsManager()">Annuler</button>' +
         '</div>'
       document.getElementById('tool-form-slot').innerHTML = html
     }
 
+    function toggleToolKindFields() {
+      var isImage = document.getElementById('f-kind').value === 'image'
+      document.getElementById('f-chat-fields').style.display = isImage ? 'none' : 'block'
+      document.getElementById('f-image-fields').style.display = isImage ? 'block' : 'none'
+    }
+
     function saveTool(id) {
       var category = document.getElementById('f-category').value
       if (category === 'custom') category = document.getElementById('f-category-custom').value.trim().toLowerCase().replace(/\s+/g,'-') || 'autre'
+      var kind = document.getElementById('f-kind').value
       var payload = {
         name: document.getElementById('f-name').value.trim(),
         icon: document.getElementById('f-icon').value.trim() || '⚙️',
         category: category,
+        kind: kind,
         providerId: document.getElementById('f-provider').value,
-        model: document.getElementById('f-model').value.trim(),
-        system_prompt: document.getElementById('f-prompt').value,
-        max_tokens: Number(document.getElementById('f-maxtokens').value) || 2000,
-        temperature: Number(document.getElementById('f-temp').value)
+        model: document.getElementById('f-model').value.trim()
+      }
+      if (kind === 'image') {
+        payload.aspect_ratio = document.getElementById('f-aspect').value
+      } else {
+        payload.system_prompt = document.getElementById('f-prompt').value
+        payload.max_tokens = Number(document.getElementById('f-maxtokens').value) || 2000
+        payload.temperature = Number(document.getElementById('f-temp').value)
       }
       if (!payload.name || !payload.model) { alert('Nom et modèle sont requis.'); return }
 
