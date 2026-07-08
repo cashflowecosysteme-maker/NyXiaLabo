@@ -87,7 +87,25 @@ const DEFAULT_TOOLS = [
   { id: "eso-zenquotes", name: "Citation inspirante", icon: "💬", category: "esoterisme", kind: "esoteric", source: "zenquotes" },
   { id: "eso-sunrise", name: "Lever / Coucher du soleil", icon: "☀️", category: "esoterisme", kind: "esoteric", source: "sunrise" },
   { id: "eso-tarot", name: "Tarot (à confirmer)", icon: "🃏", category: "esoterisme", kind: "esoteric", source: "tarot" },
-  { id: "stt-whisper", name: "Whisper Large v3", icon: "🎙️", category: "transcription", kind: "transcribe", providerId: "aimlapi", model: "#g1_whisper-large" }
+  { id: "stt-whisper", name: "Whisper Large v3", icon: "🎙️", category: "transcription", kind: "transcribe", providerId: "aimlapi", model: "#g1_whisper-large" },
+  { id: "apy-translate-webpage", name: "Traduire une page web", icon: "🌐", category: "utilites", kind: "apyhub", source: "translate-webpage" },
+  { id: "apy-analyze-webpage", name: "Analyser une page web", icon: "🌐", category: "utilites", kind: "apyhub", source: "analyze-webpage" },
+  { id: "apy-audio-convert", name: "Convertir WAV → MP3", icon: "🔊", category: "utilites", kind: "apyhub", source: "audio-wav-to-mp3" },
+  { id: "apy-extract-contact", name: "Extraire des contacts", icon: "📇", category: "utilites", kind: "apyhub", source: "extract-contact" },
+  { id: "apy-thumbnail", name: "Créer une miniature", icon: "🖼️", category: "utilites", kind: "apyhub", source: "image-thumbnail" },
+  { id: "apy-webpage-audit", name: "Audit technique de site", icon: "🔍", category: "utilites", kind: "apyhub", source: "webpage-audit" },
+  { id: "apy-market-trends", name: "Tendances de marché", icon: "📈", category: "utilites", kind: "apyhub", source: "market-trends" },
+  { id: "apy-product-intro", name: "Description produit", icon: "🛍️", category: "utilites", kind: "apyhub", source: "product-intro" },
+  { id: "apy-qrcode", name: "Générer un QR code", icon: "📱", category: "utilites", kind: "apyhub", source: "qr-code" },
+  { id: "apy-watermark", name: "Filigrane sur image", icon: "💧", category: "utilites", kind: "apyhub", source: "image-watermark" },
+  { id: "apy-compress", name: "Compresser une image", icon: "🗜️", category: "utilites", kind: "apyhub", source: "image-compress" },
+  { id: "apy-crop", name: "Recadrer une image", icon: "✂️", category: "utilites", kind: "apyhub", source: "image-crop" },
+  { id: "apy-resize", name: "Redimensionner une image", icon: "📐", category: "utilites", kind: "apyhub", source: "image-resize" },
+  { id: "apy-translate-text", name: "Traduire un texte", icon: "📝", category: "utilites", kind: "apyhub", source: "translate-text" },
+  { id: "apy-pdf-watermark", name: "Filigrane sur PDF", icon: "📄", category: "utilites", kind: "apyhub", source: "pdf-watermark" },
+  { id: "apy-pdf-watermark-footer", name: "PDF — en-tête/pied de page", icon: "📄", category: "utilites", kind: "apyhub", source: "pdf-watermark-footer" },
+  { id: "apy-summarize", name: "Résumer un texte", icon: "📋", category: "utilites", kind: "apyhub", source: "summarize-text" },
+  { id: "apy-paraphrase", name: "Paraphraser un texte", icon: "🔄", category: "utilites", kind: "apyhub", source: "paraphrase-text" }
 ];
 
 const CATEGORY_LABELS = {
@@ -103,6 +121,7 @@ const CATEGORY_LABELS = {
   video: { icon: "🎬", name: "Génération vidéo" },
   esoterisme: { icon: "🔮", name: "Ésotérisme" },
   transcription: { icon: "🎙️", name: "Transcription" },
+  utilites: { icon: "🧩", name: "Utilités" },
   consultation: { icon: "🧭", name: "Outils Consultation" },
   exercices: { icon: "✨", name: "Générateur d'exercices" },
   contenu: { icon: "🖋️", name: "Outils création contenu" },
@@ -217,6 +236,79 @@ async function callImageGeneration(provider, env, { model, prompt, aspect_ratio,
   return { images, elapsedMs };
 }
 
+const APYHUB_TOOLS = {
+  "translate-webpage": { method: "POST", path: "/namastesumalya/api/translate", type: "json" },
+  "analyze-webpage": { method: "GET", path: "/namastesumalya/api/analyze", type: "query" },
+  "audio-wav-to-mp3": { method: "POST", path: "/convert/audio/wav-file/mp3-file", type: "multipart", query: { output: "sample.mp3" }, fileFields: ["file"] },
+  "extract-contact": { method: "POST", path: "/chisleroff/extract/contact", type: "json" },
+  "image-thumbnail": { method: "POST", path: "/generate/image/thumbnail/file", type: "multipart", query: { output: "thumbnail", auto_orientation: "false", preserve_format: "true" }, fileFields: ["image"], queryFromFields: ["width", "height"] },
+  "webpage-audit": { method: "POST", path: "/namastesumalya/api/audit", type: "json" },
+  "market-trends": { method: "POST", path: "/namastesumalya/api/market-trends", type: "json" },
+  "product-intro": { method: "POST", path: "/sharpapi/api/v1/ecommerce/product_intro", type: "json" },
+  "qr-code": { method: "POST", path: "/generate/qr-code/file", type: "json", query: { output: "sample.png" } },
+  "image-watermark": { method: "POST", path: "/processor/image/watermark/file", type: "multipart", query: { output: "test-sample", preserve_format: "true" }, fileFields: ["image", "watermark_image"] },
+  "image-compress": { method: "POST", path: "/processor/image/compress/file", type: "multipart", query: { output: "test-sample", preserve_format: "true" }, fileFields: ["image"], queryFromFields: ["compression_percentage"] },
+  "image-crop": { method: "POST", path: "/processor/image/crop/file", type: "multipart", query: { output: "test-sample", preserve_format: "true" }, fileFields: ["image"], formFields: ["top"] },
+  "image-resize": { method: "POST", path: "/processor/image/resize/file", type: "multipart", query: { output: "test-sample", auto_orientation: "false", preserve_format: "true" }, fileFields: ["image"], queryFromFields: ["width", "height"] },
+  "translate-text": { method: "POST", path: "/sharpapi/api/v1/content/translate", type: "json" },
+  "pdf-watermark": { method: "POST", path: "/stamp/pdf/watermark/file", type: "multipart", query: { output: "test-sample" }, fileFields: ["file"], formFields: ["watermark_text"] },
+  "pdf-watermark-footer": { method: "POST", path: "/stamp/pdf/watermark-footers/file", type: "multipart", query: { output: "test-sample" }, fileFields: ["file", "watermark_image"], formFields: ["header_text", "footer_text"] },
+  "summarize-text": { method: "POST", path: "/sharpapi/api/v1/content/summarize", type: "json" },
+  "paraphrase-text": { method: "POST", path: "/sharpapi/api/v1/content/paraphrase", type: "json" }
+};
+
+async function callApyHub(env, source, fields, files) {
+  const config = APYHUB_TOOLS[source];
+  if (!config) throw new Error(`Outil ApyHub inconnu: ${source}`);
+  if (!env.ApyHub_KEY) throw new Error("Clé ApyHub_KEY manquante");
+
+  const base = "https://api.apyhub.com";
+  let queryParams = new URLSearchParams(config.query || {});
+  if (config.queryFromFields) config.queryFromFields.forEach(f => { if (fields[f]) queryParams.set(f, fields[f]); });
+
+  if (config.type === "query") {
+    Object.keys(fields || {}).forEach(k => { if (fields[k]) queryParams.set(k, fields[k]); });
+    const res = await fetch(`${base}${config.path}?${queryParams.toString()}`, {
+      headers: { "apy-token": env.ApyHub_KEY, "Content-Type": "application/json" }
+    });
+    return await res.json();
+  }
+
+  if (config.type === "json") {
+    const qs = queryParams.toString();
+    const res = await fetch(`${base}${config.path}${qs ? "?" + qs : ""}`, {
+      method: "POST",
+      headers: { "apy-token": env.ApyHub_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify(fields || {})
+    });
+    return await res.json();
+  }
+
+  // multipart
+  const form = new FormData();
+  for (const fieldName of (config.fileFields || [])) {
+    const dataUrl = files && files[fieldName];
+    if (!dataUrl) continue;
+    const match = dataUrl.match(/^data:(.+?);base64,(.+)$/);
+    if (!match) continue;
+    const mimeType = match[1];
+    const raw = atob(match[2]);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    form.append(fieldName, new Blob([bytes], { type: mimeType }), fieldName + "." + (mimeType.split("/")[1] || "bin"));
+  }
+  for (const fieldName of (config.formFields || [])) {
+    if (fields && fields[fieldName]) form.append(fieldName, fields[fieldName]);
+  }
+  const qs = queryParams.toString();
+  const res = await fetch(`${base}${config.path}${qs ? "?" + qs : ""}`, {
+    method: "POST",
+    headers: { "apy-token": env.ApyHub_KEY },
+    body: form
+  });
+  return await res.json();
+}
+
 // ---- Helpers KV ----
 
 async function getProviders(env) {
@@ -226,17 +318,24 @@ async function getProviders(env) {
 async function saveProviders(env, providers) {
   await env.HUB_CONFIG.put("providers", JSON.stringify(providers));
 }
+const CATEGORY_MIGRATIONS = {
+  "musique-libre": "musique",
+  "musique-ambiance": "musique",
+  "musique-chanson": "musique"
+};
+
 async function getTools(env) {
   if (env.HUB_CONFIG) {
     const stored = await env.HUB_CONFIG.get("tools", "json");
     if (stored) {
+      let changed = false;
+      stored.forEach(t => {
+        if (CATEGORY_MIGRATIONS[t.category]) { t.category = CATEGORY_MIGRATIONS[t.category]; changed = true; }
+      });
       const storedIds = new Set(stored.map(t => t.id));
       const missingDefaults = DEFAULT_TOOLS.filter(t => !storedIds.has(t.id));
-      if (missingDefaults.length) {
-        const merged = [...stored, ...missingDefaults];
-        await saveTools(env, merged);
-        return merged;
-      }
+      const merged = missingDefaults.length ? [...stored, ...missingDefaults] : stored;
+      if (changed || missingDefaults.length) { await saveTools(env, merged); return merged; }
       return stored;
     }
   }
@@ -589,6 +688,17 @@ export default {
         const res = await fetch(`${provider.base_url}/generations/${genId}`, { headers: { "Authorization": `Bearer ${apiKey}` } });
         const data = await res.json();
         return json({ status: data.status, output_url: data.output_url, thumbnail_url: data.thumbnail_url, error: data.error });
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
+    }
+
+    // --- ApyHub : appel générique vers l'un des 17 outils configurés ---
+    if (request.method === "POST" && url.pathname === "/api/apyhub") {
+      try {
+        const body = await request.json();
+        const data = await callApyHub(env, body.source, body.fields || {}, body.files || {});
+        return json(data);
       } catch (err) {
         return json({ error: err.message || String(err) }, 500);
       }
