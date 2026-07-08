@@ -41,6 +41,8 @@
     .nav-item:hover { background: rgba(123,92,255,0.08); color: var(--t2); }
     .nav-item.active { background: rgba(123,92,255,0.15); color: var(--t); border-color: rgba(123,92,255,0.3); }
     .sidebar-divider { height: 1px; background: rgba(123,92,255,0.08); margin: 8px 12px; }
+    .cat-select { width: 100%; padding: 8px 10px; font-size: 12.5px; border-radius: 8px; }
+    .cat-select.active { border-color: rgba(123,92,255,0.55); box-shadow: 0 0 0 2px rgba(123,92,255,0.12); color: var(--t); }
 
     .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
     .panel-header { padding: 14px 24px; border-bottom: 1px solid rgba(123,92,255,0.1); background: rgba(10,22,40,0.6); flex-shrink: 0; display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -164,22 +166,24 @@
       })
     }
 
-    /* ═══════ SIDEBAR ═══════ */
+    /* ═══════ SIDEBAR (une ligne par catégorie, menu déroulant pour les outils) ═══════ */
     function renderSidebar() {
       var el = document.getElementById('sidebar')
       var byCategory = {}
       tools.forEach(function (t) { (byCategory[t.category] = byCategory[t.category] || []).push(t) })
+      var currentTool = tools.find(function (t) { return t.id === currentToolId })
 
       var html = ''
       Object.keys(byCategory).forEach(function (cat) {
         var meta = CATEGORY_LABELS[cat] || { icon: '⚙️', name: cat.charAt(0).toUpperCase() + cat.slice(1) }
-        html += '<div class="sidebar-section"><div class="sidebar-label">' + meta.icon + ' ' + esc(meta.name) + '</div>'
-        byCategory[cat].forEach(function (t) {
-          var active = (currentView === 'chat' && currentToolId === t.id)
-          html += '<div class="nav-item' + (active ? ' active' : '') + '" onclick="selectTool(\'' + t.id + '\')">' +
-            '<span>' + t.icon + '</span> ' + esc(t.name) + '</div>'
-        })
-        html += '</div>'
+        var isActiveCat = currentView === 'chat' && currentTool && currentTool.category === cat
+        var options = byCategory[cat].map(function (t) {
+          return '<option value="' + t.id + '"' + (currentToolId === t.id ? ' selected' : '') + '>' + t.icon + ' ' + esc(t.name) + '</option>'
+        }).join('')
+        html += '<div class="sidebar-section">' +
+          '<div class="sidebar-label">' + meta.icon + ' ' + esc(meta.name) + '</div>' +
+          '<select class="cat-select' + (isActiveCat ? ' active' : '') + '" onchange="selectTool(this.value)">' + options + '</select>' +
+          '</div>'
       })
 
       html += '<div class="sidebar-divider"></div><div class="sidebar-section"><div class="sidebar-label">Gestion</div>' +
@@ -426,13 +430,16 @@
     }
 
     /* ═══════ PEXELS ═══════ */
+    var pexelsMode = 'photo'
     function pexelsView() {
       currentView = 'pexels'; renderSidebar()
       document.getElementById('panel-title').textContent = 'Banque Pexels'
-      document.getElementById('panel-sub').textContent = 'Recherche de photos libres de droits'
+      document.getElementById('panel-sub').textContent = 'Photos et vidéos libres de droits'
       document.getElementById('panel-actions').innerHTML = ''
       document.getElementById('panel-body').innerHTML =
-        '<div class="field-row"><div class="field"><input type="text" id="pexels-q" placeholder="ex: méditation, forêt, femme sereine" onkeydown="if(event.key===\'Enter\') runPexels()"></div>' +
+        '<div class="field-row"><div class="field" style="flex:0 0 160px"><select id="pexels-mode" onchange="pexelsMode=this.value">' +
+          '<option value="photo">📷 Photos</option><option value="video">🎬 Vidéos</option></select></div>' +
+        '<div class="field"><input type="text" id="pexels-q" placeholder="ex: méditation, forêt, femme sereine" onkeydown="if(event.key===\'Enter\') runPexels()"></div>' +
         '<div><button class="btn-primary" onclick="runPexels()">Rechercher</button></div></div>' +
         '<div class="pexels-grid" id="pexels-grid"></div>'
     }
@@ -441,13 +448,22 @@
       if (!q) return
       var grid = document.getElementById('pexels-grid')
       grid.innerHTML = 'Chargement...'
-      fetch('/api/pexels-search?q=' + encodeURIComponent(q), { headers: authHeaders() })
+      var endpoint = pexelsMode === 'video' ? '/api/pexels-video-search' : '/api/pexels-search'
+      fetch(endpoint + '?q=' + encodeURIComponent(q), { headers: authHeaders() })
         .then(function (r) { return r.json() })
         .then(function (data) {
           if (data.error) { grid.innerHTML = 'Erreur : ' + esc(data.error); return }
-          grid.innerHTML = (data.photos || []).map(function (p) {
-            return '<div class="pexels-item"><a href="' + p.full + '" target="_blank"><img src="' + p.thumb + '" loading="lazy"></a>' + esc(p.photographer) + '</div>'
-          }).join('') || 'Aucun résultat.'
+          if (pexelsMode === 'video') {
+            grid.innerHTML = (data.videos || []).map(function (v) {
+              return '<div class="pexels-item"><a href="' + v.full + '" target="_blank">' +
+                '<video src="' + v.preview + '" poster="' + v.thumb + '" muted preload="none" style="width:100%;border-radius:10px;display:block" onmouseover="this.play()" onmouseout="this.pause()"></video></a>' +
+                esc(v.photographer) + ' · ' + (v.duration || '?') + 's</div>'
+            }).join('') || 'Aucun résultat.'
+          } else {
+            grid.innerHTML = (data.photos || []).map(function (p) {
+              return '<div class="pexels-item"><a href="' + p.full + '" target="_blank"><img src="' + p.thumb + '" loading="lazy"></a>' + esc(p.photographer) + '</div>'
+            }).join('') || 'Aucun résultat.'
+          }
         })
         .catch(function (e) { grid.innerHTML = 'Erreur : ' + e.message })
     }
