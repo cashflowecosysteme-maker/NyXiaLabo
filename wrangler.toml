@@ -1,0 +1,17 @@
+name = "nyxia-sandbox-hub"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+# Namespace KV pour stocker la config des fournisseurs.
+# Crée-le avec : wrangler kv namespace create HUB_CONFIG
+# puis colle l'id retourné ci-dessous.
+[[kv_namespaces]]
+binding = "HUB_CONFIG"
+id = "COLLE_ICI_L_ID_RETOURNE_PAR_WRANGLER"
+
+# Secrets à définir séparément (jamais dans ce fichier, jamais commit) :
+#   wrangler secret put OPENROUTER_API_KEY
+#   wrangler secret put ADMIN_TOKEN
+#
+# ADMIN_TOKEN protège l'endpoint PUT /api/config (mise à jour des fournisseurs).
+# Choisis une chaîne aléatoire longue, garde-la seulement pour toi.
