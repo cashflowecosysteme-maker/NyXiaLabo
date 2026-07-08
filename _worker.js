@@ -301,22 +301,94 @@ export default {
       return json({ videos });
     }
 
-    // --- HeyGen : liste des avatars ---
-    if (request.method === "GET" && url.pathname === "/api/heygen/avatars") {
+    // --- HeyGen : créer un nouvel avatar (Photo Avatar) à partir d'une image ---
+    if (request.method === "POST" && url.pathname === "/api/heygen/create-avatar") {
       if (!env.HEYGEN_API_KEY) return json({ error: "Clé HEYGEN_API_KEY manquante" }, 500);
-      const res = await fetch("https://api.heygen.com/v2/avatars", { headers: { "X-Api-Key": env.HEYGEN_API_KEY } });
-      const data = await res.json();
-      const avatars = ((data.data && data.data.avatars) || []).map(a => ({ id: a.avatar_id, name: a.avatar_name, preview: a.preview_image_url }));
-      return json({ avatars });
+      try {
+        const body = await request.json();
+        const name = body.name || "Avatar sans nom";
+        const imageBase64 = body.image_base64 || ""; // data URL complète: data:image/jpeg;base64,...
+        if (!imageBase64) return json({ error: "Image requise" }, 400);
+
+        const matches = imageBase64.match(/^data:(.+?);base64,(.+)$/);
+        if (!matches) return json({ error: "Format d'image invalide" }, 400);
+        const mimeType = matches[1];
+        const raw = atob(matches[2]);
+        const bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        const blob = new Blob([bytes], { type: mimeType });
+
+        // Étape 1 : upload de l'asset
+        const form = new FormData();
+        form.append("file", blob, "avatar-photo." + (mimeType.split("/")[1] || "jpg"));
+        const uploadRes = await fetch("https://api.heygen.com/v3/assets", {
+          method: "POST",
+          headers: { "X-Api-Key": env.HEYGEN_API_KEY },
+          body: form
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok || !uploadData.data || !uploadData.data.url) {
+          return json({ error: (uploadData.error && uploadData.error.message) || "Échec de l'upload de la photo" }, 500);
+        }
+
+        // Étape 2 : création de l'avatar à partir de l'asset uploadé
+        const avatarRes = await fetch("https://api.heygen.com/v3/avatars", {
+          method: "POST",
+          headers: { "X-Api-Key": env.HEYGEN_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "photo", name, file: { type: "url", url: uploadData.data.url } })
+        });
+        const avatarData = await avatarRes.json();
+        if (!avatarRes.ok || !avatarData.data) {
+          return json({ error: (avatarData.error && avatarData.error.message) || "Échec de la création de l'avatar" }, 500);
+        }
+
+        return json({ ok: true, avatar: avatarData.data.avatar_item, group: avatarData.data.avatar_group });
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
     }
 
-    // --- HeyGen : liste des voix ---
+    // --- HeyGen : liste de TES avatars uniquement (pas la bibliothèque publique) ---
+    if (request.method === "GET" && url.pathname === "/api/heygen/avatars") {
+      if (!env.HEYGEN_API_KEY) return json({ error: "Clé HEYGEN_API_KEY manquante" }, 500);
+      try {
+        const groupsRes = await fetch("https://api.heygen.com/v2/avatar_group.list", { headers: { "X-Api-Key": env.HEYGEN_API_KEY } });
+        const groupsData = await groupsRes.json();
+        const groups = (groupsData.data && groupsData.data.avatar_groups) || groupsData.avatar_groups || [];
+
+        const avatars = [];
+        for (const g of groups) {
+          try {
+            const looksRes = await fetch(`https://api.heygen.com/v2/avatar_group/${g.id}/avatars`, { headers: { "X-Api-Key": env.HEYGEN_API_KEY } });
+            const looksData = await looksRes.json();
+            const looks = (looksData.data && (looksData.data.avatar_list || looksData.data.avatars)) || looksData.avatars || [];
+            if (looks.length) {
+              looks.forEach(l => avatars.push({
+                id: l.avatar_id || l.id,
+                name: (g.name || "Avatar") + (looks.length > 1 ? " — " + (l.name || l.avatar_id || l.id) : ""),
+                preview: l.image_url || l.preview_image_url || g.preview_image_url
+              }));
+            } else {
+              // Fallback : au moins montrer le groupe si le détail des looks échoue
+              avatars.push({ id: g.id, name: g.name || "Avatar", preview: g.preview_image_url });
+            }
+          } catch (e) {
+            avatars.push({ id: g.id, name: g.name || "Avatar", preview: g.preview_image_url });
+          }
+        }
+        return json({ avatars, raw_groups_count: groups.length });
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
+    }
+
+
+    // --- HeyGen : liste de TES voix clonées uniquement (type=private) ---
     if (request.method === "GET" && url.pathname === "/api/heygen/voices") {
       if (!env.HEYGEN_API_KEY) return json({ error: "Clé HEYGEN_API_KEY manquante" }, 500);
-      const res = await fetch("https://api.heygen.com/v2/voices", { headers: { "X-Api-Key": env.HEYGEN_API_KEY } });
+      const res = await fetch("https://api.heygen.com/v3/voices?type=private", { headers: { "X-Api-Key": env.HEYGEN_API_KEY } });
       const data = await res.json();
-      const voices = ((data.data && data.data.voices) || [])
-        .map(v => ({ id: v.voice_id, name: v.name, language: v.language, gender: v.gender })).slice(0, 300);
+      const voices = (data.data || []).map(v => ({ id: v.voice_id, name: v.name, language: v.language, gender: v.gender })).slice(0, 300);
       return json({ voices });
     }
 
