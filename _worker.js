@@ -27,6 +27,11 @@ const DEFAULT_PROVIDERS = [
     id: "aimlapi", name: "AIMLAPI",
     base_url: "https://api.aimlapi.com/v1",
     api_key_secret: "AIMLAPI_API_KEY", format: "openai-compatible"
+  },
+  {
+    id: "alexya", name: "Alexya",
+    base_url: "https://alexya.ai/api/v1",
+    api_key_secret: "ALEXYA_KEY", format: "alexya-async"
   }
 ];
 
@@ -53,7 +58,9 @@ const DEFAULT_TOOLS = [
   { id: "img-recraft", name: "Recraft V3", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "recraft-v3" },
   { id: "img-wan27", name: "Wan 2.7 Pro", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "alibaba/wan-2-7-image-pro" },
   { id: "img-gemini25", name: "Gemini 2.5 Flash Image", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "google/gemini-2.5-flash-image" },
-  { id: "img-zturbo", name: "Z-Image Turbo", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "alibaba/z-image-turbo" }
+  { id: "img-zturbo", name: "Z-Image Turbo", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "alibaba/z-image-turbo" },
+  { id: "img-alexya-fast", name: "Alexya Image (Fast)", icon: "🎨", category: "image", kind: "image-async", providerId: "alexya", model: "fast", aspect_ratio: "1:1" },
+  { id: "img-alexya-hq", name: "Alexya Image (Haute qualité)", icon: "🎨", category: "image", kind: "image-async", providerId: "alexya", model: "high_quality", aspect_ratio: "1:1" }
 ];
 
 const CATEGORY_LABELS = {
@@ -152,7 +159,19 @@ async function saveProviders(env, providers) {
   await env.HUB_CONFIG.put("providers", JSON.stringify(providers));
 }
 async function getTools(env) {
-  if (env.HUB_CONFIG) { const s = await env.HUB_CONFIG.get("tools", "json"); if (s) return s; }
+  if (env.HUB_CONFIG) {
+    const stored = await env.HUB_CONFIG.get("tools", "json");
+    if (stored) {
+      const storedIds = new Set(stored.map(t => t.id));
+      const missingDefaults = DEFAULT_TOOLS.filter(t => !storedIds.has(t.id));
+      if (missingDefaults.length) {
+        const merged = [...stored, ...missingDefaults];
+        await saveTools(env, merged);
+        return merged;
+      }
+      return stored;
+    }
+  }
   return DEFAULT_TOOLS;
 }
 async function saveTools(env, tools) {
@@ -332,6 +351,51 @@ export default {
         return { id: v.id, thumb: v.image, preview: sd ? sd.link : null, full: hd ? hd.link : null, duration: v.duration, photographer: v.user ? v.user.name : "", url: v.url };
       });
       return json({ videos });
+    }
+
+    // --- Alexya : soumission d'une génération d'image (async) ---
+    if (request.method === "POST" && url.pathname === "/api/alexya/generate") {
+      try {
+        const body = await request.json();
+        const tools = await getTools(env);
+        const tool = tools.find(t => t.id === body.toolId);
+        if (!tool) return json({ error: "Outil introuvable" }, 400);
+        const providers = await getProviders(env);
+        const provider = providers.find(p => p.id === tool.providerId);
+        if (!provider) return json({ error: `Fournisseur inconnu: ${tool.providerId}` }, 400);
+        const apiKey = env[provider.api_key_secret];
+        if (!apiKey) return json({ error: `Clé manquante (${provider.api_key_secret})` }, 500);
+
+        const res = await fetch(`${provider.base_url}/image/generate`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: body.prompt, mode: tool.model, aspect_ratio: body.aspect_ratio || tool.aspect_ratio || "1:1" })
+        });
+        const data = await res.json();
+        if (!res.ok) return json({ error: data.error?.message || data.message || `Erreur Alexya: ${res.status}` }, 500);
+        return json({ id: data.id, status: data.status, poll_url: data.poll_url });
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
+    }
+
+    // --- Alexya : statut d'une génération ---
+    if (request.method === "GET" && url.pathname === "/api/alexya/status") {
+      try {
+        const genId = url.searchParams.get("id");
+        if (!genId) return json({ error: "Paramètre id requis" }, 400);
+        const providers = await getProviders(env);
+        const provider = providers.find(p => p.id === "alexya");
+        if (!provider) return json({ error: "Fournisseur Alexya introuvable" }, 400);
+        const apiKey = env[provider.api_key_secret];
+        if (!apiKey) return json({ error: `Clé manquante (${provider.api_key_secret})` }, 500);
+
+        const res = await fetch(`${provider.base_url}/generations/${genId}`, { headers: { "Authorization": `Bearer ${apiKey}` } });
+        const data = await res.json();
+        return json({ status: data.status, output_url: data.output_url, thumbnail_url: data.thumbnail_url, error: data.error });
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
     }
 
     // --- Génération d'image (outils de type "image") ---
