@@ -301,6 +301,63 @@ export default {
       return json({ videos });
     }
 
+    // --- HeyGen : liste des avatars ---
+    if (request.method === "GET" && url.pathname === "/api/heygen/avatars") {
+      if (!env.HEYGEN_API_KEY) return json({ error: "Clé HEYGEN_API_KEY manquante" }, 500);
+      const res = await fetch("https://api.heygen.com/v2/avatars", { headers: { "X-Api-Key": env.HEYGEN_API_KEY } });
+      const data = await res.json();
+      const avatars = ((data.data && data.data.avatars) || []).map(a => ({ id: a.avatar_id, name: a.avatar_name, preview: a.preview_image_url }));
+      return json({ avatars });
+    }
+
+    // --- HeyGen : liste des voix ---
+    if (request.method === "GET" && url.pathname === "/api/heygen/voices") {
+      if (!env.HEYGEN_API_KEY) return json({ error: "Clé HEYGEN_API_KEY manquante" }, 500);
+      const res = await fetch("https://api.heygen.com/v2/voices", { headers: { "X-Api-Key": env.HEYGEN_API_KEY } });
+      const data = await res.json();
+      const voices = ((data.data && data.data.voices) || [])
+        .map(v => ({ id: v.voice_id, name: v.name, language: v.language, gender: v.gender })).slice(0, 300);
+      return json({ voices });
+    }
+
+    // --- HeyGen : générer une vidéo avatar ---
+    if (request.method === "POST" && url.pathname === "/api/heygen/generate") {
+      if (!env.HEYGEN_API_KEY) return json({ error: "Clé HEYGEN_API_KEY manquante" }, 500);
+      try {
+        const body = await request.json();
+        const payload = {
+          video_inputs: [{
+            character: { type: "avatar", avatar_id: body.avatar_id, avatar_style: "normal" },
+            voice: { type: "text", input_text: body.script, voice_id: body.voice_id }
+          }],
+          dimension: { width: 1280, height: 720 }
+        };
+        const res = await fetch("https://api.heygen.com/v2/video/generate", {
+          method: "POST",
+          headers: { "X-Api-Key": env.HEYGEN_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) return json({ error: (data.error && data.error.message) || `Erreur HeyGen: ${res.status}` }, 500);
+        return json({ video_id: data.data.video_id });
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
+    }
+
+    // --- HeyGen : statut d'une vidéo ---
+    if (request.method === "GET" && url.pathname === "/api/heygen/status") {
+      if (!env.HEYGEN_API_KEY) return json({ error: "Clé HEYGEN_API_KEY manquante" }, 500);
+      const videoId = url.searchParams.get("video_id");
+      if (!videoId) return json({ error: "Paramètre video_id requis" }, 400);
+      const res = await fetch(`https://api.heygen.com/v1/video_status.get?video_id=${encodeURIComponent(videoId)}`, {
+        headers: { "X-Api-Key": env.HEYGEN_API_KEY }
+      });
+      const data = await res.json();
+      const d = data.data || {};
+      return json({ status: d.status, video_url: d.video_url, error: d.error });
+    }
+
     // --- Fichiers statiques ---
     return env.ASSETS.fetch(request);
   }
