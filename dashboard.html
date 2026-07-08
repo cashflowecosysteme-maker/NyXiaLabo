@@ -227,6 +227,7 @@
       if (tool && tool.kind === 'image-async') { renderImageTool(tool); return }
       if (tool && tool.kind === 'audio') { renderAudioTool(tool); return }
       if (tool && tool.kind === 'audio-search') { renderAudioSearchTool(tool); return }
+      if (tool && tool.kind === 'video') { renderVideoTool(tool); return }
       renderChatTool(tool)
     }
 
@@ -895,6 +896,109 @@
           }).join('') || 'Aucun résultat.'
         })
         .catch(function (e) { out.innerHTML = 'Erreur : ' + e.message })
+    }
+
+    /* ═══════ VIDÉO — GÉNÉRATION (AIMLAPI, async) ═══════ */
+    var videoHistories = {} // toolId -> [{prompt, url, pending, errorMsg}]
+    var pendingVideoRef = null
+
+    function renderVideoTool(tool) {
+      document.getElementById('panel-title').textContent = tool.name
+      document.getElementById('panel-sub').textContent = (providers.find(function (p) { return p.id === tool.providerId }) || {}).name + ' · ' + tool.model
+      document.getElementById('panel-actions').innerHTML = '<button class="btn-mini" onclick="clearVideoHistory()">🗑️ Effacer</button>'
+
+      var history = videoHistories[tool.id] || []
+      var body =
+        '<div style="max-width:760px;margin:0 auto 12px">' +
+          '<label class="f-label">Prompt</label>' +
+          '<textarea id="video-prompt" style="min-height:80px" placeholder="Décris la scène ou le mouvement voulu..."></textarea>' +
+        '</div>' +
+        '<div style="max-width:760px;margin:0 auto 12px">' +
+          '<label class="f-label">Image de départ (optionnel — pour Image → Vidéo)</label>' +
+          '<input type="file" id="video-ref-file" accept="image/*" onchange="handleVideoRefAttachment(event)">' +
+          '<div id="video-ref-preview" style="margin-top:8px"></div>' +
+        '</div>' +
+        '<div style="max-width:760px;margin:0 auto 20px"><button class="btn-primary" id="video-gen-btn" onclick="generateVideo()">🎬 Générer</button></div>' +
+        '<div id="video-history" style="max-width:760px;margin:0 auto">' +
+        (history.length ? history.map(renderVideoEntry).reverse().join('') : '<div class="chat-empty">Aucune vidéo générée avec ' + esc(tool.name) + ' pour l\'instant.</div>') +
+        '</div>'
+      document.getElementById('panel-body').innerHTML = body
+      pendingVideoRef = null
+    }
+
+    function handleVideoRefAttachment(e) {
+      var file = e.target.files[0]
+      if (!file) return
+      var reader = new FileReader()
+      reader.onload = function () {
+        pendingVideoRef = reader.result
+        document.getElementById('video-ref-preview').innerHTML =
+          '<img src="' + reader.result + '" style="max-width:140px;border-radius:8px;display:block;margin-bottom:4px">' +
+          '<button onclick="clearVideoRefAttachment()" style="background:none;border:none;color:var(--t4);cursor:pointer;font-size:12px">✕ Retirer</button>'
+      }
+      reader.readAsDataURL(file)
+    }
+    function clearVideoRefAttachment() {
+      pendingVideoRef = null
+      document.getElementById('video-ref-file').value = ''
+      document.getElementById('video-ref-preview').innerHTML = ''
+    }
+
+    function renderVideoEntry(entry) {
+      if (entry.pending) return '<div class="result-box" style="margin-bottom:16px">⏳ ' + esc(entry.prompt) + ' — génération en cours (peut prendre plusieurs minutes)...</div>'
+      if (entry.errorMsg) return '<div class="result-box result-error" style="margin-bottom:16px">' + esc(entry.prompt) + ' — ' + esc(entry.errorMsg) + '</div>'
+      return '<div style="margin-bottom:16px"><div style="font-size:13px;color:var(--t3);margin-bottom:6px">' + esc(entry.prompt) + '</div>' +
+        '<video controls src="' + entry.url + '" style="width:100%;border-radius:10px"></video>' +
+        '<div style="margin-top:4px"><a class="btn-mini" href="' + entry.url + '" target="_blank" download>⬇️ Télécharger</a></div></div>'
+    }
+
+    function generateVideo() {
+      var tool = tools.find(function (t) { return t.id === currentToolId })
+      var prompt = document.getElementById('video-prompt').value.trim()
+      if (!prompt) return
+      var btn = document.getElementById('video-gen-btn')
+      btn.disabled = true; btn.textContent = 'Génération en cours...'
+
+      fetch('/api/generate-video', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ toolId: tool.id, prompt: prompt, image_url: pendingVideoRef || undefined })
+      })
+      .then(function (r) { return r.json() })
+      .then(function (data) {
+        if (data.error) { btn.disabled = false; btn.textContent = '🎬 Générer'; alert('Erreur : ' + data.error); return }
+        videoHistories[tool.id] = videoHistories[tool.id] || []
+        var entry = { prompt: prompt, pending: true }
+        videoHistories[tool.id].push(entry)
+        clearVideoRefAttachment()
+        renderVideoTool(tool)
+        pollVideo(data.id, tool, entry, btn)
+      })
+      .catch(function (e) { btn.disabled = false; btn.textContent = '🎬 Générer'; alert('Erreur réseau : ' + e.message) })
+    }
+
+    function pollVideo(genId, tool, entry, btn, attempt) {
+      attempt = attempt || 0
+      if (attempt > 60) { entry.pending = false; entry.errorMsg = 'Timeout — vérifie ton dashboard AIMLAPI.'; renderVideoTool(tool); btn.disabled = false; btn.textContent = '🎬 Générer'; return }
+      fetch('/api/generate-video/status?id=' + encodeURIComponent(genId), { headers: authHeaders() })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          if (data.status === 'completed' && data.video_url) {
+            entry.pending = false; entry.url = data.video_url
+            renderVideoTool(tool); btn.disabled = false; btn.textContent = '🎬 Générer'
+          } else if (data.status === 'error' || data.error) {
+            entry.pending = false; entry.errorMsg = data.error ? JSON.stringify(data.error) : 'Échec de la génération'
+            renderVideoTool(tool); btn.disabled = false; btn.textContent = '🎬 Générer'
+          } else {
+            setTimeout(function () { pollVideo(genId, tool, entry, btn, attempt + 1) }, 6000)
+          }
+        })
+        .catch(function () { setTimeout(function () { pollVideo(genId, tool, entry, btn, attempt + 1) }, 8000) })
+    }
+
+    function clearVideoHistory() {
+      videoHistories[currentToolId] = []
+      var tool = tools.find(function (t) { return t.id === currentToolId })
+      renderVideoTool(tool)
     }
 
     var heygenAvatars = [], heygenVoices = [], heygenLoaded = false
