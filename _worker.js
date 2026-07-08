@@ -60,7 +60,12 @@ const DEFAULT_TOOLS = [
   { id: "img-gemini25", name: "Gemini 2.5 Flash Image", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "google/gemini-2.5-flash-image" },
   { id: "img-zturbo", name: "Z-Image Turbo", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "alibaba/z-image-turbo" },
   { id: "img-alexya-fast", name: "Alexya Image (Fast)", icon: "🎨", category: "image", kind: "image-async", providerId: "alexya", model: "fast", aspect_ratio: "1:1" },
-  { id: "img-alexya-hq", name: "Alexya Image (Haute qualité)", icon: "🎨", category: "image", kind: "image-async", providerId: "alexya", model: "high_quality", aspect_ratio: "1:1" }
+  { id: "img-alexya-hq", name: "Alexya Image (Haute qualité)", icon: "🎨", category: "image", kind: "image-async", providerId: "alexya", model: "high_quality", aspect_ratio: "1:1" },
+  { id: "music-freesound", name: "Freesound (recherche)", icon: "🔎", category: "musique-libre", kind: "audio-search" },
+  { id: "music-stable-audio", name: "Stable Audio", icon: "🎼", category: "musique-ambiance", kind: "audio", providerId: "aimlapi", model: "stable-audio" },
+  { id: "music-eleven", name: "Eleven Music", icon: "🎼", category: "musique-ambiance", kind: "audio", providerId: "aimlapi", model: "elevenlabs/eleven_music" },
+  { id: "music-lyria2", name: "Lyria 2", icon: "🎼", category: "musique-ambiance", kind: "audio", providerId: "aimlapi", model: "google/lyria2" },
+  { id: "music-minimax", name: "MiniMax Music 2.6", icon: "🎤", category: "musique-chanson", kind: "audio", needs_lyrics: true, providerId: "aimlapi", model: "minimax/music-2.6" }
 ];
 
 const CATEGORY_LABELS = {
@@ -68,6 +73,9 @@ const CATEGORY_LABELS = {
   livre: { icon: "📖", name: "Écriture de livre" },
   narration: { icon: "🎭", name: "Narration & personnages" },
   image: { icon: "🎨", name: "Génération d'image" },
+  "musique-libre": { icon: "🆓", name: "Musique libre de droit" },
+  "musique-ambiance": { icon: "🎼", name: "Ambiances instrumentales" },
+  "musique-chanson": { icon: "🎤", name: "Chansons complètes" },
   consultation: { icon: "🧭", name: "Outils Consultation" },
   exercices: { icon: "✨", name: "Générateur d'exercices" },
   contenu: { icon: "🖋️", name: "Outils création contenu" },
@@ -384,6 +392,70 @@ export default {
         return { id: v.id, thumb: v.image, preview: sd ? sd.link : null, full: hd ? hd.link : null, duration: v.duration, photographer: v.user ? v.user.name : "", url: v.url };
       });
       return json({ videos });
+    }
+
+    // --- Freesound : recherche par mots-clés (libre de droit) ---
+    if (request.method === "GET" && url.pathname === "/api/freesound-search") {
+      if (!env.FREESOUND_API_KEY) return json({ error: "Clé FREESOUND_API_KEY manquante" }, 500);
+      const q = url.searchParams.get("q") || "";
+      if (!q) return json({ error: "Paramètre q requis" }, 400);
+      const res = await fetch(`https://freesound.org/apiv2/search/text/?query=${encodeURIComponent(q)}&fields=id,name,previews,duration,username,license&page_size=15&token=${env.FREESOUND_API_KEY}`);
+      const data = await res.json();
+      if (!res.ok) return json({ error: data.detail || `Erreur Freesound: ${res.status}` }, 500);
+      const results = (data.results || []).map(s => ({
+        id: s.id, name: s.name, duration: s.duration, username: s.username, license: s.license,
+        preview: s.previews ? (s.previews["preview-hq-mp3"] || s.previews["preview-lq-mp3"]) : null
+      }));
+      return json({ results });
+    }
+
+    // --- Musique (AIMLAPI) : soumission d'une génération audio ---
+    if (request.method === "POST" && url.pathname === "/api/generate-audio") {
+      try {
+        const body = await request.json();
+        const tools = await getTools(env);
+        const tool = tools.find(t => t.id === body.toolId);
+        if (!tool) return json({ error: "Outil introuvable" }, 400);
+        const providers = await getProviders(env);
+        const provider = providers.find(p => p.id === tool.providerId);
+        if (!provider) return json({ error: `Fournisseur inconnu: ${tool.providerId}` }, 400);
+        const apiKey = env[provider.api_key_secret];
+        if (!apiKey) return json({ error: `Clé manquante (${provider.api_key_secret})` }, 500);
+
+        const v2Base = provider.base_url.replace(/\/v1$/, "/v2");
+        const payload = { model: tool.model, prompt: body.prompt };
+        if (body.lyrics) payload.lyrics = body.lyrics;
+
+        const res = await fetch(`${v2Base}/generate/audio`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
+        return json({ id: data.id, status: data.status });
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
+    }
+
+    // --- Musique (AIMLAPI) : statut d'une génération audio ---
+    if (request.method === "GET" && url.pathname === "/api/generate-audio/status") {
+      try {
+        const genId = url.searchParams.get("id");
+        if (!genId) return json({ error: "Paramètre id requis" }, 400);
+        const providers = await getProviders(env);
+        const provider = providers.find(p => p.id === "aimlapi");
+        if (!provider) return json({ error: "Fournisseur AIMLAPI introuvable" }, 400);
+        const apiKey = env[provider.api_key_secret];
+        const v2Base = provider.base_url.replace(/\/v1$/, "/v2");
+
+        const res = await fetch(`${v2Base}/generate/audio?generation_id=${encodeURIComponent(genId)}`, { headers: { "Authorization": `Bearer ${apiKey}` } });
+        const data = await res.json();
+        return json({ status: data.status, audio_url: data.audio_file ? data.audio_file.url : null, error: data.error });
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
     }
 
     // --- Alexya : soumission d'une génération d'image (async) ---
