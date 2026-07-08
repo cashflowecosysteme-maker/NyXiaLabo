@@ -95,6 +95,7 @@
     @media (max-width: 768px) { aside { width: 210px; } .header-center { display: none; } }
     @media (max-width: 600px) { aside { display: none; } }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -177,9 +178,10 @@
       Object.keys(byCategory).forEach(function (cat) {
         var meta = CATEGORY_LABELS[cat] || { icon: '⚙️', name: cat.charAt(0).toUpperCase() + cat.slice(1) }
         var isActiveCat = currentView === 'chat' && currentTool && currentTool.category === cat
-        var options = byCategory[cat].map(function (t) {
-          return '<option value="' + t.id + '"' + (currentToolId === t.id ? ' selected' : '') + '>' + t.icon + ' ' + esc(t.name) + '</option>'
-        }).join('')
+        var options = (!isActiveCat ? '<option value="" disabled selected>' + byCategory[cat].length + ' outil(s)</option>' : '') +
+          byCategory[cat].map(function (t) {
+            return '<option value="' + t.id + '"' + (isActiveCat && currentToolId === t.id ? ' selected' : '') + '>' + t.icon + ' ' + esc(t.name) + '</option>'
+          }).join('')
         html += '<div class="sidebar-section">' +
           '<div class="sidebar-label">' + meta.icon + ' ' + esc(meta.name) + '</div>' +
           '<select class="cat-select' + (isActiveCat ? ' active' : '') + '" onchange="selectTool(this.value)">' + options + '</select>' +
@@ -208,7 +210,10 @@
       var tool = tools.find(function (t) { return t.id === id })
       document.getElementById('panel-title').textContent = tool.name
       document.getElementById('panel-sub').textContent = (providers.find(function(p){return p.id===tool.providerId}) || {}).name + ' · ' + tool.model
-      document.getElementById('panel-actions').innerHTML = '<button class="btn-mini" onclick="toggleToolSettings()">⚙️ Réglages</button> <button class="btn-mini" onclick="clearChat()">🗑️ Effacer</button>'
+      document.getElementById('panel-actions').innerHTML =
+        '<button class="btn-mini" onclick="exportChatPDF()">📄 PDF</button> ' +
+        '<button class="btn-mini" onclick="toggleToolSettings()">⚙️ Réglages</button> ' +
+        '<button class="btn-mini" onclick="clearChat()">🗑️ Effacer</button>'
 
       var history = chatHistories[id] || []
       var body = '<div class="tool-settings" id="tool-settings">' +
@@ -221,7 +226,13 @@
         '<div class="chat-messages" id="chat-messages">' +
         (history.length ? history.map(renderMsg).join('') : '<div class="chat-empty">Écris un message pour commencer la conversation avec ' + esc(tool.name) + '.</div>') +
         '</div>' +
+        '<div id="attach-bar" style="display:none;padding:6px 0;max-width:760px;margin:0 auto;align-items:center;gap:8px;font-size:12px;color:var(--t3)">' +
+          '<span id="attach-name"></span> <button onclick="clearAttachment()" style="background:none;border:none;color:var(--t4);cursor:pointer">✕</button>' +
+        '</div>' +
         '<div class="chat-input-wrap">' +
+          '<label title="Joindre une image" style="flex-shrink:0;width:44px;height:44px;border-radius:12px;border:1px solid rgba(123,92,255,0.2);background:rgba(123,92,255,0.06);color:var(--t3);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px">' +
+            '📎<input type="file" id="chat-file" accept="image/*" style="display:none" onchange="handleAttachment(event)">' +
+          '</label>' +
           '<textarea class="chat-input" id="chat-input" rows="1" placeholder="Écris ton message..."></textarea>' +
           '<button class="btn-send" id="btn-send" onclick="sendMessage()">➤</button>' +
         '</div>'
@@ -235,14 +246,103 @@
 
     function toggleToolSettings() { document.getElementById('tool-settings').classList.toggle('open') }
 
+    var pendingImage = null // { dataUrl, name }
+
+    function handleAttachment(e) {
+      var file = e.target.files[0]
+      if (!file) return
+      var reader = new FileReader()
+      reader.onload = function () {
+        pendingImage = { dataUrl: reader.result, name: file.name }
+        var bar = document.getElementById('attach-bar')
+        bar.style.display = 'flex'
+        document.getElementById('attach-name').textContent = '🖼️ ' + file.name
+      }
+      reader.readAsDataURL(file)
+    }
+    function clearAttachment() {
+      pendingImage = null
+      document.getElementById('attach-bar').style.display = 'none'
+      document.getElementById('chat-file').value = ''
+    }
+
     function updateToolField(field, value) {
       var tool = tools.find(function (t) { return t.id === currentToolId })
       tool[field] = value
       fetch('/api/tools/' + currentToolId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(tool) })
     }
 
-    function renderMsg(m) {
-      return '<div class="msg ' + (m.role === 'user' ? 'user' : 'bot') + '"><div class="msg-bubble">' + esc(m.content) + '</div></div>'
+    function renderMsg(m, idx) {
+      var text = typeof m.content === 'string' ? m.content : (m.content.find(function (c) { return c.type === 'text' }) || {}).text || ''
+      var img = typeof m.content === 'object' ? (m.content.find(function (c) { return c.type === 'image_url' }) || {}).image_url : null
+      var imgHtml = img ? '<img src="' + img.url + '" style="max-width:220px;border-radius:10px;display:block;margin-bottom:6px">' : ''
+      var speakBtn = (m.role !== 'user') ? '<button onclick="speakText(' + idx + ')" style="background:none;border:none;color:var(--t4);cursor:pointer;font-size:12px;margin-top:6px;padding:0" title="Écouter">🔊 Écouter</button>' : ''
+      return '<div class="msg ' + (m.role === 'user' ? 'user' : 'bot') + '"><div class="msg-bubble">' + imgHtml + esc(text) + speakBtn + '</div></div>'
+    }
+
+    /* ═══════ TTS — voix française (France, pas Québec) ═══════ */
+    var NX_VOICE_PRIORITY = ['Microsoft Denise', 'Microsoft Hortense', 'Google français', 'Amélie', 'Audrey', 'Virginie', 'Sophie', 'Marie', 'Alice']
+    var _nxCachedVoice = null
+    function pickFrenchVoice() {
+      if (!window.speechSynthesis) return null
+      var voices = window.speechSynthesis.getVoices()
+      if (!voices.length) return _nxCachedVoice
+      for (var i = 0; i < NX_VOICE_PRIORITY.length; i++) {
+        var found = voices.find(function (v) { return v.name.indexOf(NX_VOICE_PRIORITY[i]) !== -1 && v.lang === 'fr-FR' })
+        if (found) { _nxCachedVoice = found; return found }
+      }
+      var fr = voices.find(function (v) { return v.lang === 'fr-FR' })
+      if (fr) { _nxCachedVoice = fr; return fr }
+      var anyFr = voices.find(function (v) { return v.lang && v.lang.indexOf('fr') === 0 })
+      _nxCachedVoice = anyFr || null
+      return _nxCachedVoice
+    }
+    function cleanForSpeech(str) {
+      return String(str || '')
+        .replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1')
+        .replace(/^#{1,6}\s+/gm, '').replace(/^[-*]\s+/gm, '').replace(/`([^`]+)`/g, '$1')
+        .replace(/[✦💜🚀💎🌐📱⭐✓►▶🔊📄🧬🎬🎨]/g, '').trim()
+    }
+    function speakText(idx) {
+      if (!window.speechSynthesis) { alert('Synthèse vocale non supportée par ce navigateur.'); return }
+      window.speechSynthesis.cancel()
+      var m = chatHistories[currentToolId][idx]
+      var text = typeof m.content === 'string' ? m.content : (m.content.find(function (c) { return c.type === 'text' }) || {}).text || ''
+      var clean = cleanForSpeech(text)
+      if (!clean) return
+      var utt = new SpeechSynthesisUtterance(clean)
+      utt.lang = 'fr-FR'; utt.rate = 0.95; utt.pitch = 1
+      var voice = pickFrenchVoice()
+      if (voice) utt.voice = voice
+      window.speechSynthesis.speak(utt)
+    }
+    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = pickFrenchVoice
+
+    /* ═══════ EXPORT PDF ═══════ */
+    function exportChatPDF() {
+      var history = chatHistories[currentToolId] || []
+      if (!history.length) { alert('Rien à exporter — la conversation est vide.'); return }
+      var tool = tools.find(function (t) { return t.id === currentToolId })
+      var doc = new window.jspdf.jsPDF()
+      var margin = 15, y = 20, maxWidth = 180
+      doc.setFontSize(16); doc.text(tool ? tool.name : 'Conversation', margin, y); y += 10
+      doc.setFontSize(10); doc.setTextColor(120)
+      doc.text(new Date().toLocaleString('fr-FR'), margin, y); y += 10
+      doc.setTextColor(0)
+
+      history.forEach(function (m) {
+        var text = typeof m.content === 'string' ? m.content : (m.content.find(function (c) { return c.type === 'text' }) || {}).text || ''
+        var label = (m.role === 'user' ? 'Toi : ' : (tool ? tool.name + ' : ' : 'Assistant : '))
+        doc.setFontSize(11)
+        var lines = doc.splitTextToSize(label + text, maxWidth)
+        lines.forEach(function (line) {
+          if (y > 280) { doc.addPage(); y = 20 }
+          doc.text(line, margin, y)
+          y += 6
+        })
+        y += 4
+      })
+      doc.save((tool ? tool.name.replace(/[^a-z0-9]+/gi, '-') : 'conversation') + '.pdf')
     }
 
     function clearChat() {
@@ -253,11 +353,22 @@
     function sendMessage() {
       var input = document.getElementById('chat-input')
       var text = input.value.trim()
-      if (!text) return
+      if (!text && !pendingImage) return
       var tool = tools.find(function (t) { return t.id === currentToolId })
       chatHistories[currentToolId] = chatHistories[currentToolId] || []
-      chatHistories[currentToolId].push({ role: 'user', content: text })
+
+      var content
+      if (pendingImage) {
+        content = [
+          { type: 'text', text: text || 'Décris cette image en détail.' },
+          { type: 'image_url', image_url: { url: pendingImage.dataUrl } }
+        ]
+      } else {
+        content = text
+      }
+      chatHistories[currentToolId].push({ role: 'user', content: content })
       input.value = ''; input.style.height = 'auto'
+      clearAttachment()
 
       var msgsEl = document.getElementById('chat-messages')
       msgsEl.innerHTML = chatHistories[currentToolId].map(renderMsg).join('') + '<div class="msg bot" id="typing"><div class="msg-bubble">…</div></div>'
