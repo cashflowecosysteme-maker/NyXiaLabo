@@ -188,7 +188,8 @@
 
       html += '<div class="sidebar-divider"></div><div class="sidebar-section"><div class="sidebar-label">Gestion</div>' +
         navBtn('tools', '🧰 Outils') + navBtn('providers', '🔌 Fournisseurs') +
-        navBtn('explore', '🔎 Explorer modèles') + navBtn('pexels', '🖼️ Banque Pexels') + '</div>'
+        navBtn('explore', '🔎 Explorer modèles') + navBtn('pexels', '🖼️ Banque Pexels') +
+        navBtn('heygen', '🧑\u200d🎤 Clone IA (HeyGen)') + '</div>'
 
       el.innerHTML = html
     }
@@ -466,6 +467,88 @@
           }
         })
         .catch(function (e) { grid.innerHTML = 'Erreur : ' + e.message })
+    }
+
+    /* ═══════ HEYGEN — CLONE IA ═══════ */
+    var heygenAvatars = [], heygenVoices = [], heygenLoaded = false
+    function heygenView() {
+      currentView = 'heygen'; renderSidebar()
+      document.getElementById('panel-title').textContent = 'Clone IA — HeyGen'
+      document.getElementById('panel-sub').textContent = 'Avatar parlant à partir d\'un script (Digital Twin ou Photo Avatar)'
+      document.getElementById('panel-actions').innerHTML = ''
+      document.getElementById('panel-body').innerHTML = '<div id="heygen-body">Chargement des avatars et voix...</div>'
+
+      Promise.all([
+        fetch('/api/heygen/avatars', { headers: authHeaders() }).then(function (r) { return r.json() }),
+        fetch('/api/heygen/voices', { headers: authHeaders() }).then(function (r) { return r.json() })
+      ]).then(function (results) {
+        if (results[0].error) { document.getElementById('heygen-body').innerHTML = 'Erreur : ' + esc(results[0].error); return }
+        heygenAvatars = results[0].avatars || []
+        heygenVoices = results[1].voices || []
+        heygenLoaded = true
+        renderHeygenForm()
+      }).catch(function (e) { document.getElementById('heygen-body').innerHTML = 'Erreur : ' + e.message })
+    }
+
+    function renderHeygenForm() {
+      var avatarOptions = heygenAvatars.map(function (a) { return '<option value="' + a.id + '">' + esc(a.name) + '</option>' }).join('')
+      var voiceOptions = heygenVoices.map(function (v) { return '<option value="' + v.id + '">' + esc(v.name) + (v.language ? ' (' + esc(v.language) + ')' : '') + '</option>' }).join('')
+
+      document.getElementById('heygen-body').innerHTML =
+        '<div class="field-row"><div class="field"><label class="f-label">Avatar (' + heygenAvatars.length + ')</label><select id="hg-avatar">' + avatarOptions + '</select></div>' +
+        '<div class="field"><label class="f-label">Voix (' + heygenVoices.length + ')</label><select id="hg-voice">' + voiceOptions + '</select></div></div>' +
+        '<div class="field"><label class="f-label">Script (ce que l\'avatar va dire)</label><textarea id="hg-script" style="min-height:120px" placeholder="Bonjour, je suis..."></textarea></div>' +
+        '<button class="btn-primary" id="hg-generate" onclick="heygenGenerate()">🎬 Générer la vidéo</button>' +
+        '<div id="hg-result" style="margin-top:20px"></div>'
+    }
+
+    function heygenGenerate() {
+      var avatarId = document.getElementById('hg-avatar').value
+      var voiceId = document.getElementById('hg-voice').value
+      var script = document.getElementById('hg-script').value.trim()
+      if (!script) { alert('Écris un script.'); return }
+
+      var btn = document.getElementById('hg-generate')
+      var resultEl = document.getElementById('hg-result')
+      btn.disabled = true; btn.textContent = 'Envoi...'
+      resultEl.innerHTML = '<div class="result-box">Soumission à HeyGen...</div>'
+
+      fetch('/api/heygen/generate', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ avatar_id: avatarId, voice_id: voiceId, script: script })
+      })
+      .then(function (r) { return r.json() })
+      .then(function (data) {
+        if (data.error) { resultEl.innerHTML = '<div class="result-box result-error">Erreur : ' + esc(data.error) + '</div>'; btn.disabled = false; btn.textContent = '🎬 Générer la vidéo'; return }
+        resultEl.innerHTML = '<div class="result-box">Génération en cours (id: ' + esc(data.video_id) + ')... peut prendre 1 à 5 minutes.</div>'
+        heygenPoll(data.video_id, btn, resultEl)
+      })
+      .catch(function (e) {
+        resultEl.innerHTML = '<div class="result-box result-error">Erreur réseau : ' + e.message + '</div>'
+        btn.disabled = false; btn.textContent = '🎬 Générer la vidéo'
+      })
+    }
+
+    function heygenPoll(videoId, btn, resultEl, attempt) {
+      attempt = attempt || 0
+      if (attempt > 60) { resultEl.innerHTML = '<div class="result-box result-error">Timeout — vérifie plus tard depuis ton dashboard HeyGen.</div>'; btn.disabled = false; btn.textContent = '🎬 Générer la vidéo'; return }
+
+      fetch('/api/heygen/status?video_id=' + encodeURIComponent(videoId), { headers: authHeaders() })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          if (data.status === 'completed' && data.video_url) {
+            resultEl.innerHTML = '<video src="' + data.video_url + '" controls style="width:100%;max-width:500px;border-radius:12px;display:block"></video>' +
+              '<div style="margin-top:10px"><a class="btn-mini" href="' + data.video_url + '" target="_blank" download>⬇️ Télécharger</a></div>'
+            btn.disabled = false; btn.textContent = '🎬 Générer la vidéo'
+          } else if (data.status === 'failed') {
+            resultEl.innerHTML = '<div class="result-box result-error">Échec HeyGen : ' + esc(data.error ? JSON.stringify(data.error) : 'inconnu') + '</div>'
+            btn.disabled = false; btn.textContent = '🎬 Générer la vidéo'
+          } else {
+            resultEl.innerHTML = '<div class="result-box">Statut : ' + esc(data.status || 'en cours') + '... (' + attempt + '/60)</div>'
+            setTimeout(function () { heygenPoll(videoId, btn, resultEl, attempt + 1) }, 5000)
+          }
+        })
+        .catch(function () { setTimeout(function () { heygenPoll(videoId, btn, resultEl, attempt + 1) }, 8000) })
     }
   </script>
 
