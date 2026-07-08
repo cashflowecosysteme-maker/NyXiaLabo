@@ -188,19 +188,34 @@
           '</div>'
       })
 
-      html += '<div class="sidebar-divider"></div><div class="sidebar-section"><div class="sidebar-label">Gestion</div>' +
-        navBtn('tools', '🧰 Outils') + navBtn('providers', '🔌 Fournisseurs') +
-        navBtn('explore', '🔎 Explorer modèles') + navBtn('pexels', '🖼️ Banque Pexels') +
-        navBtn('heygen', '🧑\u200d🎤 Clone IA (HeyGen)') + '</div>' +
-        '<div class="sidebar-section"><div class="sidebar-label">Wan (DashScope)</div>' +
-        '<div class="nav-item' + (currentView === 'wan-video' ? ' active' : '') + '" onclick="wanVideoView()"><span>🎬</span> Génération Vidéo</div>' +
-        '<div class="nav-item' + (currentView === 'wan-image' ? ' active' : '') + '" onclick="wanImageView()"><span>🎨</span> Génération Image</div></div>'
+      var MGMT_ITEMS = [
+        { view: 'tools', icon: '🧰', label: 'Outils' },
+        { view: 'providers', icon: '🔌', label: 'Fournisseurs' },
+        { view: 'explore', icon: '🔎', label: 'Explorer modèles' },
+        { view: 'pexels', icon: '🖼️', label: 'Banque Pexels' },
+        { view: 'heygen', icon: '🧑\u200d🎤', label: 'Clone IA (HeyGen)' },
+        { view: 'wan-video', icon: '🎬', label: 'Wan — Vidéo' },
+        { view: 'wan-image', icon: '🎨', label: 'Wan — Image' }
+      ]
+      var mgmtActive = MGMT_ITEMS.some(function (m) { return m.view === currentView })
+      var mgmtOptions = (!mgmtActive ? '<option value="" disabled selected>' + MGMT_ITEMS.length + ' outil(s)</option>' : '') +
+        MGMT_ITEMS.map(function (m) {
+          return '<option value="' + m.view + '"' + (mgmtActive && currentView === m.view ? ' selected' : '') + '>' + m.icon + ' ' + m.label + '</option>'
+        }).join('')
+
+      html += '<div class="sidebar-divider"></div><div class="sidebar-section">' +
+        '<div class="sidebar-label">🛠️ Gestion</div>' +
+        '<select class="cat-select' + (mgmtActive ? ' active' : '') + '" onchange="goToManagement(this.value)">' + mgmtOptions + '</select>' +
+        '</div>'
 
       el.innerHTML = html
     }
-    function navBtn(view, label) {
-      var active = currentView === view
-      return '<div class="nav-item' + (active ? ' active' : '') + '" onclick="' + view + 'View()">' + label + '</div>'
+    function goToManagement(view) {
+      var fnMap = {
+        tools: toolsView, providers: providersView, explore: exploreView, pexels: pexelsView,
+        heygen: heygenView, 'wan-video': wanVideoView, 'wan-image': wanImageView
+      }
+      if (fnMap[view]) fnMap[view]()
     }
 
     /* ═══════ CHAT ═══════ */
@@ -265,14 +280,47 @@
             ['1:1', '16:9', '9:16', '4:3', '3:4'].map(function (r) { return '<option value="' + r + '"' + (tool.aspect_ratio === r ? ' selected' : '') + '>' + r + '</option>' }).join('') +
           '</select></div>' +
         '</div>' +
+        '<div style="max-width:760px;margin:0 auto 12px">' +
+          '<label class="f-label">Image de référence (optionnel — pour garder le même personnage/style, ou cloner une photo)</label>' +
+          '<input type="file" id="img-ref-file" accept="image/*" onchange="handleImgRefAttachment(event)">' +
+          '<div id="img-ref-preview" style="margin-top:8px"></div>' +
+        '</div>' +
         '<div style="max-width:760px;margin:0 auto 20px"><button class="btn-primary" id="img-gen-btn" onclick="generateImage()">🎨 Générer</button></div>' +
         '<div id="img-history" style="max-width:900px;margin:0 auto">' +
         (history.length ? history.map(renderImageEntry).reverse().join('') : '<div class="chat-empty">Aucune image générée avec ' + esc(tool.name) + ' pour l\'instant.</div>') +
         '</div>'
       document.getElementById('panel-body').innerHTML = body
+      pendingImageGenRef = null
+    }
+
+    var pendingImageGenRef = null
+    function handleImgRefAttachment(e) {
+      var file = e.target.files[0]
+      if (!file) return
+      var reader = new FileReader()
+      reader.onload = function () {
+        pendingImageGenRef = reader.result
+        document.getElementById('img-ref-preview').innerHTML =
+          '<img src="' + reader.result + '" style="max-width:140px;border-radius:8px;display:block;margin-bottom:4px">' +
+          '<button onclick="clearImgRefAttachment()" style="background:none;border:none;color:var(--t4);cursor:pointer;font-size:12px">✕ Retirer</button>'
+      }
+      reader.readAsDataURL(file)
+    }
+    function clearImgRefAttachment() {
+      pendingImageGenRef = null
+      document.getElementById('img-ref-file').value = ''
+      document.getElementById('img-ref-preview').innerHTML = ''
     }
 
     function renderImageEntry(entry) {
+      if (entry.pending) {
+        return '<div style="margin-bottom:24px"><div style="font-size:13px;color:var(--t3);margin-bottom:8px">' + esc(entry.prompt) + '</div>' +
+          '<div class="result-box">⏳ Génération en cours (Alexya peut prendre 5s à 3min selon le mode)...</div></div>'
+      }
+      if (entry.errorMsg) {
+        return '<div style="margin-bottom:24px"><div style="font-size:13px;color:var(--t3);margin-bottom:8px">' + esc(entry.prompt) + '</div>' +
+          '<div class="result-box result-error">' + esc(entry.errorMsg) + '</div></div>'
+      }
       var imgs = entry.images.map(function (url) {
         return '<a href="' + url + '" target="_blank" download><img src="' + url + '" style="width:100%;border-radius:10px;display:block"></a>'
       }).join('')
@@ -289,9 +337,28 @@
       var btn = document.getElementById('img-gen-btn')
       btn.disabled = true; btn.textContent = 'Génération en cours...'
 
+      if (tool.kind === 'image-async') {
+        fetch('/api/alexya/generate', {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({ toolId: tool.id, prompt: prompt, aspect_ratio: ratio })
+        })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          if (data.error) { btn.disabled = false; btn.textContent = '🎨 Générer'; alert('Erreur : ' + data.error); return }
+          imageHistories[tool.id] = imageHistories[tool.id] || []
+          var entry = { prompt: prompt, images: [], time: Date.now(), pending: true }
+          imageHistories[tool.id].push(entry)
+          document.getElementById('img-prompt').value = ''
+          renderImageTool(tool)
+          pollAlexya(data.id, tool, entry, btn)
+        })
+        .catch(function (e) { btn.disabled = false; btn.textContent = '🎨 Générer'; alert('Erreur réseau : ' + e.message) })
+        return
+      }
+
       fetch('/api/generate-image', {
         method: 'POST', headers: authHeaders(),
-        body: JSON.stringify({ toolId: tool.id, prompt: prompt, aspect_ratio: ratio })
+        body: JSON.stringify({ toolId: tool.id, prompt: prompt, aspect_ratio: ratio, image_urls: pendingImageGenRef ? [pendingImageGenRef] : undefined })
       })
       .then(function (r) { return r.json() })
       .then(function (data) {
@@ -300,12 +367,32 @@
         imageHistories[tool.id] = imageHistories[tool.id] || []
         imageHistories[tool.id].push({ prompt: prompt, images: data.images, time: Date.now() })
         document.getElementById('img-prompt').value = ''
+        clearImgRefAttachment()
         renderImageTool(tool)
       })
       .catch(function (e) {
         btn.disabled = false; btn.textContent = '🎨 Générer'
         alert('Erreur réseau : ' + e.message)
       })
+    }
+
+    function pollAlexya(genId, tool, entry, btn, attempt) {
+      attempt = attempt || 0
+      if (attempt > 40) { entry.pending = false; entry.images = []; entry.errorMsg = 'Timeout — vérifie ton dashboard Alexya.'; renderImageTool(tool); btn.disabled = false; btn.textContent = '🎨 Générer'; return }
+      fetch('/api/alexya/status?id=' + encodeURIComponent(genId), { headers: authHeaders() })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          if (data.status === 'completed' && data.output_url) {
+            entry.pending = false; entry.images = [data.output_url]
+            renderImageTool(tool); btn.disabled = false; btn.textContent = '🎨 Générer'
+          } else if (data.status === 'failed' || data.error) {
+            entry.pending = false; entry.errorMsg = data.error ? JSON.stringify(data.error) : 'Échec de la génération'
+            renderImageTool(tool); btn.disabled = false; btn.textContent = '🎨 Générer'
+          } else {
+            setTimeout(function () { pollAlexya(genId, tool, entry, btn, attempt + 1) }, 4000)
+          }
+        })
+        .catch(function () { setTimeout(function () { pollAlexya(genId, tool, entry, btn, attempt + 1) }, 6000) })
     }
 
     function clearImageHistory() {
