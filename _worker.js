@@ -271,7 +271,7 @@ export default {
       return json(await res.json());
     }
 
-    // --- Recherche Pexels (banque d'images) ---
+    // --- Recherche Pexels (photos) ---
     if (request.method === "GET" && url.pathname === "/api/pexels-search") {
       if (!env.PEXELS_KEY) return json({ error: "Clé PEXELS_KEY manquante" }, 500);
       const q = url.searchParams.get("q") || "";
@@ -281,6 +281,24 @@ export default {
       });
       const data = await res.json();
       return json({ photos: (data.photos || []).map(p => ({ id: p.id, thumb: p.src.medium, full: p.src.large2x, photographer: p.photographer, url: p.url })) });
+    }
+
+    // --- Recherche Pexels (vidéos) ---
+    if (request.method === "GET" && url.pathname === "/api/pexels-video-search") {
+      if (!env.PEXELS_KEY) return json({ error: "Clé PEXELS_KEY manquante" }, 500);
+      const q = url.searchParams.get("q") || "";
+      if (!q) return json({ error: "Paramètre q requis" }, 400);
+      const res = await fetch(`https://api.pexels.com/videos/search?query=${encodeURIComponent(q)}&per_page=12`, {
+        headers: { Authorization: env.PEXELS_KEY }
+      });
+      const data = await res.json();
+      const videos = (data.videos || []).map(v => {
+        const files = (v.video_files || []).slice().sort((a, b) => (a.width || 0) - (b.width || 0));
+        const sd = files.find(f => f.width && f.width <= 960) || files[0];
+        const hd = files.slice().reverse()[0];
+        return { id: v.id, thumb: v.image, preview: sd ? sd.link : null, full: hd ? hd.link : null, duration: v.duration, photographer: v.user ? v.user.name : "", url: v.url };
+      });
+      return json({ videos });
     }
 
     // --- Fichiers statiques ---
