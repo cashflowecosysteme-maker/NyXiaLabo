@@ -133,9 +133,41 @@ async function callImageGeneration(provider, env, { model, prompt, aspect_ratio,
   if (!apiKey) throw new Error(`Clé API manquante pour ${provider.id} (secret: ${provider.api_key_secret})`);
 
   const started = Date.now();
+
+  // Les modèles GPT Image ignorent l'image en JSON — ils exigent l'endpoint /images/edits en multipart
+  if (image_urls && image_urls.length && model.startsWith("openai/gpt-image")) {
+    const dataUrl = image_urls[0];
+    const match = dataUrl.match(/^data:(.+?);base64,(.+)$/);
+    if (!match) throw new Error("Format d'image de référence invalide pour l'édition GPT Image");
+    const mimeType = match[1];
+    const raw = atob(match[2]);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    const blob = new Blob([bytes], { type: mimeType });
+
+    const form = new FormData();
+    form.append("model", model);
+    form.append("prompt", prompt);
+    form.append("image", blob, "reference." + (mimeType.split("/")[1] || "png"));
+
+    const res = await fetch(`${provider.base_url}/images/edits`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}` },
+      body: form
+    });
+    const elapsedMs = Date.now() - started;
+    const data = await res.json();
+    if (!res.ok) throw new Error((data.error && (data.error.message || JSON.stringify(data.error))) || `Erreur ${provider.id}: ${res.status}`);
+    const images = (data.data || []).map(d => d.url || (d.b64_json ? "data:image/png;base64," + d.b64_json : null)).filter(Boolean);
+    return { images, elapsedMs };
+  }
+
   const payload = { model, prompt };
   if (aspect_ratio) payload.aspect_ratio = aspect_ratio;
-  if (image_urls && image_urls.length) payload.image_urls = image_urls;
+  if (image_urls && image_urls.length) {
+    // Certains modèles (ex. Wan 2.7 Pro) attendent du base64 brut, sans le préfixe "data:...;base64,"
+    payload.image_urls = image_urls.map(u => u.startsWith("data:") ? u.split(",")[1] : u);
+  }
 
   const res = await fetch(`${provider.base_url}/images/generations`, {
     method: "POST",
