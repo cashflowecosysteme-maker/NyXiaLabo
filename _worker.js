@@ -41,7 +41,9 @@ const DEFAULT_TOOLS = [
   { id: "gpt", name: "GPT-5.2", icon: "🤖", category: "conversation", providerId: "openrouter", model: "openai/gpt-5.2", system_prompt: "", max_tokens: 2000, temperature: 0.7 },
   { id: "gemini", name: "Gemini 3.1 Pro", icon: "🤖", category: "conversation", providerId: "openrouter", model: "google/gemini-3.1-pro", system_prompt: "", max_tokens: 2000, temperature: 0.7 },
   { id: "glm", name: "Z (GLM 5.2)", icon: "🤖", category: "conversation", providerId: "openrouter", model: "z-ai/glm-5.2", system_prompt: "", max_tokens: 2000, temperature: 0.7 },
+  { id: "grok", name: "Grok 4.3", icon: "🤖", category: "conversation", providerId: "openrouter", model: "x-ai/grok-4.3", system_prompt: "", max_tokens: 2000, temperature: 0.7 },
   { id: "livre-claude", name: "Chapitre — Claude Opus 4.8", icon: "📖", category: "livre", providerId: "openrouter", model: "anthropic/claude-opus-4.8", system_prompt: "Tu écris un chapitre complet et cohérent en français, dans un style romanesque immersif. Vise environ 30 000 caractères sauf indication contraire.", max_tokens: 8000, temperature: 0.85 },
+  { id: "livre-grok", name: "Chapitre — Grok 4.3", icon: "📖", category: "livre", providerId: "openrouter", model: "x-ai/grok-4.3", system_prompt: "Tu écris un chapitre complet et cohérent en français, dans un style romanesque immersif. Vise environ 30 000 caractères sauf indication contraire.", max_tokens: 8000, temperature: 0.85 },
   { id: "narration-1", name: "Continuité personnages", icon: "🎭", category: "narration", providerId: "openrouter", model: "anthropic/claude-sonnet-5", system_prompt: "Tu es gardien de la continuité narrative de l'univers des Terres de Brume. Garde la cohérence des personnages, de leurs voix, et de la chronologie.", max_tokens: 3000, temperature: 0.9 }
 ];
 
