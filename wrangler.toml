@@ -12,7 +12,7 @@ binding = "ASSETS"
 # Stockage et bases de données → KV → HUB_CONFIG dans le dashboard Cloudflare.
 [[kv_namespaces]]
 binding = "HUB_CONFIG"
-id = "COLLE_ICI_TON_VRAI_ID"
+id = "75b93baac0974f8cb8d1f2089eceb4e6"
 
 # Secrets à définir dans le dashboard de CE Worker (nyxialabo) :
 # Settings → Variables and Secrets → Add variable → type "Secret"
