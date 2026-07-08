@@ -29,9 +29,14 @@ const DEFAULT_PROVIDERS = [
     api_key_secret: "AIMLAPI_API_KEY", format: "openai-compatible"
   },
   {
+    id: "aimlapi-music", name: "AIMLAPI (Musique)",
+    base_url: "https://api.aimlapi.com/v1",
+    api_key_secret: "NyXia_Musique", format: "openai-compatible"
+  },
+  {
     id: "alexya", name: "Alexya",
     base_url: "https://alexya.ai/api/v1",
-    api_key_secret: "ALEXYA_KEY", format: "alexya-async"
+    api_key_secret: "Alexya_KEY", format: "alexya-async"
   }
 ];
 
@@ -61,11 +66,13 @@ const DEFAULT_TOOLS = [
   { id: "img-zturbo", name: "Z-Image Turbo", icon: "🎨", category: "image", kind: "image", providerId: "aimlapi", model: "alibaba/z-image-turbo" },
   { id: "img-alexya-fast", name: "Alexya Image (Fast)", icon: "🎨", category: "image", kind: "image-async", providerId: "alexya", model: "fast", aspect_ratio: "1:1" },
   { id: "img-alexya-hq", name: "Alexya Image (Haute qualité)", icon: "🎨", category: "image", kind: "image-async", providerId: "alexya", model: "high_quality", aspect_ratio: "1:1" },
-  { id: "music-freesound", name: "Freesound (recherche)", icon: "🔎", category: "musique-libre", kind: "audio-search" },
-  { id: "music-stable-audio", name: "Stable Audio", icon: "🎼", category: "musique-ambiance", kind: "audio", providerId: "aimlapi", model: "stable-audio" },
-  { id: "music-eleven", name: "Eleven Music", icon: "🎼", category: "musique-ambiance", kind: "audio", providerId: "aimlapi", model: "elevenlabs/eleven_music" },
-  { id: "music-lyria2", name: "Lyria 2", icon: "🎼", category: "musique-ambiance", kind: "audio", providerId: "aimlapi", model: "google/lyria2" },
-  { id: "music-minimax", name: "MiniMax Music 2.6", icon: "🎤", category: "musique-chanson", kind: "audio", needs_lyrics: true, providerId: "aimlapi", model: "minimax/music-2.6" },
+  { id: "music-freesound", name: "Freesound (Sons)", icon: "🔎", category: "banque-gratuite", kind: "audio-search" },
+  { id: "bank-pexels", name: "Pexels (Photos & Vidéos)", icon: "🖼️", category: "banque-gratuite", kind: "pexels" },
+  { id: "bank-unsplash", name: "Unsplash (Photos)", icon: "📷", category: "banque-gratuite", kind: "unsplash" },
+  { id: "music-stable-audio", name: "Stable Audio", icon: "🎼", category: "musique", kind: "audio", providerId: "aimlapi-music", model: "stable-audio" },
+  { id: "music-eleven", name: "Eleven Music", icon: "🎼", category: "musique", kind: "audio", providerId: "aimlapi-music", model: "elevenlabs/eleven_music" },
+  { id: "music-lyria2", name: "Lyria 2", icon: "🎼", category: "musique", kind: "audio", providerId: "aimlapi-music", model: "google/lyria2" },
+  { id: "music-minimax", name: "MiniMax Music 2.6", icon: "🎤", category: "musique", kind: "audio", needs_lyrics: true, providerId: "aimlapi-music", model: "minimax/music-2.6" },
   { id: "video-luma-ray2", name: "Luma Ray 2", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "luma/ray-2" },
   { id: "video-gen4-turbo", name: "Runway Gen4 Turbo", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "runway/gen4_turbo" },
   { id: "video-gen3a-turbo", name: "Runway Gen3a Turbo", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "runway/gen3a_turbo" },
@@ -74,7 +81,13 @@ const DEFAULT_TOOLS = [
   { id: "video-veo31-t2v", name: "Veo 3.1 (Texte → Vidéo)", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "google/veo-3.1-t2v" },
   { id: "video-veo31-i2v", name: "Veo 3.1 (Image → Vidéo)", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "google/veo-3.1-i2v" },
   { id: "video-kling", name: "Kling 2.6 Pro (à confirmer)", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "kling-video/v2.6-pro/text-to-video" },
-  { id: "video-minimax", name: "MiniMax Hailuo 2.3 Fast (à confirmer)", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "minimax/hailuo-2.3-fast" }
+  { id: "video-minimax", name: "MiniMax Hailuo 2.3 Fast (à confirmer)", icon: "🎬", category: "video", kind: "video", providerId: "aimlapi", model: "minimax/hailuo-2.3-fast" },
+  { id: "eso-horoscope", name: "Horoscope du jour", icon: "🔮", category: "esoterisme", kind: "esoteric", source: "horoscope" },
+  { id: "eso-moonphase", name: "Phase de lune", icon: "🌙", category: "esoterisme", kind: "esoteric", source: "moonphase" },
+  { id: "eso-zenquotes", name: "Citation inspirante", icon: "💬", category: "esoterisme", kind: "esoteric", source: "zenquotes" },
+  { id: "eso-sunrise", name: "Lever / Coucher du soleil", icon: "☀️", category: "esoterisme", kind: "esoteric", source: "sunrise" },
+  { id: "eso-tarot", name: "Tarot (à confirmer)", icon: "🃏", category: "esoterisme", kind: "esoteric", source: "tarot" },
+  { id: "stt-whisper", name: "Whisper Large v3", icon: "🎙️", category: "transcription", kind: "transcribe", providerId: "aimlapi", model: "#g1_whisper-large" }
 ];
 
 const CATEGORY_LABELS = {
@@ -85,7 +98,11 @@ const CATEGORY_LABELS = {
   "musique-libre": { icon: "🆓", name: "Musique libre de droit" },
   "musique-ambiance": { icon: "🎼", name: "Ambiances instrumentales" },
   "musique-chanson": { icon: "🎤", name: "Chansons complètes" },
+  musique: { icon: "🎵", name: "Musique" },
+  "banque-gratuite": { icon: "🆓", name: "Banque gratuite" },
   video: { icon: "🎬", name: "Génération vidéo" },
+  esoterisme: { icon: "🔮", name: "Ésotérisme" },
+  transcription: { icon: "🎙️", name: "Transcription" },
   consultation: { icon: "🧭", name: "Outils Consultation" },
   exercices: { icon: "✨", name: "Générateur d'exercices" },
   contenu: { icon: "🖋️", name: "Outils création contenu" },
@@ -452,6 +469,22 @@ export default {
       }
     }
 
+    // --- Unsplash : recherche de photos (banque gratuite) ---
+    if (request.method === "GET" && url.pathname === "/api/unsplash-search") {
+      if (!env.UNSPLASH_KEY) return json({ error: "Clé UNSPLASH_KEY manquante" }, 500);
+      const q = url.searchParams.get("q") || "";
+      if (!q) return json({ error: "Paramètre q requis" }, 400);
+      const res = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(q)}&per_page=15`, {
+        headers: { Authorization: `Client-ID ${env.UNSPLASH_KEY}` }
+      });
+      const data = await res.json();
+      if (!res.ok) return json({ error: data.errors ? data.errors.join(", ") : `Erreur Unsplash: ${res.status}` }, 500);
+      const results = (data.results || []).map(p => ({
+        id: p.id, thumb: p.urls.small, full: p.urls.regular, photographer: p.user ? p.user.name : "", link: p.links ? p.links.html : ""
+      }));
+      return json({ results });
+    }
+
     // --- Freesound : recherche par mots-clés (libre de droit) ---
     if (request.method === "GET" && url.pathname === "/api/freesound-search") {
       if (!env.FREESOUND_API_KEY) return json({ error: "Clé FREESOUND_API_KEY manquante" }, 500);
@@ -556,6 +589,110 @@ export default {
         const res = await fetch(`${provider.base_url}/generations/${genId}`, { headers: { "Authorization": `Bearer ${apiKey}` } });
         const data = await res.json();
         return json({ status: data.status, output_url: data.output_url, thumbnail_url: data.thumbnail_url, error: data.error });
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
+    }
+
+    // --- Transcription (Whisper via AIMLAPI) : soumission ---
+    if (request.method === "POST" && url.pathname === "/api/transcribe") {
+      try {
+        const body = await request.json();
+        const tools = await getTools(env);
+        const tool = tools.find(t => t.id === body.toolId);
+        if (!tool) return json({ error: "Outil introuvable" }, 400);
+        const providers = await getProviders(env);
+        const provider = providers.find(p => p.id === tool.providerId);
+        const apiKey = env[provider.api_key_secret];
+        if (!apiKey) return json({ error: `Clé manquante (${provider.api_key_secret})` }, 500);
+
+        const dataUrl = body.audio_base64;
+        const match = dataUrl.match(/^data:(.+?);base64,(.+)$/);
+        if (!match) return json({ error: "Format de fichier invalide" }, 400);
+        const mimeType = match[1];
+        const raw = atob(match[2]);
+        const bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        const blob = new Blob([bytes], { type: mimeType });
+
+        const form = new FormData();
+        form.append("model", tool.model);
+        form.append("audio", blob, "audio." + (mimeType.split("/")[1] || "mp3"));
+
+        const res = await fetch("https://api.aimlapi.com/v1/stt/create", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${apiKey}` },
+          body: form
+        });
+        const data = await res.json();
+        if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
+        return json({ generation_id: data.generation_id });
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
+    }
+
+    // --- Transcription : statut ---
+    if (request.method === "GET" && url.pathname === "/api/transcribe/status") {
+      try {
+        const genId = url.searchParams.get("id");
+        if (!genId) return json({ error: "Paramètre id requis" }, 400);
+        const providers = await getProviders(env);
+        const provider = providers.find(p => p.id === "aimlapi");
+        const apiKey = env[provider.api_key_secret];
+
+        const res = await fetch(`https://api.aimlapi.com/v1/stt/${encodeURIComponent(genId)}`, { headers: { "Authorization": `Bearer ${apiKey}` } });
+        const data = await res.json();
+        return json(data);
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
+    }
+
+    // --- Ésotérisme : horoscope, lune, citations, soleil, tarot ---
+    if (request.method === "GET" && url.pathname === "/api/esoteric/horoscope") {
+      const sign = url.searchParams.get("sign") || "aries";
+      const keyPart = env.VIEWBITS_KEY ? `&key=${env.VIEWBITS_KEY}` : "";
+      const res = await fetch(`https://api.viewbits.com/v1/horoscopes?sign=${sign}${keyPart}`);
+      const data = await res.json();
+      if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
+      return json(data);
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/esoteric/moonphase") {
+      const keyPart = env.VIEWBITS_KEY ? `?key=${env.VIEWBITS_KEY}` : "";
+      const res = await fetch(`https://api.viewbits.com/v1/moonphase${keyPart}`);
+      const data = await res.json();
+      if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
+      return json(data);
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/esoteric/zenquotes") {
+      const keyPart = env.VIEWBITS_KEY ? `?key=${env.VIEWBITS_KEY}` : "";
+      const res = await fetch(`https://api.viewbits.com/v1/zenquotes${keyPart}`);
+      const data = await res.json();
+      if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
+      return json(data);
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/esoteric/sunrise") {
+      const lat = url.searchParams.get("lat") || "45.7";
+      const lng = url.searchParams.get("lng") || "-74.0";
+      const res = await fetch(`https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lng}&formatted=0`);
+      const data = await res.json();
+      return json(data);
+    }
+
+    // Tarot : endpoint non-confirmé par documentation officielle — à valider avec Diane
+    if (request.method === "GET" && url.pathname === "/api/esoteric/tarot") {
+      if (!env.Astro_KEY) return json({ error: "Clé Astro_KEY manquante" }, 500);
+      try {
+        const res = await fetch("https://astrology-api.io/api/v1/tarot/draw", {
+          headers: { "Authorization": `Bearer ${env.Astro_KEY}` }
+        });
+        const data = await res.json();
+        if (!res.ok) return json({ error: data.message || `Erreur: ${res.status} — endpoint peut-être incorrect, à vérifier` }, 500);
+        return json(data);
       } catch (err) {
         return json({ error: err.message || String(err) }, 500);
       }
