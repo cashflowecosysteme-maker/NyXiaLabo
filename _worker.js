@@ -530,6 +530,15 @@ export default {
         return json({ ok: true, tool });
       }
 
+      if (request.method === "PUT" && ctId) {
+        const idx = customTools.findIndex(t => t.id === ctId);
+        if (idx === -1) return json({ error: "Outil introuvable" }, 404);
+        const body = await request.json();
+        customTools[idx] = { ...customTools[idx], ...body, id: ctId };
+        await saveCustomTools(env, customTools);
+        return json({ ok: true, tool: customTools[idx] });
+      }
+
       if (request.method === "DELETE" && ctId) {
         await saveCustomTools(env, customTools.filter(t => t.id !== ctId));
         return json({ ok: true });
