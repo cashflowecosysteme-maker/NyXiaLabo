@@ -140,6 +140,7 @@ const CATEGORY_LABELS = {
   "banque-gratuite": { icon: "🆓", name: "Banque gratuite" },
   video: { icon: "🎬", name: "Génération vidéo" },
   esoterisme: { icon: "🔮", name: "Ésotérisme" },
+  transcription: { icon: "🎙️", name: "Transcription" },
   utilites: { icon: "🧩", name: "Utilités" },
   downloader: { icon: "⬇️", name: "Downloader" },
   consultation: { icon: "🧭", name: "Outils Consultation" },
