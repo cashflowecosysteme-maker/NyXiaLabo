@@ -370,6 +370,43 @@ async function callRapidApi(env, source, fields) {
   return await res.json();
 }
 
+async function getCustomTools(env) {
+  if (env.HUB_CONFIG) { const s = await env.HUB_CONFIG.get("customTools", "json"); if (s) return s; }
+  return [];
+}
+async function saveCustomTools(env, list) {
+  await env.HUB_CONFIG.put("customTools", JSON.stringify(list));
+}
+
+async function callCustomTool(env, toolConfig, fields) {
+  let path = toolConfig.pathTemplate.replace(/\{(\w+)\}/g, (_, name) => encodeURIComponent(fields[name] || ""));
+  const queryParams = new URLSearchParams(toolConfig.query || {});
+  (toolConfig.fields || []).filter(f => f.location === "query").forEach(f => { if (fields[f.name]) queryParams.set(f.name, fields[f.name]); });
+  const qs = queryParams.toString();
+  const fullUrl = `https://${toolConfig.host}${path}${qs ? "?" + qs : ""}`;
+
+  const apiKey = toolConfig.authSecretName ? env[toolConfig.authSecretName] : null;
+  if (toolConfig.authSecretName && !apiKey) throw new Error(`Clé manquante (${toolConfig.authSecretName})`);
+  const headers = {};
+  if (toolConfig.authHeaderName) headers[toolConfig.authHeaderName] = (toolConfig.authHeaderPrefix || "") + apiKey;
+
+  let body;
+  if (toolConfig.bodyType === "json") {
+    const obj = {};
+    (toolConfig.fields || []).filter(f => f.location === "body").forEach(f => { if (fields[f.name]) obj[f.name] = fields[f.name]; });
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify(obj);
+  } else if (toolConfig.bodyType === "form") {
+    const form = new URLSearchParams();
+    (toolConfig.fields || []).filter(f => f.location === "body").forEach(f => form.set(f.name, fields[f.name] || ""));
+    headers["Content-Type"] = "application/x-www-form-urlencoded";
+    body = form.toString();
+  }
+
+  const res = await fetch(fullUrl, { method: toolConfig.method, headers, body: toolConfig.method === "GET" ? undefined : body });
+  return await res.json();
+}
+
 // ---- Helpers KV ----
 
 async function getProviders(env) {
@@ -442,12 +479,53 @@ export default {
       if (!ok) return json({ error: "Non autorisé" }, 401);
     }
 
+    // --- Outils API personnalisés : CRUD ---
+    if (parts[0] === "api" && parts[1] === "custom-tools") {
+      const customTools = await getCustomTools(env);
+      const ctId = parts[2];
+
+      if (request.method === "GET" && !ctId) return json({ customTools });
+
+      if (request.method === "POST" && !ctId) {
+        const body = await request.json();
+        if (!body.name || !body.host) return json({ error: "Nom et hôte requis" }, 400);
+        const id = uniqueId("custom-" + slugify(body.name), customTools.map(t => t.id));
+        const tool = { ...body, id };
+        customTools.push(tool);
+        await saveCustomTools(env, customTools);
+        return json({ ok: true, tool });
+      }
+
+      if (request.method === "DELETE" && ctId) {
+        await saveCustomTools(env, customTools.filter(t => t.id !== ctId));
+        return json({ ok: true });
+      }
+    }
+
+    // --- Exécution d'un outil API personnalisé ---
+    if (request.method === "POST" && url.pathname === "/api/custom-tools/call") {
+      try {
+        const body = await request.json();
+        const customTools = await getCustomTools(env);
+        const toolConfig = customTools.find(t => t.id === body.id);
+        if (!toolConfig) return json({ error: "Outil introuvable" }, 400);
+        const data = await callCustomTool(env, toolConfig, body.fields || {});
+        return json(data);
+      } catch (err) {
+        return json({ error: err.message || String(err) }, 500);
+      }
+    }
+
     // --- Outils : GET liste / POST créer / PUT modifier / DELETE supprimer ---
     if (parts[0] === "api" && parts[1] === "tools") {
       const tools = await getTools(env);
       const toolId = parts[2];
 
-      if (request.method === "GET" && !toolId) return json({ tools });
+      if (request.method === "GET" && !toolId) {
+        const customTools = await getCustomTools(env);
+        const customAsTools = customTools.map(t => ({ id: t.id, name: t.name, icon: t.icon || "🧩", category: t.category, kind: "custom-api" }));
+        return json({ tools: [...tools, ...customAsTools] });
+      }
 
       if (request.method === "POST" && !toolId) {
         const body = await request.json();
@@ -835,7 +913,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/api/esoteric/horoscope") {
       const sign = url.searchParams.get("sign") || "aries";
       const keyPart = env.VIEWBITS_KEY ? `&key=${env.VIEWBITS_KEY}` : "";
-      const res = await fetch(`https://api.viewbits.com/v1/horoscopes?mode=sign&sign=${sign}${keyPart}`);
+      const res = await fetch(`https://api.viewbits.com/v1/horoscope?sign=${sign}${keyPart}`);
       const data = await res.json();
       if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
       return json(data);
