@@ -440,6 +440,10 @@ async function getTools(env) {
       let changed = false;
       stored.forEach(t => {
         if (CATEGORY_MIGRATIONS[t.category]) { t.category = CATEGORY_MIGRATIONS[t.category]; changed = true; }
+        if (!t.kind && (!t.system_prompt || !t.system_prompt.trim())) {
+          t.system_prompt = "Tu utilises toujours le tutoiement (« tu »), jamais le vouvoiement (« vous »), sauf si on te demande explicitement le contraire.";
+          changed = true;
+        }
       });
       const deletedIds = new Set((await env.HUB_CONFIG.get("deletedToolIds", "json")) || []);
       const storedIds = new Set(stored.map(t => t.id));
