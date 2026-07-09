@@ -347,7 +347,7 @@ const RAPIDAPI_TOOLS = {
   "all-video": { host: "all-video-downloader1.p.rapidapi.com", method: "POST", pathTemplate: "/all", bodyType: "form", bodyFields: ["url", "cookies", "cookies_file"] },
   "tiktok-comments": { host: "tiktok-download5.p.rapidapi.com", method: "GET", pathTemplate: "/commentReply", queryFromFields: ["comment_id", "count", "cursor", "video_id"] },
   "bg-removal": { host: "background-removal.p.rapidapi.com", method: "POST", pathTemplate: "/remove", bodyType: "form", bodyFields: ["image_url", "image_base64", "output_format", "to_remove", "color_removal"] },
-  "media2text": { host: "media2text.p.rapidapi.com", method: "POST", pathTemplate: "/", bodyType: "json", bodyFields: ["file_url", "api_key"] },
+  "media2text": { host: "media2text.p.rapidapi.com", method: "POST", pathTemplate: "/", bodyType: "json", bodyFields: ["file_url", "openai_key"] },
   "astrology-yearly": { host: "best-daily-astrology-and-horoscope-api.p.rapidapi.com", method: "GET", pathTemplate: "/api/Detailed-Horoscope/yearly/", queryFromFields: ["zodiacSign"] }
 };
 
@@ -373,7 +373,7 @@ async function callRapidApi(env, source, fields) {
   } else if (config.bodyType === "json") {
     const obj = {};
     (config.bodyFields || []).forEach(f => { if (fields[f]) obj[f] = fields[f]; });
-    if (source === "media2text" && env.OpenAi_KEY) obj.api_key = env.OpenAi_KEY;
+    if (source === "media2text" && env.OpenAi_KEY) obj.openai_key = env.OpenAi_KEY;
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(obj);
   } else {
