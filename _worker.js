@@ -87,6 +87,7 @@ const DEFAULT_TOOLS = [
   { id: "eso-zenquotes", name: "Citation inspirante", icon: "💬", category: "esoterisme", kind: "esoteric", source: "zenquotes" },
   { id: "eso-sunrise", name: "Lever / Coucher du soleil", icon: "☀️", category: "esoterisme", kind: "esoteric", source: "sunrise" },
   { id: "eso-tarot", name: "Tarot (à confirmer)", icon: "🃏", category: "esoterisme", kind: "esoteric", source: "tarot" },
+  { id: "eso-astrology-yearly", name: "Horoscope annuel détaillé", icon: "🔮", category: "esoterisme", kind: "rapidapi", source: "astrology-yearly" },
   { id: "stt-whisper", name: "Whisper Large v3", icon: "🎙️", category: "transcription", kind: "transcribe", providerId: "aimlapi", model: "#g1_whisper-large" },
   { id: "apy-translate-webpage", name: "Traduire une page web", icon: "🌐", category: "utilites", kind: "apyhub", source: "translate-webpage" },
   { id: "apy-analyze-webpage", name: "Analyser une page web", icon: "🌐", category: "utilites", kind: "apyhub", source: "analyze-webpage" },
@@ -132,7 +133,6 @@ const CATEGORY_LABELS = {
   "banque-gratuite": { icon: "🆓", name: "Banque gratuite" },
   video: { icon: "🎬", name: "Génération vidéo" },
   esoterisme: { icon: "🔮", name: "Ésotérisme" },
-  transcription: { icon: "🎙️", name: "Transcription" },
   utilites: { icon: "🧩", name: "Utilités" },
   downloader: { icon: "⬇️", name: "Downloader" },
   consultation: { icon: "🧭", name: "Outils Consultation" },
@@ -334,7 +334,8 @@ const RAPIDAPI_TOOLS = {
   "all-video": { host: "all-video-downloader1.p.rapidapi.com", method: "POST", pathTemplate: "/all", bodyType: "form", bodyFields: ["url", "cookies", "cookies_file"] },
   "tiktok-comments": { host: "tiktok-download5.p.rapidapi.com", method: "GET", pathTemplate: "/commentReply", queryFromFields: ["comment_id", "count", "cursor", "video_id"] },
   "bg-removal": { host: "background-removal.p.rapidapi.com", method: "POST", pathTemplate: "/remove", bodyType: "form", bodyFields: ["image_url", "image_base64", "output_format", "to_remove", "color_removal"] },
-  "media2text": { host: "media2text.p.rapidapi.com", method: "POST", pathTemplate: "/", bodyType: "json", bodyFields: ["file_url", "api_key"] }
+  "media2text": { host: "media2text.p.rapidapi.com", method: "POST", pathTemplate: "/", bodyType: "json", bodyFields: ["file_url", "api_key"] },
+  "astrology-yearly": { host: "best-daily-astrology-and-horoscope-api.p.rapidapi.com", method: "GET", pathTemplate: "/api/Detailed-Horoscope/yearly/", queryFromFields: ["zodiacSign"] }
 };
 
 async function callRapidApi(env, source, fields) {
@@ -834,7 +835,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/api/esoteric/horoscope") {
       const sign = url.searchParams.get("sign") || "aries";
       const keyPart = env.VIEWBITS_KEY ? `&key=${env.VIEWBITS_KEY}` : "";
-      const res = await fetch(`https://api.viewbits.com/v1/horoscopes?sign=${sign}${keyPart}`);
+      const res = await fetch(`https://api.viewbits.com/v1/horoscopes?mode=sign&sign=${sign}${keyPart}`);
       const data = await res.json();
       if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
       return json(data);
@@ -849,8 +850,8 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/api/esoteric/zenquotes") {
-      const keyPart = env.VIEWBITS_KEY ? `?key=${env.VIEWBITS_KEY}` : "";
-      const res = await fetch(`https://api.viewbits.com/v1/zenquotes${keyPart}`);
+      const keyPart = env.VIEWBITS_KEY ? `&key=${env.VIEWBITS_KEY}` : "";
+      const res = await fetch(`https://api.viewbits.com/v1/zenquotes?mode=random${keyPart}`);
       const data = await res.json();
       if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
       return json(data);
