@@ -443,12 +443,39 @@
       fetch('/api/tools/' + currentToolId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(tool) })
     }
 
+    // Rendu markdown léger, sans dépendance externe — gras, italique, code, listes, liens, paragraphes
+    function renderMarkdown(text) {
+      var html = esc(text)
+      html = html.replace(/```([\s\S]*?)```/g, function (m, code) { return '<pre style="background:rgba(0,0,0,0.25);padding:10px;border-radius:8px;overflow-x:auto"><code>' + code + '</code></pre>' })
+      html = html.replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.25);padding:1px 5px;border-radius:4px">$1</code>')
+      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      html = html.replace(/(^|[\s(])\*(?!\s)(.+?)(?<!\s)\*(?=[\s).,!?]|$)/g, '$1<em>$2</em>')
+      html = html.replace(/^### (.+)$/gm, '<strong style="font-size:1.05em">$1</strong>')
+      html = html.replace(/^## (.+)$/gm, '<strong style="font-size:1.1em">$1</strong>')
+      html = html.replace(/^# (.+)$/gm, '<strong style="font-size:1.2em">$1</strong>')
+      html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--p3)">$1</a>')
+      // Listes à puces / numérotées : regroupe les lignes consécutives
+      html = html.replace(/(^|\n)((?:[-*] .+(?:\n|$))+)/g, function (m, pre, block) {
+        var items = block.trim().split(/\n/).map(function (l) { return '<li>' + l.replace(/^[-*]\s+/, '') + '</li>' }).join('')
+        return pre + '<ul style="margin:6px 0;padding-left:20px">' + items + '</ul>'
+      })
+      html = html.replace(/(^|\n)((?:\d+\. .+(?:\n|$))+)/g, function (m, pre, block) {
+        var items = block.trim().split(/\n/).map(function (l) { return '<li>' + l.replace(/^\d+\.\s+/, '') + '</li>' }).join('')
+        return pre + '<ol style="margin:6px 0;padding-left:20px">' + items + '</ol>'
+      })
+      html = html.replace(/\n{2,}/g, '</p><p style="margin:8px 0 0">')
+      html = html.replace(/\n/g, '<br>')
+      return html
+    }
+
     function renderMsg(m, idx) {
       var text = typeof m.content === 'string' ? m.content : (m.content.find(function (c) { return c.type === 'text' }) || {}).text || ''
       var img = typeof m.content === 'object' ? (m.content.find(function (c) { return c.type === 'image_url' }) || {}).image_url : null
       var imgHtml = img ? '<img src="' + img.url + '" style="max-width:220px;border-radius:10px;display:block;margin-bottom:6px">' : ''
       var speakBtn = (m.role !== 'user') ? '<button onclick="speakText(' + idx + ')" style="background:none;border:none;color:var(--t4);cursor:pointer;font-size:12px;margin-top:6px;padding:0" title="Écouter">🔊 Écouter</button>' : ''
-      return '<div class="msg ' + (m.role === 'user' ? 'user' : 'bot') + '"><div class="msg-bubble">' + imgHtml + esc(text) + speakBtn + '</div></div>'
+      var pdfBtn = (m.role !== 'user') ? ' <button onclick="exportSingleMessagePDF(' + idx + ')" style="background:none;border:none;color:var(--t4);cursor:pointer;font-size:12px;margin-top:6px;padding:0" title="Exporter cette réponse en PDF">📄 PDF</button>' : ''
+      var bodyHtml = m.role === 'user' ? esc(text) : renderMarkdown(text)
+      return '<div class="msg ' + (m.role === 'user' ? 'user' : 'bot') + '"><div class="msg-bubble">' + imgHtml + bodyHtml + '<div>' + speakBtn + pdfBtn + '</div></div></div>'
     }
 
     /* ═══════ TTS — voix française (France, pas Québec) ═══════ */
@@ -488,6 +515,34 @@
       window.speechSynthesis.speak(utt)
     }
     if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = pickFrenchVoice
+
+    function exportSingleMessagePDF(idx) {
+      var history = chatHistories[currentToolId] || []
+      var m = history[idx]
+      if (!m) return
+      var tool = tools.find(function (t) { return t.id === currentToolId })
+      var text = typeof m.content === 'string' ? m.content : (m.content.find(function (c) { return c.type === 'text' }) || {}).text || ''
+
+      var doc = new window.jspdf.jsPDF()
+      var margin = 20, y = 25, maxWidth = 170
+      doc.setFontSize(16)
+      doc.text(tool ? tool.name : 'Document', margin, y); y += 8
+      doc.setFontSize(9); doc.setTextColor(140)
+      doc.text(new Date().toLocaleDateString('fr-FR'), margin, y); y += 12
+      doc.setTextColor(20); doc.setFontSize(12)
+
+      var paragraphs = text.split(/\n\s*\n/)
+      paragraphs.forEach(function (para) {
+        var lines = doc.splitTextToSize(para.trim(), maxWidth)
+        lines.forEach(function (line) {
+          if (y > 280) { doc.addPage(); y = 25 }
+          doc.text(line, margin, y)
+          y += 7
+        })
+        y += 5
+      })
+      doc.save((tool ? tool.name.replace(/[^a-z0-9]+/gi, '-') : 'document') + '-' + Date.now() + '.pdf')
+    }
 
     /* ═══════ EXPORT PDF ═══════ */
     function exportChatPDF() {
