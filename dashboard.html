@@ -1224,7 +1224,7 @@
           Object.keys(obj).forEach(function (k) {
             if (fileUrl) return
             var v = obj[k], lk = k.toLowerCase()
-            if (typeof v === 'string' && /^https?:\/\//.test(v) && (lk.indexOf('output') !== -1 || lk.indexOf('download') !== -1)) fileUrl = v
+            if (typeof v === 'string' && /^https?:\/\//.test(v) && /output|download|video|audio|nwm|play|\.mp4|\.mp3/i.test(lk + ' ' + v)) fileUrl = v
             else if (v && typeof v === 'object') find(v, depth + 1)
           })
         })(d, 0)
