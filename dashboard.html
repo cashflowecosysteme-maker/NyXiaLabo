@@ -193,6 +193,7 @@
         { view: 'providers', icon: '🔌', label: 'Fournisseurs' },
         { view: 'explore', icon: '🔎', label: 'Explorer modèles' },
         { view: 'transcription', icon: '🎙️', label: 'Transcription' },
+        { view: 'customtools', icon: '🧩', label: 'Outils API (coller un cURL)' },
         { view: 'heygen', icon: '🧑\u200d🎤', label: 'Clone IA (HeyGen)' },
         { view: 'wan-video', icon: '🎬', label: 'Wan — Vidéo' },
         { view: 'wan-image', icon: '🎨', label: 'Wan — Image' }
@@ -214,7 +215,8 @@
       var fnMap = {
         tools: toolsView, providers: providersView, explore: exploreView,
         heygen: heygenView, 'wan-video': wanVideoView, 'wan-image': wanImageView,
-        transcription: function () { var t = tools.find(function (x) { return x.id === 'stt-whisper' }); if (t) renderTranscribeTool(t) }
+        transcription: function () { var t = tools.find(function (x) { return x.id === 'stt-whisper' }); if (t) renderTranscribeTool(t) },
+        customtools: customToolsView
       }
       if (fnMap[view]) fnMap[view]()
     }
@@ -235,6 +237,7 @@
       if (tool && tool.kind === 'transcribe') { renderTranscribeTool(tool); return }
       if (tool && tool.kind === 'apyhub') { renderApyHubTool(tool); return }
       if (tool && tool.kind === 'rapidapi') { renderRapidApiTool(tool); return }
+      if (tool && tool.kind === 'custom-api') { renderCustomApiUseTool(tool); return }
       renderChatTool(tool)
     }
 
@@ -1125,7 +1128,7 @@
     // et affiche ça en priorité plutôt qu'un mur de JSON.
     function renderSmartResult(data) {
       var d = data.data || data
-      var textKeys = ['content', 'summary', 'translated_text', 'translatedText', 'paraphrased_text', 'text', 'result', 'transcript', 'intro']
+      var textKeys = ['content', 'summary', 'translated_text', 'translatedText', 'paraphrased_text', 'text', 'result', 'transcript', 'intro', 'prediction', 'description', 'analysis']
       var mainText = null
       for (var i = 0; i < textKeys.length; i++) { if (typeof d[textKeys[i]] === 'string' && d[textKeys[i]].length > 3) { mainText = d[textKeys[i]]; break } }
 
@@ -1208,6 +1211,216 @@
         out.innerHTML = renderSmartResult(data)
       })
       .catch(function (e) { btn.disabled = false; btn.textContent = '⬇️ Lancer'; out.textContent = 'Erreur réseau : ' + e.message })
+    }
+
+    /* ═══════ OUTILS API PERSONNALISÉS (coller un cURL, libre-service) ═══════ */
+    var customTools = []
+    var pendingParsedCurl = null
+
+    function customToolsView() {
+      currentView = 'customtools'
+      fetch('/api/custom-tools', { headers: authHeaders() })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          customTools = data.customTools || []
+          renderCustomToolsList()
+        })
+    }
+
+    function renderCustomToolsList() {
+      document.getElementById('panel-title').textContent = 'Outils API personnalisés'
+      document.getElementById('panel-sub').textContent = 'Colle un cURL, ajuste, enregistre — sans coder'
+      document.getElementById('panel-actions').innerHTML = ''
+
+      var rows = customTools.map(function (t) {
+        return '<tr><td>' + (t.icon || '🧩') + ' ' + esc(t.name) + '</td><td>' + esc(t.category) + '</td><td>' + esc(t.host) + '</td>' +
+          '<td class="row-actions"><button class="btn-danger" onclick="deleteCustomTool(\'' + t.id + '\')">Supprimer</button></td></tr>'
+      }).join('')
+
+      document.getElementById('panel-body').innerHTML =
+        '<button class="btn-primary" onclick="showCurlPasteForm()">+ Coller un cURL</button>' +
+        '<table style="margin-top:16px"><tr><th>Nom</th><th>Catégorie</th><th>Hôte</th><th></th></tr>' + rows + '</table>' +
+        '<div id="curl-form-slot"></div>'
+    }
+
+    function deleteCustomTool(id) {
+      if (!confirm('Supprimer cet outil ?')) return
+      fetch('/api/custom-tools/' + id, { method: 'DELETE', headers: authHeaders() })
+        .then(function () { customToolsView() })
+    }
+
+    function showCurlPasteForm() {
+      document.getElementById('curl-form-slot').innerHTML =
+        '<div class="form-card">' +
+        '<label class="f-label">Colle ta commande cURL complète ici</label>' +
+        '<textarea id="curl-raw" style="min-height:160px;font-family:monospace;font-size:12px" placeholder="curl --request GET \\\n  --url ...\\\n  --header ..."></textarea>' +
+        '<button class="btn-primary" style="margin-top:10px" onclick="analyzeCurl()">🔍 Analyser</button>' +
+        '<button class="btn-mini" onclick="document.getElementById(\'curl-form-slot\').innerHTML=\'\'">Annuler</button>' +
+        '<div id="curl-review-slot"></div></div>'
+    }
+
+    // Analyse simple d'une commande cURL — gère --url, --request, --header, --data, --form
+    function parseCurl(text) {
+      var flat = text.replace(/\\\r?\n/g, ' ')
+      var result = { method: 'GET', url: '', headers: {}, jsonBody: null, formFields: {}, hasForm: false }
+
+      var urlMatch = flat.match(/--url\s+'([^']+)'/) || flat.match(/--url\s+"([^"]+)"/) || flat.match(/--url\s+(\S+)/)
+      if (urlMatch) result.url = urlMatch[1]
+
+      var methodMatch = flat.match(/--request\s+(\w+)/i) || flat.match(/-X\s+(\w+)/i)
+      if (methodMatch) result.method = methodMatch[1].toUpperCase()
+
+      var headerRe = /--header\s+'([^:]+):\s*([^']*)'/g
+      var hm
+      while ((hm = headerRe.exec(flat))) { result.headers[hm[1].trim()] = hm[2].trim() }
+
+      var dataMatch = flat.match(/--data(?:-raw)?\s+'([\s\S]*?)'\s*(?=--\w|$)/)
+      if (dataMatch) { try { result.jsonBody = JSON.parse(dataMatch[1]) } catch (e) { result.jsonBody = { _raw: dataMatch[1] } } }
+
+      var formRe = /--form\s+'([^=]+)=(?:@"?([^"']*)"?|"?([^"']*)"?)'/g
+      var fm
+      while ((fm = formRe.exec(flat))) { result.formFields[fm[1].trim()] = fm[2] || fm[3] || ''; result.hasForm = true }
+
+      return result
+    }
+
+    function analyzeCurl() {
+      var raw = document.getElementById('curl-raw').value
+      var parsed = parseCurl(raw)
+      if (!parsed.url) { alert('URL introuvable dans ce cURL — vérifie le format.'); return }
+
+      var urlObj
+      try { urlObj = new URL(parsed.url) } catch (e) { alert('URL invalide.'); return }
+
+      // Devine quel en-tête sert de clé API
+      var authHeaderName = null
+      Object.keys(parsed.headers).forEach(function (h) {
+        var low = h.toLowerCase()
+        if (low.indexOf('key') !== -1 || low.indexOf('token') !== -1 || low === 'authorization') authHeaderName = h
+      })
+
+      var queryFields = []
+      urlObj.searchParams.forEach(function (v, k) { queryFields.push({ name: k, label: k, location: 'query', default: v }) })
+      var bodyFields = []
+      if (parsed.jsonBody) Object.keys(parsed.jsonBody).forEach(function (k) { bodyFields.push({ name: k, label: k, location: 'body', default: String(parsed.jsonBody[k]) }) })
+      if (parsed.hasForm) Object.keys(parsed.formFields).forEach(function (k) { bodyFields.push({ name: k, label: k, location: 'body', default: parsed.formFields[k] }) })
+
+      pendingParsedCurl = {
+        host: urlObj.host, path: urlObj.pathname, method: parsed.method,
+        bodyType: parsed.jsonBody ? 'json' : (parsed.hasForm ? 'form' : 'none'),
+        authHeaderName: authHeaderName, fields: queryFields.concat(bodyFields)
+      }
+      renderCurlReview()
+    }
+
+    function renderCurlReview() {
+      var p = pendingParsedCurl
+      var fieldsHtml = p.fields.map(function (f, i) {
+        return '<div class="field-row" style="align-items:center">' +
+          '<div class="field"><input type="text" id="rev-fname-' + i + '" value="' + esc(f.name) + '" placeholder="nom du champ"></div>' +
+          '<div class="field"><input type="text" id="rev-flabel-' + i + '" value="' + esc(f.label) + '" placeholder="étiquette affichée"></div>' +
+          '<div class="field"><input type="text" id="rev-fdefault-' + i + '" value="' + esc(f.default) + '" placeholder="valeur par défaut"></div>' +
+          '<div style="flex:0 0 70px;font-size:11px;color:var(--t4)">' + f.location + '</div>' +
+          '</div>'
+      }).join('')
+
+      document.getElementById('curl-review-slot').innerHTML =
+        '<div style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(123,92,255,0.15)">' +
+        '<div class="field-row"><div class="field"><label class="f-label">Icône</label><input type="text" id="rev-icon" value="🧩"></div>' +
+        '<div class="field" style="flex:3"><label class="f-label">Nom de l\'outil</label><input type="text" id="rev-name" value=""></div></div>' +
+        '<div class="field-row"><div class="field"><label class="f-label">Catégorie</label><select id="rev-category">' +
+          Object.keys(CATEGORY_LABELS).map(function (c) { return '<option value="' + c + '">' + CATEGORY_LABELS[c].icon + ' ' + CATEGORY_LABELS[c].name + '</option>' }).join('') +
+          '<option value="custom">➕ Autre (nouvelle catégorie)</option></select>' +
+          '<input type="text" id="rev-category-custom" placeholder="nom-de-la-categorie" style="margin-top:6px;display:none"></div>' +
+        '<div class="field"><label class="f-label">Hôte détecté</label><input type="text" id="rev-host" value="' + esc(p.host) + '" readonly style="opacity:.6"></div></div>' +
+        '<div class="field"><label class="f-label">Nom exact de l\'en-tête d\'authentification</label><input type="text" id="rev-authheader" value="' + esc(p.authHeaderName || '') + '" placeholder="ex: x-rapidapi-key, apy-token, Authorization"></div>' +
+        '<div class="field"><label class="f-label">Nom du secret Cloudflare à utiliser (pas la clé elle-même !)</label><input type="text" id="rev-authsecret" placeholder="ex: X-RapidAPI-Key"></div>' +
+        '<div class="field"><label class="f-label">Préfixe devant la clé (optionnel, ex: "Bearer ")</label><input type="text" id="rev-authprefix" value=""></div>' +
+        '<label class="f-label" style="margin-top:10px;display:block">Champs détectés (nom technique · étiquette · valeur par défaut · emplacement)</label>' +
+        fieldsHtml +
+        '<button class="btn-primary" style="margin-top:14px" onclick="saveCustomTool()">💾 Enregistrer cet outil</button>' +
+        '</div>'
+
+      document.getElementById('rev-category').onchange = function () {
+        document.getElementById('rev-category-custom').style.display = this.value === 'custom' ? 'block' : 'none'
+      }
+    }
+
+    function saveCustomTool() {
+      var p = pendingParsedCurl
+      var category = document.getElementById('rev-category').value
+      if (category === 'custom') category = document.getElementById('rev-category-custom').value.trim().toLowerCase().replace(/\s+/g, '-') || 'custom'
+
+      var fields = p.fields.map(function (f, i) {
+        return {
+          name: document.getElementById('rev-fname-' + i).value.trim(),
+          label: document.getElementById('rev-flabel-' + i).value.trim(),
+          location: f.location,
+          default: document.getElementById('rev-fdefault-' + i).value
+        }
+      })
+
+      var payload = {
+        name: document.getElementById('rev-name').value.trim() || 'Outil sans nom',
+        icon: document.getElementById('rev-icon').value.trim() || '🧩',
+        category: category,
+        host: p.host,
+        method: p.method,
+        pathTemplate: p.path,
+        bodyType: p.bodyType,
+        authHeaderName: document.getElementById('rev-authheader').value.trim(),
+        authSecretName: document.getElementById('rev-authsecret').value.trim(),
+        authHeaderPrefix: document.getElementById('rev-authprefix').value,
+        fields: fields
+      }
+      if (!payload.authSecretName) { alert('Indique le nom du secret Cloudflare à utiliser.'); return }
+
+      fetch('/api/custom-tools', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
+        .then(function (r) { return r.json() })
+        .then(function () { loadAll(); customToolsView() })
+    }
+
+    function renderCustomApiUseTool(toolStub) {
+      // toolStub vient de la liste fusionnée (id/name/category) — on va chercher la config complète
+      fetch('/api/custom-tools', { headers: authHeaders() })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          var full = (data.customTools || []).find(function (t) { return t.id === toolStub.id })
+          if (!full) { document.getElementById('panel-body').innerHTML = 'Outil introuvable.'; return }
+          document.getElementById('panel-title').textContent = full.name
+          document.getElementById('panel-sub').textContent = full.host
+          document.getElementById('panel-actions').innerHTML = ''
+
+          var fieldsHtml = (full.fields || []).map(function (f) {
+            return '<div class="field"><label class="f-label">' + esc(f.label || f.name) + '</label><input type="text" id="cu-f-' + f.name + '" value="' + esc(f.default || '') + '"></div>'
+          }).join('')
+
+          document.getElementById('panel-body').innerHTML =
+            '<div style="max-width:600px;margin:0 auto">' + fieldsHtml +
+            '<button class="btn-primary" id="cu-btn" onclick="runCustomApiTool(\'' + full.id + '\')" style="margin-top:8px">✨ Lancer</button>' +
+            '<div class="result-box" id="cu-result" style="margin-top:20px;white-space:pre-wrap">—</div></div>'
+          window._currentCustomTool = full
+        })
+    }
+
+    function runCustomApiTool(id) {
+      var full = window._currentCustomTool
+      var btn = document.getElementById('cu-btn')
+      var out = document.getElementById('cu-result')
+      btn.disabled = true; btn.textContent = 'En cours...'
+      out.textContent = 'Chargement...'
+
+      var fields = {}
+      ;(full.fields || []).forEach(function (f) { fields[f.name] = document.getElementById('cu-f-' + f.name).value })
+
+      fetch('/api/custom-tools/call', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ id: id, fields: fields }) })
+        .then(function (r) { return r.json() })
+        .then(function (data) {
+          btn.disabled = false; btn.textContent = '✨ Lancer'
+          if (data.error) { out.innerHTML = 'Erreur : ' + esc(data.error); return }
+          out.innerHTML = renderSmartResult(data)
+        })
+        .catch(function (e) { btn.disabled = false; btn.textContent = '✨ Lancer'; out.textContent = 'Erreur réseau : ' + e.message })
     }
 
     function renderAudioSearchTool(tool) {
