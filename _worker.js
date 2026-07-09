@@ -407,6 +407,16 @@ async function saveCustomTools(env, list) {
   await env.HUB_CONFIG.put("customTools", JSON.stringify(list));
 }
 
+function setNestedValue(obj, path, value) {
+  const parts = path.split(".");
+  let cur = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (typeof cur[parts[i]] !== "object" || cur[parts[i]] === null) cur[parts[i]] = {};
+    cur = cur[parts[i]];
+  }
+  cur[parts[parts.length - 1]] = value;
+}
+
 async function callCustomTool(env, toolConfig, fields) {
   let path = toolConfig.pathTemplate.replace(/\{(\w+)\}/g, (_, name) => encodeURIComponent(fields[name] || ""));
   const queryParams = new URLSearchParams(toolConfig.query || {});
@@ -422,7 +432,9 @@ async function callCustomTool(env, toolConfig, fields) {
   let body;
   if (toolConfig.bodyType === "json") {
     const obj = {};
-    (toolConfig.fields || []).filter(f => f.location === "body").forEach(f => { if (fields[f.name]) obj[f.name] = fields[f.name]; });
+    (toolConfig.fields || []).filter(f => f.location === "body").forEach(f => {
+      if (fields[f.name] !== undefined && fields[f.name] !== "") setNestedValue(obj, f.name, fields[f.name]);
+    });
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(obj);
   } else if (toolConfig.bodyType === "form") {
