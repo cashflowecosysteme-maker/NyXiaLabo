@@ -190,7 +190,7 @@ async function callOpenAiCompatible(provider, env, { model, messages, max_tokens
     body: JSON.stringify({ model, messages: finalMessages, max_tokens: max_tokens || 2000, temperature: temperature ?? 0.7 })
   });
   const elapsedMs = Date.now() - started;
-  const data = await res.json();
+  const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.error?.message || `Erreur ${provider.id}: ${res.status}`);
   return { text: data.choices?.[0]?.message?.content ?? "", usage: data.usage || null, elapsedMs };
 }
@@ -223,7 +223,7 @@ async function callImageGeneration(provider, env, { model, prompt, aspect_ratio,
       body: form
     });
     const elapsedMs = Date.now() - started;
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error((data.error && (data.error.message || JSON.stringify(data.error))) || `Erreur ${provider.id}: ${res.status}`);
     const images = (data.data || []).map(d => d.url || (d.b64_json ? "data:image/png;base64," + d.b64_json : null)).filter(Boolean);
     return { images, elapsedMs };
@@ -242,7 +242,7 @@ async function callImageGeneration(provider, env, { model, prompt, aspect_ratio,
     body: JSON.stringify(payload)
   });
   const elapsedMs = Date.now() - started;
-  const data = await res.json();
+  const data = await safeJson(res);
   if (!res.ok) throw new Error((data.error && (data.error.message || JSON.stringify(data.error))) || `Erreur ${provider.id}: ${res.status}`);
 
   const images = (data.data || []).map(d => d.url || (d.b64_json ? "data:image/png;base64," + d.b64_json : null)).filter(Boolean);
@@ -270,6 +270,12 @@ const APYHUB_TOOLS = {
   "paraphrase-text": { method: "POST", path: "/sharpapi/api/v1/content/paraphrase", type: "json" }
 };
 
+async function safeJson(res) {
+  const raw = await res.text();
+  try { return JSON.parse(raw); }
+  catch (e) { return { error: `Réponse invalide du serveur (${res.status}) : ${raw.slice(0, 200)}` }; }
+}
+
 async function callApyHub(env, source, fields, files) {
   const config = APYHUB_TOOLS[source];
   if (!config) throw new Error(`Outil ApyHub inconnu: ${source}`);
@@ -284,7 +290,7 @@ async function callApyHub(env, source, fields, files) {
     const res = await fetch(`${base}${config.path}?${queryParams.toString()}`, {
       headers: { "apy-token": env.ApyHub_KEY, "Content-Type": "application/json" }
     });
-    return await res.json();
+    return await safeJson(res);
   }
 
   if (config.type === "json") {
@@ -294,7 +300,7 @@ async function callApyHub(env, source, fields, files) {
       headers: { "apy-token": env.ApyHub_KEY, "Content-Type": "application/json" },
       body: JSON.stringify(fields || {})
     });
-    return await res.json();
+    return await safeJson(res);
   }
 
   // multipart
@@ -319,7 +325,7 @@ async function callApyHub(env, source, fields, files) {
     headers: { "apy-token": env.ApyHub_KEY },
     body: form
   });
-  return await res.json();
+  return await safeJson(res);
 }
 
 const RAPIDAPI_TOOLS = {
@@ -367,7 +373,12 @@ async function callRapidApi(env, source, fields) {
   }
 
   const res = await fetch(fullUrl, { method: config.method, headers, body: config.method === "GET" ? undefined : body });
-  return await res.json();
+  const raw = await res.text();
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    return { error: `Réponse invalide du serveur (${res.status}) : ${raw.slice(0, 200)}` };
+  }
 }
 
 async function getCustomTools(env) {
@@ -404,7 +415,7 @@ async function callCustomTool(env, toolConfig, fields) {
   }
 
   const res = await fetch(fullUrl, { method: toolConfig.method, headers, body: toolConfig.method === "GET" ? undefined : body });
-  return await res.json();
+  return await safeJson(res);
 }
 
 // ---- Helpers KV ----
@@ -626,7 +637,7 @@ export default {
       const provider = providers.find(p => p.id === providerId);
       if (!provider) return json({ error: "Fournisseur inconnu" }, 400);
       const res = await fetch(`${provider.base_url}/models`);
-      return json(await res.json());
+      return json(await safeJson(res));
     }
 
     // --- Recherche Pexels (photos) ---
@@ -637,7 +648,7 @@ export default {
       const res = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=15`, {
         headers: { Authorization: env.PEXELS_KEY }
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       return json({ photos: (data.photos || []).map(p => ({ id: p.id, thumb: p.src.medium, full: p.src.large2x, photographer: p.photographer, url: p.url })) });
     }
 
@@ -649,7 +660,7 @@ export default {
       const res = await fetch(`https://api.pexels.com/videos/search?query=${encodeURIComponent(q)}&per_page=12`, {
         headers: { Authorization: env.PEXELS_KEY }
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       const videos = (data.videos || []).map(v => {
         const files = (v.video_files || []).slice().sort((a, b) => (a.width || 0) - (b.width || 0));
         const sd = files.find(f => f.width && f.width <= 960) || files[0];
@@ -681,7 +692,7 @@ export default {
           headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        const data = await res.json();
+        const data = await safeJson(res);
         if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
         return json({ id: data.id, status: data.status });
       } catch (err) {
@@ -700,7 +711,7 @@ export default {
         const v2Base = provider.base_url.replace(/\/v1$/, "/v2");
 
         const res = await fetch(`${v2Base}/video/generations?generation_id=${encodeURIComponent(genId)}`, { headers: { "Authorization": `Bearer ${apiKey}` } });
-        const data = await res.json();
+        const data = await safeJson(res);
         return json({ status: data.status, video_url: data.video ? data.video.url : null, error: data.error });
       } catch (err) {
         return json({ error: err.message || String(err) }, 500);
@@ -715,7 +726,7 @@ export default {
       const res = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(q)}&per_page=15`, {
         headers: { Authorization: `Client-ID ${env.UNSPLASH_KEY}` }
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) return json({ error: data.errors ? data.errors.join(", ") : `Erreur Unsplash: ${res.status}` }, 500);
       const results = (data.results || []).map(p => ({
         id: p.id, thumb: p.urls.small, full: p.urls.regular, photographer: p.user ? p.user.name : "", link: p.links ? p.links.html : ""
@@ -729,7 +740,7 @@ export default {
       const q = url.searchParams.get("q") || "";
       if (!q) return json({ error: "Paramètre q requis" }, 400);
       const res = await fetch(`https://freesound.org/apiv2/search/text/?query=${encodeURIComponent(q)}&fields=id,name,previews,duration,username,license&page_size=15&token=${env.FREESOUND_API_KEY}`);
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) return json({ error: data.detail || `Erreur Freesound: ${res.status}` }, 500);
       const results = (data.results || []).map(s => ({
         id: s.id, name: s.name, duration: s.duration, username: s.username, license: s.license,
@@ -760,7 +771,7 @@ export default {
           headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        const data = await res.json();
+        const data = await safeJson(res);
         if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
         return json({ id: data.id, status: data.status });
       } catch (err) {
@@ -780,7 +791,7 @@ export default {
         const v2Base = provider.base_url.replace(/\/v1$/, "/v2");
 
         const res = await fetch(`${v2Base}/generate/audio?generation_id=${encodeURIComponent(genId)}`, { headers: { "Authorization": `Bearer ${apiKey}` } });
-        const data = await res.json();
+        const data = await safeJson(res);
         return json({ status: data.status, audio_url: data.audio_file ? data.audio_file.url : null, error: data.error });
       } catch (err) {
         return json({ error: err.message || String(err) }, 500);
@@ -805,7 +816,7 @@ export default {
           headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({ prompt: body.prompt, mode: tool.model, aspect_ratio: body.aspect_ratio || tool.aspect_ratio || "1:1" })
         });
-        const data = await res.json();
+        const data = await safeJson(res);
         if (!res.ok) return json({ error: data.error?.message || data.message || `Erreur Alexya: ${res.status}` }, 500);
         return json({ id: data.id, status: data.status, poll_url: data.poll_url });
       } catch (err) {
@@ -825,7 +836,7 @@ export default {
         if (!apiKey) return json({ error: `Clé manquante (${provider.api_key_secret})` }, 500);
 
         const res = await fetch(`${provider.base_url}/generations/${genId}`, { headers: { "Authorization": `Bearer ${apiKey}` } });
-        const data = await res.json();
+        const data = await safeJson(res);
         return json({ status: data.status, output_url: data.output_url, thumbnail_url: data.thumbnail_url, error: data.error });
       } catch (err) {
         return json({ error: err.message || String(err) }, 500);
@@ -884,7 +895,7 @@ export default {
           headers: { "Authorization": `Bearer ${apiKey}` },
           body: form
         });
-        const data = await res.json();
+        const data = await safeJson(res);
         if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
         return json({ generation_id: data.generation_id });
       } catch (err) {
@@ -902,7 +913,7 @@ export default {
         const apiKey = env[provider.api_key_secret];
 
         const res = await fetch(`https://api.aimlapi.com/v1/stt/${encodeURIComponent(genId)}`, { headers: { "Authorization": `Bearer ${apiKey}` } });
-        const data = await res.json();
+        const data = await safeJson(res);
         return json(data);
       } catch (err) {
         return json({ error: err.message || String(err) }, 500);
@@ -914,7 +925,7 @@ export default {
       const sign = url.searchParams.get("sign") || "aries";
       const keyPart = env.VIEWBITS_KEY ? `&key=${env.VIEWBITS_KEY}` : "";
       const res = await fetch(`https://api.viewbits.com/v1/horoscope?sign=${sign}${keyPart}`);
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
       return json(data);
     }
@@ -922,7 +933,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/api/esoteric/moonphase") {
       const keyPart = env.VIEWBITS_KEY ? `?key=${env.VIEWBITS_KEY}` : "";
       const res = await fetch(`https://api.viewbits.com/v1/moonphase${keyPart}`);
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
       return json(data);
     }
@@ -930,7 +941,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/api/esoteric/zenquotes") {
       const keyPart = env.VIEWBITS_KEY ? `&key=${env.VIEWBITS_KEY}` : "";
       const res = await fetch(`https://api.viewbits.com/v1/zenquotes?mode=random${keyPart}`);
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
       return json(data);
     }
@@ -939,7 +950,7 @@ export default {
       const lat = url.searchParams.get("lat") || "45.7";
       const lng = url.searchParams.get("lng") || "-74.0";
       const res = await fetch(`https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lng}&formatted=0`);
-      const data = await res.json();
+      const data = await safeJson(res);
       return json(data);
     }
 
@@ -950,7 +961,7 @@ export default {
         const res = await fetch("https://astrology-api.io/api/v1/tarot/draw", {
           headers: { "Authorization": `Bearer ${env.Astro_KEY}` }
         });
-        const data = await res.json();
+        const data = await safeJson(res);
         if (!res.ok) return json({ error: data.message || `Erreur: ${res.status} — endpoint peut-être incorrect, à vérifier` }, 500);
         return json(data);
       } catch (err) {
@@ -1061,7 +1072,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/api/heygen/voices") {
       if (!env.HEYGEN_API_KEY) return json({ error: "Clé HEYGEN_API_KEY manquante" }, 500);
       const res = await fetch("https://api.heygen.com/v3/voices?type=private", { headers: { "X-Api-Key": env.HEYGEN_API_KEY } });
-      const data = await res.json();
+      const data = await safeJson(res);
       const voices = (data.data || []).map(v => ({ id: v.voice_id, name: v.name, language: v.language, gender: v.gender })).slice(0, 300);
       return json({ voices });
     }
@@ -1083,7 +1094,7 @@ export default {
           headers: { "X-Api-Key": env.HEYGEN_API_KEY, "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        const data = await res.json();
+        const data = await safeJson(res);
         if (!res.ok || data.error) return json({ error: (data.error && data.error.message) || `Erreur HeyGen: ${res.status}` }, 500);
         return json({ video_id: data.data.video_id });
       } catch (err) {
@@ -1099,7 +1110,7 @@ export default {
       const res = await fetch(`https://api.heygen.com/v1/video_status.get?video_id=${encodeURIComponent(videoId)}`, {
         headers: { "X-Api-Key": env.HEYGEN_API_KEY }
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       const d = data.data || {};
       return json({ status: d.status, video_url: d.video_url, error: d.error });
     }
