@@ -632,8 +632,9 @@
       document.getElementById('panel-actions').innerHTML = ''
 
       var rows = tools.map(function (t) {
-        return '<tr><td>' + t.icon + ' ' + esc(t.name) + '</td><td>' + esc((CATEGORY_LABELS[t.category]||{name:t.category}).name) + '</td><td>' + esc(t.model) + '</td>' +
-          '<td class="row-actions"><button class="btn-mini" onclick="editTool(\'' + t.id + '\')">Modifier</button>' +
+        var editBtn = (t.kind === 'custom-api') ? '' : '<button class="btn-mini" onclick="editTool(\'' + t.id + '\')">Modifier</button>'
+        return '<tr><td>' + t.icon + ' ' + esc(t.name) + '</td><td>' + esc((CATEGORY_LABELS[t.category]||{name:t.category}).name) + '</td><td>' + esc(t.model || '—') + '</td>' +
+          '<td class="row-actions">' + editBtn +
           '<button class="btn-danger" onclick="deleteTool(\'' + t.id + '\')">Supprimer</button></td></tr>'
       }).join('')
 
@@ -714,7 +715,9 @@
 
     function deleteTool(id) {
       if (!confirm('Supprimer cet outil ?')) return
-      fetch('/api/tools/' + id, { method: 'DELETE', headers: authHeaders() })
+      var t = tools.find(function (x) { return x.id === id })
+      var endpoint = (t && t.kind === 'custom-api') ? '/api/custom-tools/' : '/api/tools/'
+      fetch(endpoint + id, { method: 'DELETE', headers: authHeaders() })
         .then(function () { loadAll(); setTimeout(function(){ toolsView() }, 50) })
     }
 
@@ -1060,18 +1063,12 @@
       document.getElementById('panel-actions').innerHTML = ''
       document.getElementById('panel-body').innerHTML =
         '<div style="max-width:600px;margin:0 auto;text-align:center">' +
-        '<div style="margin-bottom:12px"><select id="stt-mode" onchange="sttMode=this.value;renderTranscribeTool(tools.find(function(t){return t.id===currentToolId}))" style="max-width:220px;margin:0 auto">' +
-          '<option value="file"' + (sttMode === 'file' ? ' selected' : '') + '>📁 Fichier depuis mon appareil</option>' +
-          '<option value="url"' + (sttMode === 'url' ? ' selected' : '') + '>🔗 Lien direct vers un fichier</option>' +
-        '</select></div>' +
         '<div style="margin-bottom:12px"><select id="stt-lang" style="max-width:220px;margin:0 auto">' +
           '<option value="">🌐 Détection automatique</option>' +
           '<option value="fr">🇫🇷 Français (forcer)</option>' +
           '<option value="en">🇬🇧 Anglais (forcer)</option>' +
         '</select></div>' +
-        (sttMode === 'file'
-          ? '<input type="file" id="stt-file" accept="audio/*,video/*" style="margin-bottom:16px">'
-          : '<input type="text" id="stt-url" placeholder="https://.../fichier.mp3" style="margin-bottom:16px"><div style="font-size:11px;color:var(--t4);margin:-10px 0 16px">Doit pointer directement vers un fichier audio/vidéo, pas une page web (ex. pas un lien YouTube — utilise d\'abord "YouTube — Audio rapide" dans Downloader pour obtenir le vrai lien du fichier)</div>') +
+        '<input type="file" id="stt-file" accept="audio/*,video/*" style="margin-bottom:16px">' +
         '<div><button class="btn-primary" id="stt-btn" onclick="runTranscribe()">🎙️ Transcrire</button></div>' +
         '<div class="result-box" id="stt-result" style="margin-top:20px;text-align:left;white-space:pre-wrap">—</div>' +
         '<div id="stt-actions" style="margin-top:8px"></div></div>'
@@ -1081,30 +1078,6 @@
       var tool = tools.find(function (t) { return t.id === currentToolId })
       var btn = document.getElementById('stt-btn')
       var out = document.getElementById('stt-result')
-
-      if (sttMode === 'url') {
-        var urlVal = document.getElementById('stt-url').value.trim()
-        if (!urlVal) { alert('Colle un lien direct vers un fichier audio/vidéo.'); return }
-        btn.disabled = true; btn.textContent = 'Envoi...'
-        out.textContent = 'Envoi...'
-        fetch('/api/transcribe', {
-          method: 'POST', headers: authHeaders(),
-          body: JSON.stringify({ toolId: tool.id, audio_url: urlVal, language: document.getElementById('stt-lang').value })
-        })
-        .then(function (r) { return r.json() })
-        .then(function (data) {
-          if (data.error) { btn.disabled = false; btn.textContent = '🎙️ Transcrire'; out.textContent = 'Erreur : ' + data.error; return }
-          if (data.done) { btn.disabled = false; btn.textContent = '🎙️ Transcrire'; out.textContent = data.text || '(vide)';
-            document.getElementById('stt-actions').innerHTML =
-              '<button class="btn-mini" onclick="navigator.clipboard.writeText(document.getElementById(\'stt-result\').textContent)">📋 Copier</button> ' +
-              '<button class="btn-mini" onclick="exportTranscriptPDF()">📄 PDF</button>'
-            return }
-          out.textContent = 'Transcription en cours...'
-          pollTranscribe(data.generation_id, btn, out)
-        })
-        .catch(function (e) { btn.disabled = false; btn.textContent = '🎙️ Transcrire'; out.textContent = 'Erreur réseau : ' + e.message })
-        return
-      }
 
       var file = document.getElementById('stt-file').files[0]
       if (!file) { alert('Choisis un fichier audio ou vidéo.'); return }
@@ -1400,7 +1373,8 @@
 
       var rows = customTools.map(function (t) {
         return '<tr><td>' + (t.icon || '🧩') + ' ' + esc(t.name) + '</td><td>' + esc(t.category) + '</td><td>' + esc(t.host) + '</td>' +
-          '<td class="row-actions"><button class="btn-danger" onclick="deleteCustomTool(\'' + t.id + '\')">Supprimer</button></td></tr>'
+          '<td class="row-actions"><button class="btn-mini" onclick="editCustomTool(\'' + t.id + '\')">Modifier</button>' +
+          '<button class="btn-danger" onclick="deleteCustomTool(\'' + t.id + '\')">Supprimer</button></td></tr>'
       }).join('')
 
       document.getElementById('panel-body').innerHTML =
@@ -1479,7 +1453,18 @@
       renderCurlReview()
     }
 
-    function renderCurlReview() {
+    var editingCustomToolId = null
+
+    function editCustomTool(id) {
+      var t = customTools.find(function (x) { return x.id === id })
+      if (!t) return
+      editingCustomToolId = id
+      pendingParsedCurl = { host: t.host, path: t.pathTemplate, method: t.method, bodyType: t.bodyType, authHeaderName: t.authHeaderName, fields: t.fields || [] }
+      document.getElementById('curl-form-slot').innerHTML = '<div id="curl-review-slot"></div>'
+      renderCurlReview(t)
+    }
+
+    function renderCurlReview(existing) {
       var p = pendingParsedCurl
       var fieldsHtml = p.fields.map(function (f, i) {
         return '<div class="field-row" style="align-items:center">' +
@@ -1490,21 +1475,25 @@
           '</div>'
       }).join('')
 
+      var catOptions = Object.keys(CATEGORY_LABELS).map(function (c) {
+        return '<option value="' + c + '"' + (existing && existing.category === c ? ' selected' : '') + '>' + CATEGORY_LABELS[c].icon + ' ' + CATEGORY_LABELS[c].name + '</option>'
+      }).join('') + '<option value="custom"' + (existing && !CATEGORY_LABELS[existing.category] ? ' selected' : '') + '>➕ Autre (nouvelle catégorie)</option>'
+
       document.getElementById('curl-review-slot').innerHTML =
         '<div style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(123,92,255,0.15)">' +
-        '<div class="field-row"><div class="field"><label class="f-label">Icône</label><input type="text" id="rev-icon" value="🧩"></div>' +
-        '<div class="field" style="flex:3"><label class="f-label">Nom de l\'outil</label><input type="text" id="rev-name" value=""></div></div>' +
-        '<div class="field-row"><div class="field"><label class="f-label">Catégorie</label><select id="rev-category">' +
-          Object.keys(CATEGORY_LABELS).map(function (c) { return '<option value="' + c + '">' + CATEGORY_LABELS[c].icon + ' ' + CATEGORY_LABELS[c].name + '</option>' }).join('') +
-          '<option value="custom">➕ Autre (nouvelle catégorie)</option></select>' +
-          '<input type="text" id="rev-category-custom" placeholder="nom-de-la-categorie" style="margin-top:6px;display:none"></div>' +
+        (existing ? '<div style="color:var(--gold);font-size:12px;margin-bottom:10px">✏️ Modification de "' + esc(existing.name) + '"</div>' : '') +
+        '<div class="field-row"><div class="field"><label class="f-label">Icône</label><input type="text" id="rev-icon" value="' + esc(existing ? existing.icon : '🧩') + '"></div>' +
+        '<div class="field" style="flex:3"><label class="f-label">Nom de l\'outil</label><input type="text" id="rev-name" value="' + esc(existing ? existing.name : '') + '"></div></div>' +
+        '<div class="field-row"><div class="field"><label class="f-label">Catégorie</label><select id="rev-category">' + catOptions +
+          '</select><input type="text" id="rev-category-custom" placeholder="nom-de-la-categorie" style="margin-top:6px;display:' + (existing && !CATEGORY_LABELS[existing.category] ? 'block' : 'none') + '" value="' + (existing && !CATEGORY_LABELS[existing.category] ? esc(existing.category) : '') + '"></div>' +
         '<div class="field"><label class="f-label">Hôte détecté</label><input type="text" id="rev-host" value="' + esc(p.host) + '" readonly style="opacity:.6"></div></div>' +
         '<div class="field"><label class="f-label">Nom exact de l\'en-tête d\'authentification</label><input type="text" id="rev-authheader" value="' + esc(p.authHeaderName || '') + '" placeholder="ex: x-rapidapi-key, apy-token, Authorization"></div>' +
-        '<div class="field"><label class="f-label">Nom du secret Cloudflare à utiliser (pas la clé elle-même !)</label><input type="text" id="rev-authsecret" placeholder="ex: X-RapidAPI-Key"></div>' +
-        '<div class="field"><label class="f-label">Préfixe devant la clé (optionnel, ex: "Bearer ")</label><input type="text" id="rev-authprefix" value=""></div>' +
-        '<label class="f-label" style="margin-top:10px;display:block">Champs détectés (nom technique · étiquette · valeur par défaut · emplacement)</label>' +
+        '<div class="field"><label class="f-label">Nom du secret Cloudflare à utiliser (pas la clé elle-même !)</label><input type="text" id="rev-authsecret" value="' + esc(existing ? existing.authSecretName : '') + '" placeholder="ex: X-RapidAPI-Key"></div>' +
+        '<div class="field"><label class="f-label">Préfixe devant la clé (optionnel, ex: "Bearer ")</label><input type="text" id="rev-authprefix" value="' + esc(existing ? existing.authHeaderPrefix || '' : '') + '"></div>' +
+        '<label class="f-label" style="margin-top:10px;display:block">Champs (nom technique · étiquette · valeur par défaut · emplacement)</label>' +
         fieldsHtml +
-        '<button class="btn-primary" style="margin-top:14px" onclick="saveCustomTool()">💾 Enregistrer cet outil</button>' +
+        '<button class="btn-primary" style="margin-top:14px" onclick="saveCustomTool()">💾 Enregistrer</button> ' +
+        (existing ? '<button class="btn-mini" onclick="customToolsView()">Annuler</button>' : '') +
         '</div>'
 
       document.getElementById('rev-category').onchange = function () {
@@ -1541,9 +1530,12 @@
       }
       if (!payload.authSecretName) { alert('Indique le nom du secret Cloudflare à utiliser.'); return }
 
-      fetch('/api/custom-tools', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
-        .then(function (r) { return r.json() })
-        .then(function () { loadAll(); customToolsView() })
+      var req = editingCustomToolId
+        ? fetch('/api/custom-tools/' + editingCustomToolId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) })
+        : fetch('/api/custom-tools', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
+
+      req.then(function (r) { return r.json() })
+        .then(function () { editingCustomToolId = null; loadAll(); customToolsView() })
     }
 
     function renderCustomApiUseTool(toolStub) {
