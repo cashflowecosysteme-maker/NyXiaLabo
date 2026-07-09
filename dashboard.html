@@ -1038,6 +1038,22 @@
 
     /* ═══════ TRANSCRIPTION (Whisper) ═══════ */
     var sttMode = 'file'
+    function exportTranscriptPDF() {
+      var text = document.getElementById('stt-result').textContent
+      if (!text || text === '—') return
+      var doc = new window.jspdf.jsPDF()
+      var margin = 20, y = 25, maxWidth = 170
+      doc.setFontSize(16); doc.text('Transcription', margin, y); y += 8
+      doc.setFontSize(9); doc.setTextColor(140); doc.text(new Date().toLocaleDateString('fr-FR'), margin, y); y += 12
+      doc.setTextColor(20); doc.setFontSize(12)
+      var lines = doc.splitTextToSize(text, maxWidth)
+      lines.forEach(function (line) {
+        if (y > 280) { doc.addPage(); y = 25 }
+        doc.text(line, margin, y); y += 7
+      })
+      doc.save('transcription-' + Date.now() + '.pdf')
+    }
+
     function renderTranscribeTool(tool) {
       document.getElementById('panel-title').textContent = tool.name
       document.getElementById('panel-sub').textContent = 'Transcrit un fichier audio ou vidéo en texte'
@@ -1047,6 +1063,11 @@
         '<div style="margin-bottom:12px"><select id="stt-mode" onchange="sttMode=this.value;renderTranscribeTool(tools.find(function(t){return t.id===currentToolId}))" style="max-width:220px;margin:0 auto">' +
           '<option value="file"' + (sttMode === 'file' ? ' selected' : '') + '>📁 Fichier depuis mon appareil</option>' +
           '<option value="url"' + (sttMode === 'url' ? ' selected' : '') + '>🔗 Lien direct vers un fichier</option>' +
+        '</select></div>' +
+        '<div style="margin-bottom:12px"><select id="stt-lang" style="max-width:220px;margin:0 auto">' +
+          '<option value="">🌐 Détection automatique</option>' +
+          '<option value="fr">🇫🇷 Français (forcer)</option>' +
+          '<option value="en">🇬🇧 Anglais (forcer)</option>' +
         '</select></div>' +
         (sttMode === 'file'
           ? '<input type="file" id="stt-file" accept="audio/*,video/*" style="margin-bottom:16px">'
@@ -1068,12 +1089,16 @@
         out.textContent = 'Envoi...'
         fetch('/api/transcribe', {
           method: 'POST', headers: authHeaders(),
-          body: JSON.stringify({ toolId: tool.id, audio_url: urlVal })
+          body: JSON.stringify({ toolId: tool.id, audio_url: urlVal, language: document.getElementById('stt-lang').value })
         })
         .then(function (r) { return r.json() })
         .then(function (data) {
           if (data.error) { btn.disabled = false; btn.textContent = '🎙️ Transcrire'; out.textContent = 'Erreur : ' + data.error; return }
-          if (data.done) { btn.disabled = false; btn.textContent = '🎙️ Transcrire'; out.textContent = data.text || '(vide)'; return }
+          if (data.done) { btn.disabled = false; btn.textContent = '🎙️ Transcrire'; out.textContent = data.text || '(vide)';
+            document.getElementById('stt-actions').innerHTML =
+              '<button class="btn-mini" onclick="navigator.clipboard.writeText(document.getElementById(\'stt-result\').textContent)">📋 Copier</button> ' +
+              '<button class="btn-mini" onclick="exportTranscriptPDF()">📄 PDF</button>'
+            return }
           out.textContent = 'Transcription en cours...'
           pollTranscribe(data.generation_id, btn, out)
         })
@@ -1090,12 +1115,16 @@
       reader.onload = function () {
         fetch('/api/transcribe', {
           method: 'POST', headers: authHeaders(),
-          body: JSON.stringify({ toolId: tool.id, audio_base64: reader.result })
+          body: JSON.stringify({ toolId: tool.id, audio_base64: reader.result, language: document.getElementById('stt-lang').value })
         })
         .then(function (r) { return r.json() })
         .then(function (data) {
           if (data.error) { btn.disabled = false; btn.textContent = '🎙️ Transcrire'; out.textContent = 'Erreur : ' + data.error; return }
-          if (data.done) { btn.disabled = false; btn.textContent = '🎙️ Transcrire'; out.textContent = data.text || '(vide)'; return }
+          if (data.done) { btn.disabled = false; btn.textContent = '🎙️ Transcrire'; out.textContent = data.text || '(vide)';
+            document.getElementById('stt-actions').innerHTML =
+              '<button class="btn-mini" onclick="navigator.clipboard.writeText(document.getElementById(\'stt-result\').textContent)">📋 Copier</button> ' +
+              '<button class="btn-mini" onclick="exportTranscriptPDF()">📄 PDF</button>'
+            return }
           out.textContent = 'Transcription en cours...'
           pollTranscribe(data.generation_id, btn, out)
         })
@@ -1110,11 +1139,15 @@
       fetch('/api/transcribe/status?id=' + encodeURIComponent(genId), { headers: authHeaders() })
         .then(function (r) { return r.json() })
         .then(function (data) {
-          var text = data.results && data.results[0] && data.results[0].transcript
-          if (!text && data.status === 'completed') text = JSON.stringify(data)
+          var text = data.result && data.result.results && data.result.results.channels && data.result.results.channels[0] &&
+                     data.result.results.channels[0].alternatives && data.result.results.channels[0].alternatives[0] &&
+                     data.result.results.channels[0].alternatives[0].transcript
+          if (!text && data.status === 'completed') text = 'Transcription terminée, mais le format de réponse est inattendu — copie le JSON ci-dessous et envoie-le à Claude pour corriger :\n\n' + JSON.stringify(data, null, 2)
           if (text) {
             out.textContent = text
-            document.getElementById('stt-actions').innerHTML = '<button class="btn-mini" onclick="navigator.clipboard.writeText(document.getElementById(\'stt-result\').textContent)">📋 Copier</button>'
+            document.getElementById('stt-actions').innerHTML =
+              '<button class="btn-mini" onclick="navigator.clipboard.writeText(document.getElementById(\'stt-result\').textContent)">📋 Copier</button> ' +
+              '<button class="btn-mini" onclick="exportTranscriptPDF()">📄 PDF</button>'
             btn.disabled = false; btn.textContent = '🎙️ Transcrire'
           } else if (data.error) {
             out.textContent = 'Erreur : ' + JSON.stringify(data.error)
