@@ -1255,6 +1255,14 @@
       var mainText = null, mainTextKey = null
       for (var i = 0; i < textKeys.length; i++) { if (typeof d[textKeys[i]] === 'string' && d[textKeys[i]].length > 3) { mainText = d[textKeys[i]]; mainTextKey = textKeys[i]; break } }
 
+      // Audio encodé en base64 (ex: audioContent de Google) : transformer en vrai lecteur audio
+      var base64Audio = null
+      Object.keys(d).forEach(function (k) {
+        if (base64Audio) return
+        var v = d[k]
+        if (typeof v === 'string' && v.length > 200 && /audio/i.test(k) && /^[A-Za-z0-9+/=]+$/.test(v.slice(0, 100))) base64Audio = v
+      })
+
       // Lien de téléchargement : uniquement si le nom du champ indique clairement un résultat généré
       // (jamais juste "url" ou "source_url", qui sont presque toujours l'adresse fournie EN ENTRÉE)
       var fileUrl = null
@@ -1273,18 +1281,23 @@
 
       var html = ''
       if (mainText) html += '<div style="white-space:pre-wrap;margin-bottom:14px">' + esc(mainText) + '</div>'
+      if (base64Audio) {
+        var audioSrc = 'data:audio/mp3;base64,' + base64Audio
+        html += '<audio controls src="' + audioSrc + '" style="width:100%;margin-bottom:10px"></audio><br>' +
+          '<a class="btn-mini" href="' + audioSrc + '" download="audio.mp3">⬇️ Télécharger le résultat</a><br><br>'
+      }
       if (fileUrl) {
         var isImg = /\.(png|jpe?g|webp|gif)(\?|$)/i.test(fileUrl)
         if (isImg) html += '<img src="' + fileUrl + '" style="max-width:100%;border-radius:10px;display:block;margin-bottom:10px">'
         html += '<a class="btn-mini" href="' + fileUrl + '" target="_blank" download>⬇️ Télécharger le résultat</a><br><br>'
       }
 
-      // Le reste des champs (hors texte principal déjà affiché) en clair, jamais en JSON brut
+      // Le reste des champs (hors texte principal et audio déjà affichés) en clair, jamais en JSON brut
       var rest = {}
-      Object.keys(d).forEach(function (k) { if (k !== mainTextKey) rest[k] = d[k] })
+      Object.keys(d).forEach(function (k) { if (k !== mainTextKey && d[k] !== base64Audio) rest[k] = d[k] })
       if (Object.keys(rest).length) html += '<div style="font-size:13px;color:var(--t2)">' + prettyPrint(rest) + '</div>'
 
-      if (!mainText && !fileUrl && !Object.keys(rest).length) html += '<div style="color:var(--t3)">Aucun résultat exploitable.</div>'
+      if (!mainText && !fileUrl && !base64Audio && !Object.keys(rest).length) html += '<div style="color:var(--t3)">Aucun résultat exploitable.</div>'
       return html
     }
 
