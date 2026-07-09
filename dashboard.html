@@ -1424,6 +1424,21 @@
       return result
     }
 
+    function flattenJsonFields(obj, prefix) {
+      var out = []
+      Object.keys(obj).forEach(function (k) {
+        var path = prefix ? prefix + '.' + k : k
+        var v = obj[k]
+        if (v && typeof v === 'object' && !Array.isArray(v)) {
+          out = out.concat(flattenJsonFields(v, path))
+        } else {
+          var niceLabel = path.split('.').map(function (s) { return s.charAt(0).toUpperCase() + s.slice(1) }).join(' — ')
+          out.push({ name: path, label: niceLabel, location: 'body', default: String(v) })
+        }
+      })
+      return out
+    }
+
     function analyzeCurl() {
       var raw = document.getElementById('curl-raw').value
       var parsed = parseCurl(raw)
@@ -1442,7 +1457,7 @@
       var queryFields = []
       urlObj.searchParams.forEach(function (v, k) { queryFields.push({ name: k, label: k, location: 'query', default: v }) })
       var bodyFields = []
-      if (parsed.jsonBody) Object.keys(parsed.jsonBody).forEach(function (k) { bodyFields.push({ name: k, label: k, location: 'body', default: String(parsed.jsonBody[k]) }) })
+      if (parsed.jsonBody) bodyFields = flattenJsonFields(parsed.jsonBody, '')
       if (parsed.hasForm) Object.keys(parsed.formFields).forEach(function (k) { bodyFields.push({ name: k, label: k, location: 'body', default: parsed.formFields[k] }) })
 
       pendingParsedCurl = {
