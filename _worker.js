@@ -441,8 +441,9 @@ async function getTools(env) {
       stored.forEach(t => {
         if (CATEGORY_MIGRATIONS[t.category]) { t.category = CATEGORY_MIGRATIONS[t.category]; changed = true; }
       });
+      const deletedIds = new Set((await env.HUB_CONFIG.get("deletedToolIds", "json")) || []);
       const storedIds = new Set(stored.map(t => t.id));
-      const missingDefaults = DEFAULT_TOOLS.filter(t => !storedIds.has(t.id));
+      const missingDefaults = DEFAULT_TOOLS.filter(t => !storedIds.has(t.id) && !deletedIds.has(t.id));
       const merged = missingDefaults.length ? [...stored, ...missingDefaults] : stored;
       if (changed || missingDefaults.length) { await saveTools(env, merged); return merged; }
       return stored;
@@ -567,6 +568,9 @@ export default {
       if (request.method === "DELETE" && toolId) {
         const filtered = tools.filter(t => t.id !== toolId);
         await saveTools(env, filtered);
+        const deletedIds = new Set((await env.HUB_CONFIG.get("deletedToolIds", "json")) || []);
+        deletedIds.add(toolId);
+        await env.HUB_CONFIG.put("deletedToolIds", JSON.stringify([...deletedIds]));
         return json({ ok: true });
       }
     }
