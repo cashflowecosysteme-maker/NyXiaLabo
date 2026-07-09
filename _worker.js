@@ -278,6 +278,15 @@ const APYHUB_TOOLS = {
   "paraphrase-text": { method: "POST", path: "/sharpapi/api/v1/content/paraphrase", type: "json" }
 };
 
+function mimeToExt(mimeType) {
+  const map = {
+    "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/wav": "wav", "audio/x-wav": "wav",
+    "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/webm": "webm", "audio/ogg": "ogg",
+    "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov"
+  };
+  return map[mimeType] || (mimeType.split("/")[1] || "mp3");
+}
+
 async function safeJson(res) {
   const raw = await res.text();
   try { return JSON.parse(raw); }
@@ -908,7 +917,8 @@ export default {
 
           const formOpenAi = new FormData();
           formOpenAi.append("model", tool.model);
-          formOpenAi.append("file", blobOpenAi, "audio." + (mimeTypeOpenAi.split("/")[1] || "mp3"));
+          formOpenAi.append("file", blobOpenAi, "audio." + mimeToExt(mimeTypeOpenAi));
+          if (body.language) formOpenAi.append("language", body.language);
 
           const resOpenAi = await fetch(`${provider.base_url}/audio/transcriptions`, {
             method: "POST",
@@ -922,10 +932,12 @@ export default {
 
         let res;
         if (body.audio_url) {
+          const urlPayload = { model: tool.model, url: body.audio_url };
+          if (body.language) urlPayload.language = body.language;
           res = await fetch("https://api.aimlapi.com/v1/stt/create", {
             method: "POST",
             headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ model: tool.model, url: body.audio_url })
+            body: JSON.stringify(urlPayload)
           });
         } else {
           const dataUrl = body.audio_base64;
@@ -939,7 +951,8 @@ export default {
 
           const form = new FormData();
           form.append("model", tool.model);
-          form.append("audio", blob, "audio." + (mimeType.split("/")[1] || "mp3"));
+          form.append("audio", blob, "audio." + mimeToExt(mimeType));
+          if (body.language) form.append("language", body.language);
 
           res = await fetch("https://api.aimlapi.com/v1/stt/create", {
             method: "POST",
