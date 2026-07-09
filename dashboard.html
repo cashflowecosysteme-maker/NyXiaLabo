@@ -171,7 +171,7 @@
     function renderSidebar() {
       var el = document.getElementById('sidebar')
       var byCategory = {}
-      tools.forEach(function (t) { (byCategory[t.category] = byCategory[t.category] || []).push(t) })
+      tools.forEach(function (t) { if (t.category === 'transcription') return; (byCategory[t.category] = byCategory[t.category] || []).push(t) })
       var currentTool = tools.find(function (t) { return t.id === currentToolId })
 
       var html = ''
@@ -192,6 +192,7 @@
         { view: 'tools', icon: '🧰', label: 'Outils' },
         { view: 'providers', icon: '🔌', label: 'Fournisseurs' },
         { view: 'explore', icon: '🔎', label: 'Explorer modèles' },
+        { view: 'transcription', icon: '🎙️', label: 'Transcription' },
         { view: 'heygen', icon: '🧑\u200d🎤', label: 'Clone IA (HeyGen)' },
         { view: 'wan-video', icon: '🎬', label: 'Wan — Vidéo' },
         { view: 'wan-image', icon: '🎨', label: 'Wan — Image' }
@@ -212,7 +213,8 @@
     function goToManagement(view) {
       var fnMap = {
         tools: toolsView, providers: providersView, explore: exploreView,
-        heygen: heygenView, 'wan-video': wanVideoView, 'wan-image': wanImageView
+        heygen: heygenView, 'wan-video': wanVideoView, 'wan-image': wanImageView,
+        transcription: function () { var t = tools.find(function (x) { return x.id === 'stt-whisper' }); if (t) renderTranscribeTool(t) }
       }
       if (fnMap[view]) fnMap[view]()
     }
@@ -937,9 +939,43 @@
         .then(function (data) {
           if (data.error) { out.textContent = 'Erreur : ' + data.error; out.className = 'result-box result-error'; return }
           out.className = 'result-box'
-          out.textContent = JSON.stringify(data, null, 2)
+          out.innerHTML = renderEsotericResult(tool.source, data)
         })
         .catch(function (e) { out.textContent = 'Erreur réseau : ' + e.message })
+    }
+
+    function renderEsotericResult(source, data) {
+      try {
+        if (source === 'horoscope') {
+          var h = Array.isArray(data) ? data[0] : data
+          return '<div style="font-size:16px;margin-bottom:8px">' + (h.icon || '🔮') + ' <strong>' + esc(h.name || '') + '</strong> <span style="color:var(--t4);font-size:13px">' + esc(h.dates || '') + '</span></div>' +
+            '<div>' + esc(h.prediction || h.text || JSON.stringify(h)) + '</div>'
+        }
+        if (source === 'moonphase') {
+          var m = Array.isArray(data) ? data[0] : data
+          return (m.moon_image ? '<img src="' + m.moon_image + '" style="width:80px;float:left;margin-right:12px">' : '') +
+            '<div><strong>' + esc(m.phase || '') + '</strong> — ' + esc(m.date || '') + '<br>' +
+            'Illumination : ' + esc(m.illumination || '?') + '<br>' +
+            'Signe : ' + esc(m.moon_sign || '?') + '<br>' +
+            'Distance : ' + esc(m.moon_distance || '?') + '</div><div style="clear:both"></div>'
+        }
+        if (source === 'zenquotes') {
+          var q = Array.isArray(data) ? data[0] : data
+          return '<div style="font-style:italic;font-size:15px;margin-bottom:6px">« ' + esc(q.q || q.text || '') + ' »</div>' +
+            '<div style="color:var(--t4)">— ' + esc(q.a || q.author || 'Inconnu') + '</div>'
+        }
+        if (source === 'sunrise') {
+          var r = data.results || data
+          function fmtTime(t) { if (!t) return '?'; var d = new Date(t); return isNaN(d) ? t : d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }
+          var hours = r.day_length ? Math.floor(r.day_length / 3600) + 'h' + Math.round((r.day_length % 3600) / 60) + 'min' : '?'
+          return '<div>☀️ Lever : <strong>' + fmtTime(r.sunrise) + '</strong></div>' +
+            '<div>🌇 Coucher : <strong>' + fmtTime(r.sunset) + '</strong></div>' +
+            '<div style="margin-top:6px;color:var(--t4)">Durée du jour : ' + hours + '</div>'
+        }
+        return '<pre style="white-space:pre-wrap;margin:0">' + esc(JSON.stringify(data, null, 2)) + '</pre>'
+      } catch (e) {
+        return '<pre style="white-space:pre-wrap;margin:0">' + esc(JSON.stringify(data, null, 2)) + '</pre>'
+      }
     }
 
     /* ═══════ TRANSCRIPTION (Whisper) ═══════ */
@@ -1079,15 +1115,42 @@
       .then(function (r) { return r.json() })
       .then(function (data) {
         btn.disabled = false; btn.textContent = '✨ Lancer'
-        if (data.error) { out.textContent = 'Erreur : ' + data.error; return }
-        var fileUrl = data.data && (data.data.url || data.data.file_url)
-        if (fileUrl) {
-          out.innerHTML = '<a href="' + fileUrl + '" target="_blank" download>⬇️ Télécharger le résultat</a>\n\n' + esc(JSON.stringify(data, null, 2))
-        } else {
-          out.textContent = JSON.stringify(data, null, 2)
-        }
+        if (data.error) { out.innerHTML = 'Erreur : ' + esc(data.error); return }
+        out.innerHTML = renderSmartResult(data)
       })
       .catch(function (e) { btn.disabled = false; btn.textContent = '✨ Lancer'; out.textContent = 'Erreur réseau : ' + e.message })
+    }
+
+    // Cherche un texte principal ou un lien exploitable dans une réponse d'API quelconque,
+    // et affiche ça en priorité plutôt qu'un mur de JSON.
+    function renderSmartResult(data) {
+      var d = data.data || data
+      var textKeys = ['content', 'summary', 'translated_text', 'translatedText', 'paraphrased_text', 'text', 'result', 'transcript', 'intro']
+      var mainText = null
+      for (var i = 0; i < textKeys.length; i++) { if (typeof d[textKeys[i]] === 'string' && d[textKeys[i]].length > 3) { mainText = d[textKeys[i]]; break } }
+
+      var fileUrl = null
+      function findUrl(obj, depth) {
+        if (depth > 3 || !obj || typeof obj !== 'object') return null
+        for (var k in obj) {
+          if (typeof obj[k] === 'string' && /^https?:\/\//.test(obj[k]) && (k.toLowerCase().indexOf('url') !== -1 || k.toLowerCase().indexOf('link') !== -1)) return obj[k]
+        }
+        for (var k2 in obj) { var found = findUrl(obj[k2], depth + 1); if (found) return found }
+        return null
+      }
+      fileUrl = findUrl(d, 0)
+
+      var html = ''
+      if (mainText) html += '<div style="margin-bottom:14px;white-space:pre-wrap">' + esc(mainText) + '</div>'
+      if (fileUrl) {
+        var isImg = /\.(png|jpe?g|webp|gif)(\?|$)/i.test(fileUrl)
+        html += isImg ? '<img src="' + fileUrl + '" style="max-width:100%;border-radius:10px;display:block;margin-bottom:10px">' : ''
+        html += '<a class="btn-mini" href="' + fileUrl + '" target="_blank" download>⬇️ Télécharger le résultat</a><br><br>'
+      }
+      if (!mainText && !fileUrl) html += '<div style="color:var(--t3);margin-bottom:10px">Pas de texte ou lien reconnu automatiquement — détails ci-dessous.</div>'
+      html += '<details><summary style="cursor:pointer;color:var(--t4);font-size:12px">Détails techniques (JSON)</summary>' +
+        '<pre style="white-space:pre-wrap;font-size:11px;color:var(--t4);margin-top:6px">' + esc(JSON.stringify(data, null, 2)) + '</pre></details>'
+      return html
     }
 
     /* ═══════ DOWNLOADER (RapidAPI, 12 outils, panneau générique) ═══════ */
@@ -1140,8 +1203,8 @@
       .then(function (r) { return r.json() })
       .then(function (data) {
         btn.disabled = false; btn.textContent = '⬇️ Lancer'
-        if (data.error) { out.textContent = 'Erreur : ' + data.error; return }
-        out.textContent = JSON.stringify(data, null, 2)
+        if (data.error) { out.innerHTML = 'Erreur : ' + esc(data.error); return }
+        out.innerHTML = renderSmartResult(data)
       })
       .catch(function (e) { btn.disabled = false; btn.textContent = '⬇️ Lancer'; out.textContent = 'Erreur réseau : ' + e.message })
     }
