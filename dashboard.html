@@ -153,6 +153,12 @@
     function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + sessionToken } }
     function logout() { sessionStorage.removeItem('sandbox_token'); window.location.href = '/login.html' }
     function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML }
+    function errText(e) {
+      if (!e) return ''
+      if (typeof e === 'string') return e
+      if (e.message) return e.message
+      try { return JSON.stringify(e) } catch (x) { return String(e) }
+    }
 
     function loadAll() {
       Promise.all([
@@ -358,7 +364,7 @@
         })
         .then(function (r) { return r.json() })
         .then(function (data) {
-          if (data.error) { btn.disabled = false; btn.textContent = '🎨 Générer'; alert('Erreur : ' + data.error); return }
+          if (data.error) { btn.disabled = false; btn.textContent = '🎨 Générer'; alert('Erreur : ' + errText(data.error)); return }
           imageHistories[tool.id] = imageHistories[tool.id] || []
           var entry = { prompt: prompt, images: [], time: Date.now(), pending: true }
           imageHistories[tool.id].push(entry)
@@ -377,7 +383,7 @@
       .then(function (r) { return r.json() })
       .then(function (data) {
         btn.disabled = false; btn.textContent = '🎨 Générer'
-        if (data.error) { alert('Erreur : ' + data.error); return }
+        if (data.error) { alert('Erreur : ' + errText(data.error)); return }
         imageHistories[tool.id] = imageHistories[tool.id] || []
         imageHistories[tool.id].push({ prompt: prompt, images: data.images, time: Date.now() })
         document.getElementById('img-prompt').value = ''
@@ -609,7 +615,7 @@
       .then(function (data) {
         var typing = document.getElementById('typing'); if (typing) typing.remove()
         if (data.error) {
-          chatHistories[currentToolId].push({ role: 'assistant', content: '⚠️ Erreur : ' + data.error })
+          chatHistories[currentToolId].push({ role: 'assistant', content: '⚠️ Erreur : ' + errText(data.error) })
         } else {
           chatHistories[currentToolId].push({ role: 'assistant', content: data.text || '(réponse vide)' })
         }
@@ -819,7 +825,7 @@
       fetch(endpoint + '?q=' + encodeURIComponent(q), { headers: authHeaders() })
         .then(function (r) { return r.json() })
         .then(function (data) {
-          if (data.error) { grid.innerHTML = 'Erreur : ' + esc(data.error); return }
+          if (data.error) { grid.innerHTML = 'Erreur : ' + esc(errText(data.error)); return }
           if (pexelsMode === 'video') {
             grid.innerHTML = (data.videos || []).map(function (v) {
               return '<div class="pexels-item"><a href="' + v.full + '" target="_blank">' +
@@ -898,7 +904,7 @@
       })
       .then(function (r) { return r.json() })
       .then(function (data) {
-        if (data.error) { btn.disabled = false; btn.textContent = '🎵 Générer'; alert('Erreur : ' + data.error); return }
+        if (data.error) { btn.disabled = false; btn.textContent = '🎵 Générer'; alert('Erreur : ' + errText(data.error)); return }
         audioHistories[tool.id] = audioHistories[tool.id] || []
         var entry = { prompt: prompt, pending: true }
         audioHistories[tool.id].push(entry)
@@ -954,7 +960,7 @@
       fetch('/api/unsplash-search?q=' + encodeURIComponent(q), { headers: authHeaders() })
         .then(function (r) { return r.json() })
         .then(function (data) {
-          if (data.error) { grid.innerHTML = 'Erreur : ' + esc(data.error); return }
+          if (data.error) { grid.innerHTML = 'Erreur : ' + esc(errText(data.error)); return }
           grid.innerHTML = (data.results || []).map(function (p) {
             return '<div class="pexels-item"><a href="' + p.full + '" target="_blank"><img src="' + p.thumb + '" loading="lazy"></a>' + esc(p.photographer) + '</div>'
           }).join('') || 'Aucun résultat.'
@@ -998,7 +1004,7 @@
       fetch(endpoint + params, { headers: authHeaders() })
         .then(function (r) { return r.json() })
         .then(function (data) {
-          if (data.error) { out.textContent = 'Erreur : ' + data.error; out.className = 'result-box result-error'; return }
+          if (data.error) { out.textContent = 'Erreur : ' + errText(data.error); out.className = 'result-box result-error'; return }
           out.className = 'result-box'
           out.innerHTML = renderEsotericResult(tool.source, data)
         })
@@ -1092,7 +1098,7 @@
         })
         .then(function (r) { return r.json() })
         .then(function (data) {
-          if (data.error) { btn.disabled = false; btn.textContent = '🎙️ Transcrire'; out.textContent = 'Erreur : ' + data.error; return }
+          if (data.error) { btn.disabled = false; btn.textContent = '🎙️ Transcrire'; out.textContent = 'Erreur : ' + errText(data.error); return }
           if (data.done) { btn.disabled = false; btn.textContent = '🎙️ Transcrire'; out.textContent = data.text || '(vide)';
             document.getElementById('stt-actions').innerHTML =
               '<button class="btn-mini" onclick="navigator.clipboard.writeText(document.getElementById(\'stt-result\').textContent)">📋 Copier</button> ' +
@@ -1208,7 +1214,7 @@
       .then(function (r) { return r.json() })
       .then(function (data) {
         btn.disabled = false; btn.textContent = '✨ Lancer'
-        if (data.error) { out.innerHTML = 'Erreur : ' + esc(data.error); return }
+        if (data.error) { out.innerHTML = 'Erreur : ' + esc(errText(data.error)); return }
         out.innerHTML = renderSmartResult(data)
       })
       .catch(function (e) { btn.disabled = false; btn.textContent = '✨ Lancer'; out.textContent = 'Erreur réseau : ' + e.message })
@@ -1333,7 +1339,7 @@
       .then(function (r) { return r.json() })
       .then(function (data) {
         btn.disabled = false; btn.textContent = '⬇️ Lancer'
-        if (data.error) { out.innerHTML = 'Erreur : ' + esc(data.error); return }
+        if (data.error) { out.innerHTML = 'Erreur : ' + esc(errText(data.error)); return }
         out.innerHTML = renderSmartResult(data)
       })
       .catch(function (e) { btn.disabled = false; btn.textContent = '⬇️ Lancer'; out.textContent = 'Erreur réseau : ' + e.message })
@@ -1590,7 +1596,7 @@
         .then(function (r) { return r.json() })
         .then(function (data) {
           btn.disabled = false; btn.textContent = '✨ Lancer'
-          if (data.error) { out.innerHTML = 'Erreur : ' + esc(data.error); return }
+          if (data.error) { out.innerHTML = 'Erreur : ' + esc(errText(data.error)); return }
           out.innerHTML = renderSmartResult(data)
         })
         .catch(function (e) { btn.disabled = false; btn.textContent = '✨ Lancer'; out.textContent = 'Erreur réseau : ' + e.message })
@@ -1616,7 +1622,7 @@
       fetch('/api/freesound-search?q=' + encodeURIComponent(q), { headers: authHeaders() })
         .then(function (r) { return r.json() })
         .then(function (data) {
-          if (data.error) { out.innerHTML = '<div class="result-box result-error">' + esc(data.error) + '</div>'; return }
+          if (data.error) { out.innerHTML = '<div class="result-box result-error">' + esc(errText(data.error)) + '</div>'; return }
           out.innerHTML = (data.results || []).map(function (s) {
             return '<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(123,92,255,0.08)">' +
               '<div style="font-size:13px;margin-bottom:4px">' + esc(s.name) + ' <span style="color:var(--t4)">— ' + esc(s.username) + ' · ' + Math.round(s.duration) + 's</span></div>' +
@@ -1694,7 +1700,7 @@
       })
       .then(function (r) { return r.json() })
       .then(function (data) {
-        if (data.error) { btn.disabled = false; btn.textContent = '🎬 Générer'; alert('Erreur : ' + data.error); return }
+        if (data.error) { btn.disabled = false; btn.textContent = '🎬 Générer'; alert('Erreur : ' + errText(data.error)); return }
         videoHistories[tool.id] = videoHistories[tool.id] || []
         var entry = { prompt: prompt, pending: true }
         videoHistories[tool.id].push(entry)
@@ -1795,7 +1801,7 @@
         .then(function (r) { return r.json() })
         .then(function (data) {
           btn.disabled = false; btn.textContent = '🧬 Créer l\'avatar'
-          if (data.error) { resultEl.innerHTML = '<span style="color:#ff8fab">Erreur : ' + esc(data.error) + '</span>'; return }
+          if (data.error) { resultEl.innerHTML = '<span style="color:#ff8fab">Erreur : ' + esc(errText(data.error)) + '</span>'; return }
           resultEl.innerHTML = '<span style="color:var(--green)">✓ Avatar "' + esc(name) + '" créé — il apparaît dans la liste ci-dessous.</span>'
           heygenView()
         })
@@ -1824,7 +1830,7 @@
       })
       .then(function (r) { return r.json() })
       .then(function (data) {
-        if (data.error) { resultEl.innerHTML = '<div class="result-box result-error">Erreur : ' + esc(data.error) + '</div>'; btn.disabled = false; btn.textContent = '🎬 Générer la vidéo'; return }
+        if (data.error) { resultEl.innerHTML = '<div class="result-box result-error">Erreur : ' + esc(errText(data.error)) + '</div>'; btn.disabled = false; btn.textContent = '🎬 Générer la vidéo'; return }
         resultEl.innerHTML = '<div class="result-box">Génération en cours (id: ' + esc(data.video_id) + ')... peut prendre 1 à 5 minutes.</div>'
         heygenPoll(data.video_id, btn, resultEl)
       })
