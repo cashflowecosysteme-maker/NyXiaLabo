@@ -37,6 +37,11 @@ const DEFAULT_PROVIDERS = [
     id: "alexya", name: "Alexya",
     base_url: "https://alexya.ai/api/v1",
     api_key_secret: "Alexya_KEY", format: "alexya-async"
+  },
+  {
+    id: "openai", name: "OpenAI",
+    base_url: "https://api.openai.com/v1",
+    api_key_secret: "OpenAi_KEY", format: "openai-compatible"
   }
 ];
 
@@ -89,6 +94,8 @@ const DEFAULT_TOOLS = [
   { id: "eso-tarot", name: "Tarot (à confirmer)", icon: "🃏", category: "esoterisme", kind: "esoteric", source: "tarot" },
   { id: "eso-astrology-yearly", name: "Horoscope annuel détaillé", icon: "🔮", category: "esoterisme", kind: "rapidapi", source: "astrology-yearly" },
   { id: "stt-whisper", name: "Whisper Large v3", icon: "🎙️", category: "transcription", kind: "transcribe", providerId: "aimlapi", model: "#g1_whisper-large" },
+  { id: "stt-gpt4o", name: "GPT-4o Transcribe", icon: "🎙️", category: "transcription", kind: "transcribe", providerId: "openai", model: "gpt-4o-transcribe" },
+  { id: "stt-gpt4o-mini", name: "GPT-4o Mini Transcribe (économique)", icon: "🎙️", category: "transcription", kind: "transcribe", providerId: "openai", model: "gpt-4o-mini-transcribe" },
   { id: "apy-translate-webpage", name: "Traduire une page web", icon: "🌐", category: "utilites", kind: "apyhub", source: "translate-webpage" },
   { id: "apy-analyze-webpage", name: "Analyser une page web", icon: "🌐", category: "utilites", kind: "apyhub", source: "analyze-webpage" },
   { id: "apy-audio-convert", name: "Convertir WAV → MP3", icon: "🔊", category: "utilites", kind: "apyhub", source: "audio-wav-to-mp3" },
@@ -885,24 +892,59 @@ export default {
         const apiKey = env[provider.api_key_secret];
         if (!apiKey) return json({ error: `Clé manquante (${provider.api_key_secret})` }, 500);
 
-        const dataUrl = body.audio_base64;
-        const match = dataUrl.match(/^data:(.+?);base64,(.+)$/);
-        if (!match) return json({ error: "Format de fichier invalide" }, 400);
-        const mimeType = match[1];
-        const raw = atob(match[2]);
-        const bytes = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-        const blob = new Blob([bytes], { type: mimeType });
+        // OpenAI répond directement, pas besoin d'attente/polling
+        if (tool.providerId === "openai") {
+          const dataUrlOpenAi = body.audio_base64;
+          if (!dataUrlOpenAi) return json({ error: "Un fichier est requis pour ce modèle (pas de lien direct pour l'instant)." }, 400);
+          const matchOpenAi = dataUrlOpenAi.match(/^data:(.+?);base64,(.+)$/);
+          if (!matchOpenAi) return json({ error: "Format de fichier invalide" }, 400);
+          const mimeTypeOpenAi = matchOpenAi[1];
+          const rawOpenAi = atob(matchOpenAi[2]);
+          const bytesOpenAi = new Uint8Array(rawOpenAi.length);
+          for (let i = 0; i < rawOpenAi.length; i++) bytesOpenAi[i] = rawOpenAi.charCodeAt(i);
+          const blobOpenAi = new Blob([bytesOpenAi], { type: mimeTypeOpenAi });
 
-        const form = new FormData();
-        form.append("model", tool.model);
-        form.append("audio", blob, "audio." + (mimeType.split("/")[1] || "mp3"));
+          const formOpenAi = new FormData();
+          formOpenAi.append("model", tool.model);
+          formOpenAi.append("file", blobOpenAi, "audio." + (mimeTypeOpenAi.split("/")[1] || "mp3"));
 
-        const res = await fetch("https://api.aimlapi.com/v1/stt/create", {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${apiKey}` },
-          body: form
-        });
+          const resOpenAi = await fetch(`${provider.base_url}/audio/transcriptions`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${apiKey}` },
+            body: formOpenAi
+          });
+          const dataOpenAi = await safeJson(resOpenAi);
+          if (!resOpenAi.ok) return json({ error: dataOpenAi.error?.message || `Erreur: ${resOpenAi.status}` }, 500);
+          return json({ done: true, text: dataOpenAi.text });
+        }
+
+        let res;
+        if (body.audio_url) {
+          res = await fetch("https://api.aimlapi.com/v1/stt/create", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ model: tool.model, url: body.audio_url })
+          });
+        } else {
+          const dataUrl = body.audio_base64;
+          const match = dataUrl.match(/^data:(.+?);base64,(.+)$/);
+          if (!match) return json({ error: "Format de fichier invalide" }, 400);
+          const mimeType = match[1];
+          const raw = atob(match[2]);
+          const bytes = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+          const blob = new Blob([bytes], { type: mimeType });
+
+          const form = new FormData();
+          form.append("model", tool.model);
+          form.append("audio", blob, "audio." + (mimeType.split("/")[1] || "mp3"));
+
+          res = await fetch("https://api.aimlapi.com/v1/stt/create", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${apiKey}` },
+            body: form
+          });
+        }
         const data = await safeJson(res);
         if (!res.ok) return json({ error: data.message || `Erreur: ${res.status}` }, 500);
         return json({ generation_id: data.generation_id });
