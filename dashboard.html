@@ -1239,7 +1239,7 @@
 
     function renderSmartResult(data) {
       var d = data.data || data
-      var textKeys = ['articleBody', 'content', 'summary', 'translated_text', 'translatedText', 'paraphrased_text', 'text', 'result', 'transcript', 'intro', 'prediction', 'description', 'analysis']
+      var textKeys = ['articleBody', 'content', 'summary', 'translated_text', 'translatedText', 'paraphrased_text', 'text', 'result', 'transcript', 'transcription', 'intro', 'prediction', 'description', 'analysis']
       var mainText = null, mainTextKey = null
       for (var i = 0; i < textKeys.length; i++) { if (typeof d[textKeys[i]] === 'string' && d[textKeys[i]].length > 3) { mainText = d[textKeys[i]]; mainTextKey = textKeys[i]; break } }
 
