@@ -373,6 +373,7 @@ async function callRapidApi(env, source, fields) {
   } else if (config.bodyType === "json") {
     const obj = {};
     (config.bodyFields || []).forEach(f => { if (fields[f]) obj[f] = fields[f]; });
+    if (source === "media2text" && env.OpenAi_KEY) obj.api_key = env.OpenAi_KEY;
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(obj);
   } else {
