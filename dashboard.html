@@ -171,7 +171,7 @@
     function renderSidebar() {
       var el = document.getElementById('sidebar')
       var byCategory = {}
-      tools.forEach(function (t) { if (t.category === 'transcription') return; (byCategory[t.category] = byCategory[t.category] || []).push(t) })
+      tools.forEach(function (t) { (byCategory[t.category] = byCategory[t.category] || []).push(t) })
       var currentTool = tools.find(function (t) { return t.id === currentToolId })
 
       var html = ''
@@ -192,7 +192,6 @@
         { view: 'tools', icon: '🧰', label: 'Outils' },
         { view: 'providers', icon: '🔌', label: 'Fournisseurs' },
         { view: 'explore', icon: '🔎', label: 'Explorer modèles' },
-        { view: 'transcription', icon: '🎙️', label: 'Transcription' },
         { view: 'customtools', icon: '🧩', label: 'Outils API (coller un cURL)' },
         { view: 'heygen', icon: '🧑\u200d🎤', label: 'Clone IA (HeyGen)' },
         { view: 'wan-video', icon: '🎬', label: 'Wan — Vidéo' },
@@ -215,7 +214,6 @@
       var fnMap = {
         tools: toolsView, providers: providersView, explore: exploreView,
         heygen: heygenView, 'wan-video': wanVideoView, 'wan-image': wanImageView,
-        transcription: function () { var t = tools.find(function (x) { return x.id === 'stt-whisper' }); if (t) renderTranscribeTool(t) },
         customtools: customToolsView
       }
       if (fnMap[view]) fnMap[view]()
