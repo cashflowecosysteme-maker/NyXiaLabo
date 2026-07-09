@@ -203,6 +203,17 @@ async function callOpenAiCompatible(provider, env, { model, messages, max_tokens
   return { text: data.choices?.[0]?.message?.content ?? "", usage: data.usage || null, elapsedMs };
 }
 
+// GPT Image n'accepte pas "aspect_ratio" — seulement un paramètre "size" avec 3 valeurs fixes
+function aspectToGptImageSize(aspect_ratio) {
+  if (!aspect_ratio) return "1024x1024";
+  const parts = aspect_ratio.split(":").map(Number);
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return "1024x1024";
+  const ratio = parts[0] / parts[1];
+  if (ratio > 1.15) return "1536x1024"; // paysage
+  if (ratio < 0.87) return "1024x1536"; // portrait
+  return "1024x1024"; // carré
+}
+
 async function callImageGeneration(provider, env, { model, prompt, aspect_ratio, image_urls }) {
   const apiKey = provider.api_key_secret ? env[provider.api_key_secret] : null;
   if (!apiKey) throw new Error(`Clé API manquante pour ${provider.id} (secret: ${provider.api_key_secret})`);
@@ -224,6 +235,7 @@ async function callImageGeneration(provider, env, { model, prompt, aspect_ratio,
     form.append("model", model);
     form.append("prompt", prompt);
     form.append("image", blob, "reference." + (mimeType.split("/")[1] || "png"));
+    form.append("size", aspectToGptImageSize(aspect_ratio));
 
     const res = await fetch(`${provider.base_url}/images/edits`, {
       method: "POST",
@@ -238,7 +250,11 @@ async function callImageGeneration(provider, env, { model, prompt, aspect_ratio,
   }
 
   const payload = { model, prompt };
-  if (aspect_ratio) payload.aspect_ratio = aspect_ratio;
+  if (model.startsWith("openai/gpt-image")) {
+    payload.size = aspectToGptImageSize(aspect_ratio);
+  } else if (aspect_ratio) {
+    payload.aspect_ratio = aspect_ratio;
+  }
   if (image_urls && image_urls.length) {
     // Certains modèles (ex. Wan 2.7 Pro) attendent du base64 brut, sans le préfixe "data:...;base64,"
     payload.image_urls = image_urls.map(u => u.startsWith("data:") ? u.split(",")[1] : u);
