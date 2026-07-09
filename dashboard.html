@@ -975,9 +975,9 @@
             '<div>🌇 Coucher : <strong>' + fmtTime(r.sunset) + '</strong></div>' +
             '<div style="margin-top:6px;color:var(--t4)">Durée du jour : ' + hours + '</div>'
         }
-        return '<pre style="white-space:pre-wrap;margin:0">' + esc(JSON.stringify(data, null, 2)) + '</pre>'
+        return prettyPrint(data)
       } catch (e) {
-        return '<pre style="white-space:pre-wrap;margin:0">' + esc(JSON.stringify(data, null, 2)) + '</pre>'
+        return prettyPrint(data)
       }
     }
 
@@ -1124,35 +1124,71 @@
       .catch(function (e) { btn.disabled = false; btn.textContent = '✨ Lancer'; out.textContent = 'Erreur réseau : ' + e.message })
     }
 
-    // Cherche un texte principal ou un lien exploitable dans une réponse d'API quelconque,
-    // et affiche ça en priorité plutôt qu'un mur de JSON.
+    // Transforme n'importe quelle réponse JSON en texte lisible, avec étiquettes en clair
+    function prettyPrint(obj, indent) {
+      indent = indent || 0
+      var pad = indent ? '<div style="margin-left:' + (indent * 16) + 'px">' : '<div>'
+      if (Array.isArray(obj)) {
+        if (!obj.length) return pad + '<span style="color:var(--t4)">(vide)</span></div>'
+        var html = ''
+        obj.forEach(function (item) {
+          html += (typeof item === 'object' && item !== null) ? prettyPrint(item, indent) : pad + '• ' + esc(String(item)) + '</div>'
+        })
+        return html
+      }
+      if (obj && typeof obj === 'object') {
+        var out = ''
+        Object.keys(obj).forEach(function (k) {
+          var label = k.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
+          label = label.charAt(0).toUpperCase() + label.slice(1)
+          var v = obj[k]
+          if (v && typeof v === 'object') {
+            out += pad + '<strong>' + esc(label) + '</strong></div>' + prettyPrint(v, indent + 1)
+          } else if (v !== null && v !== undefined && v !== '') {
+            out += pad + '<strong>' + esc(label) + ' :</strong> ' + esc(String(v)) + '</div>'
+          }
+        })
+        return out
+      }
+      return pad + esc(String(obj)) + '</div>'
+    }
+
     function renderSmartResult(data) {
       var d = data.data || data
-      var textKeys = ['content', 'summary', 'translated_text', 'translatedText', 'paraphrased_text', 'text', 'result', 'transcript', 'intro', 'prediction', 'description', 'analysis']
-      var mainText = null
-      for (var i = 0; i < textKeys.length; i++) { if (typeof d[textKeys[i]] === 'string' && d[textKeys[i]].length > 3) { mainText = d[textKeys[i]]; break } }
+      var textKeys = ['articleBody', 'content', 'summary', 'translated_text', 'translatedText', 'paraphrased_text', 'text', 'result', 'transcript', 'intro', 'prediction', 'description', 'analysis']
+      var mainText = null, mainTextKey = null
+      for (var i = 0; i < textKeys.length; i++) { if (typeof d[textKeys[i]] === 'string' && d[textKeys[i]].length > 3) { mainText = d[textKeys[i]]; mainTextKey = textKeys[i]; break } }
 
+      // Lien de téléchargement : uniquement si le nom du champ indique clairement un résultat généré
+      // (jamais juste "url" ou "source_url", qui sont presque toujours l'adresse fournie EN ENTRÉE)
       var fileUrl = null
-      function findUrl(obj, depth) {
-        if (depth > 3 || !obj || typeof obj !== 'object') return null
-        for (var k in obj) {
-          if (typeof obj[k] === 'string' && /^https?:\/\//.test(obj[k]) && (k.toLowerCase().indexOf('url') !== -1 || k.toLowerCase().indexOf('link') !== -1)) return obj[k]
-        }
-        for (var k2 in obj) { var found = findUrl(obj[k2], depth + 1); if (found) return found }
-        return null
+      if (data.data && typeof data.data.url === 'string' && /^https?:\/\//.test(data.data.url)) fileUrl = data.data.url
+      if (!fileUrl) {
+        (function find(obj, depth) {
+          if (fileUrl || depth > 3 || !obj || typeof obj !== 'object') return
+          Object.keys(obj).forEach(function (k) {
+            if (fileUrl) return
+            var v = obj[k], lk = k.toLowerCase()
+            if (typeof v === 'string' && /^https?:\/\//.test(v) && (lk.indexOf('output') !== -1 || lk.indexOf('download') !== -1)) fileUrl = v
+            else if (v && typeof v === 'object') find(v, depth + 1)
+          })
+        })(d, 0)
       }
-      fileUrl = findUrl(d, 0)
 
       var html = ''
-      if (mainText) html += '<div style="margin-bottom:14px;white-space:pre-wrap">' + esc(mainText) + '</div>'
+      if (mainText) html += '<div style="white-space:pre-wrap;margin-bottom:14px">' + esc(mainText) + '</div>'
       if (fileUrl) {
         var isImg = /\.(png|jpe?g|webp|gif)(\?|$)/i.test(fileUrl)
-        html += isImg ? '<img src="' + fileUrl + '" style="max-width:100%;border-radius:10px;display:block;margin-bottom:10px">' : ''
+        if (isImg) html += '<img src="' + fileUrl + '" style="max-width:100%;border-radius:10px;display:block;margin-bottom:10px">'
         html += '<a class="btn-mini" href="' + fileUrl + '" target="_blank" download>⬇️ Télécharger le résultat</a><br><br>'
       }
-      if (!mainText && !fileUrl) html += '<div style="color:var(--t3);margin-bottom:10px">Pas de texte ou lien reconnu automatiquement — détails ci-dessous.</div>'
-      html += '<details><summary style="cursor:pointer;color:var(--t4);font-size:12px">Détails techniques (JSON)</summary>' +
-        '<pre style="white-space:pre-wrap;font-size:11px;color:var(--t4);margin-top:6px">' + esc(JSON.stringify(data, null, 2)) + '</pre></details>'
+
+      // Le reste des champs (hors texte principal déjà affiché) en clair, jamais en JSON brut
+      var rest = {}
+      Object.keys(d).forEach(function (k) { if (k !== mainTextKey) rest[k] = d[k] })
+      if (Object.keys(rest).length) html += '<div style="font-size:13px;color:var(--t2)">' + prettyPrint(rest) + '</div>'
+
+      if (!mainText && !fileUrl && !Object.keys(rest).length) html += '<div style="color:var(--t3)">Aucun résultat exploitable.</div>'
       return html
     }
 
