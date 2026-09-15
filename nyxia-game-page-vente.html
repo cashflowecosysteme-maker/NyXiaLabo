@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NyXia Game — Des histoires à vivre, pas seulement à regarder</title>
+  <meta name="description" content="Soirées jeux Zoom, abonnement NyXia Game, licences de jeux et expériences personnalisées." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --night:#060a18;
+      --night2:#0d1430;
+      --violet:#7B5CFF;
+      --lav:#a78bfa;
+      --gold:#f1c56b;
+      --text:#f8f6ff;
+      --muted:#aab1ce;
+      --line:rgba(167,139,250,.18);
+      --card:rgba(18,26,58,.82);
+      --green:#59d8a5;
+      --shadow:0 22px 70px rgba(0,0,0,.34);
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      margin:0;
+      background:
+        radial-gradient(circle at 15% 0%,rgba(123,92,255,.18),transparent 34%),
+        radial-gradient(circle at 90% 15%,rgba(241,197,107,.08),transparent 30%),
+        linear-gradient(180deg,#060a18,#091024 55%,#060a18);
+      color:var(--text);
+      font-family:Outfit,system-ui,sans-serif;
+      line-height:1.6;
+    }
+    a{color:inherit}
+    .wrap{width:min(1160px,calc(100% - 34px));margin:auto}
+    .nav{
+      position:sticky;top:0;z-index:50;
+      backdrop-filter:blur(18px);
+      background:rgba(6,10,24,.78);
+      border-bottom:1px solid var(--line);
+    }
+    .nav-inner{
+      min-height:68px;display:flex;align-items:center;justify-content:space-between;gap:14px
+    }
+    .brand{
+      font-family:"Cormorant Garamond",serif;font-size:25px;font-weight:700;
+      letter-spacing:.3px
+    }
+    .brand span{color:var(--lav)}
+    .nav-links{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end}
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      text-decoration:none;border-radius:13px;padding:12px 17px;
+      font-weight:800;font-size:14px;border:1px solid rgba(123,92,255,.30);
+      background:rgba(123,92,255,.10);transition:.2s;cursor:pointer
+    }
+    .btn:hover{transform:translateY(-1px);background:rgba(123,92,255,.19)}
+    .btn.primary{
+      border:0;background:linear-gradient(135deg,var(--violet),#5369ff);
+      box-shadow:0 10px 28px rgba(123,92,255,.30)
+    }
+    .btn.gold{
+      background:linear-gradient(135deg,rgba(241,197,107,.18),rgba(241,197,107,.08));
+      border-color:rgba(241,197,107,.35);color:#ffe7ab
+    }
+    .btn.ghost{background:transparent}
+    .hero{
+      min-height:760px;display:grid;place-items:center;padding:90px 0 70px;position:relative;overflow:hidden
+    }
+    .hero:before{
+      content:"";position:absolute;width:760px;height:760px;border-radius:50%;
+      left:50%;top:42%;transform:translate(-50%,-50%);
+      background:radial-gradient(circle,rgba(123,92,255,.18),rgba(123,92,255,.04) 45%,transparent 70%);
+      filter:blur(8px)
+    }
+    .hero-content{position:relative;text-align:center;max-width:950px;margin:auto}
+    .eyebrow{
+      display:inline-flex;padding:7px 12px;border-radius:999px;
+      border:1px solid rgba(241,197,107,.28);background:rgba(241,197,107,.06);
+      color:#f5d58e;font-size:12px;font-weight:800;letter-spacing:.9px;text-transform:uppercase
+    }
+    h1,h2,h3{font-family:"Cormorant Garamond",serif;line-height:1.05}
+    h1{font-size:clamp(48px,8vw,92px);margin:20px 0 18px}
+    h1 .grad{
+      background:linear-gradient(115deg,#fff,var(--lav),var(--gold));
+      -webkit-background-clip:text;background-clip:text;color:transparent
+    }
+    .lead{font-size:clamp(18px,2.4vw,24px);color:#d8dcef;max-width:820px;margin:0 auto 30px}
+    .hero-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+    .mini-proof{
+      margin:35px auto 0;display:flex;gap:9px;justify-content:center;flex-wrap:wrap
+    }
+    .pill{
+      border:1px solid var(--line);border-radius:999px;padding:8px 12px;
+      color:var(--muted);font-size:12px;background:rgba(17,25,52,.55)
+    }
+    section{padding:78px 0}
+    .section-head{text-align:center;max-width:820px;margin:0 auto 36px}
+    .section-head h2{font-size:clamp(38px,5vw,58px);margin:0 0 12px}
+    .section-head p{color:var(--muted);font-size:17px;margin:0}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+    .card{
+      border:1px solid var(--line);background:var(--card);border-radius:22px;
+      padding:24px;box-shadow:var(--shadow);position:relative;overflow:hidden
+    }
+    .card:after{
+      content:"";position:absolute;width:180px;height:180px;border-radius:50%;
+      right:-70px;top:-70px;background:radial-gradient(circle,rgba(123,92,255,.16),transparent 65%)
+    }
+    .tag{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--gold);font-weight:800}
+    .card h3{font-size:31px;margin:8px 0 10px}
+    .price{font-size:42px;font-weight:800;margin:10px 0 0}
+    .price small{font-size:14px;color:var(--muted);font-weight:500}
+    .card p,.card li{color:var(--muted)}
+    ul.clean{list-style:none;padding:0;margin:18px 0}
+    ul.clean li{padding:7px 0 7px 28px;position:relative}
+    ul.clean li:before{content:"✦";position:absolute;left:0;color:var(--lav)}
+    .featured{border-color:rgba(241,197,107,.35)}
+    .featured .ribbon{
+      position:absolute;top:17px;right:-36px;transform:rotate(35deg);
+      background:linear-gradient(135deg,var(--gold),#d7a649);color:#18111f;
+      font-weight:900;font-size:10px;padding:7px 42px
+    }
+    .note{
+      margin-top:14px;padding:12px 13px;border-radius:12px;
+      background:rgba(6,10,24,.42);border:1px solid var(--line);
+      color:#c8cee4;font-size:12px
+    }
+    .split{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:center}
+    .panel{
+      border:1px solid var(--line);background:rgba(17,25,54,.68);
+      border-radius:24px;padding:28px
+    }
+    .panel h2{font-size:48px;margin:0 0 14px}
+    .steps{display:grid;gap:12px;margin-top:22px}
+    .step{
+      display:grid;grid-template-columns:46px 1fr;gap:12px;align-items:start;
+      padding:13px;border-radius:14px;border:1px solid rgba(167,139,250,.13);
+      background:rgba(6,10,24,.34)
+    }
+    .num{
+      width:38px;height:38px;border-radius:50%;display:grid;place-items:center;
+      background:rgba(123,92,255,.16);border:1px solid rgba(123,92,255,.35);
+      color:#fff;font-weight:900
+    }
+    .step b{display:block;margin-bottom:3px}.step span{color:var(--muted);font-size:13px}
+    .custom{
+      background:
+        radial-gradient(circle at 85% 20%,rgba(241,197,107,.11),transparent 25%),
+        linear-gradient(135deg,rgba(123,92,255,.13),rgba(17,25,54,.72));
+      border:1px solid rgba(241,197,107,.25);border-radius:30px;padding:36px
+    }
+    .custom h2{font-size:54px;margin:0 0 12px}
+    .custom-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:26px}
+    .custom-side{
+      border:1px solid var(--line);background:rgba(6,10,24,.40);
+      padding:22px;border-radius:20px
+    }
+    .custom-side h3{font-size:28px;margin:0 0 8px}
+    .faq{display:grid;gap:12px;max-width:900px;margin:auto}
+    details{
+      border:1px solid var(--line);background:rgba(17,25,54,.60);
+      border-radius:16px;padding:16px 18px
+    }
+    summary{cursor:pointer;font-weight:800}
+    details p{color:var(--muted);margin:10px 0 0}
+    .cta{
+      text-align:center;padding:85px 0 95px
+    }
+    .cta-box{
+      border:1px solid rgba(123,92,255,.26);background:
+      radial-gradient(circle at 50% 0%,rgba(123,92,255,.22),transparent 50%),
+      rgba(17,25,54,.72);
+      border-radius:30px;padding:50px 24px;box-shadow:var(--shadow)
+    }
+    .cta h2{font-size:58px;margin:0 0 13px}
+    footer{border-top:1px solid var(--line);padding:28px 0;color:#7f88aa;font-size:12px}
+    .footer-inner{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+    .legal{max-width:950px;margin:24px auto 0;color:#7f88aa;font-size:11px;text-align:center}
+    @media(max-width:900px){
+      .grid,.split,.custom-grid{grid-template-columns:1fr}
+      .hero{min-height:650px}
+      .nav-links a:not(.primary){display:none}
+      .panel h2,.custom h2,.cta h2{font-size:42px}
+    }
+    @media(max-width:560px){
+      .wrap{width:min(100% - 22px,1160px)}
+      .hero{padding-top:66px}
+      h1{font-size:48px}
+      .card,.panel,.custom{padding:20px}
+      section{padding:58px 0}
+      .hero-actions .btn{width:100%}
+    }
+  </style>
+</head>
+<body>
+
+  <!--
+    LIENS À CONNECTER :
+    Remplace simplement les valeurs dans le bloc CONFIG tout en bas de la page.
+  -->
+
+  <nav class="nav">
+    <div class="wrap nav-inner">
+      <div class="brand">NyXia <span>Game</span></div>
+      <div class="nav-links">
+        <a class="btn ghost" href="#offres">Les offres</a>
+        <a class="btn ghost" href="#sur-mesure">Sur mesure</a>
+        <a class="btn primary" data-link="booking" href="#sur-mesure">Réserver un appel</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="wrap hero-content">
+      <span class="eyebrow">Jeux immersifs • Zoom • RPG • Mystère • Enquête</span>
+      <h1>Tu ne regardes plus l’histoire.<br><span class="grad">Tu entres dedans.</span></h1>
+      <p class="lead">
+        Des soirées où tes décisions changent la suite, où les personnages te répondent,
+        où les indices comptent et où chaque groupe peut vivre une aventure différente.
+      </p>
+      <div class="hero-actions">
+        <a class="btn primary" href="#offres">🎲 Découvrir NyXia Game</a>
+        <a class="btn gold" data-link="booking" href="#sur-mesure">✨ Créer une expérience sur mesure</a>
+      </div>
+      <div class="mini-proof">
+        <span class="pill">🧙 Personnages & PNJ</span>
+        <span class="pill">🎲 Décisions & dés</span>
+        <span class="pill">🔎 Indices & énigmes</span>
+        <span class="pill">🎥 Soirées Zoom</span>
+        <span class="pill">🗺️ Univers immersifs</span>
+      </div>
+    </div>
+  </header>
+
+  <section id="offres">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Choisis ta façon de jouer</span>
+        <h2>Une aventure, plusieurs portes d’entrée</h2>
+        <p>
+          Tu peux venir vivre une soirée, rejoindre l’espace membre, ou obtenir
+          une licence de jeu pour organiser ton aventure toi-même.
+        </p>
+      </div>
+
+      <div class="grid">
+
+        <article class="card">
+          <div class="tag">Je veux essayer</div>
+          <h3>Soirée NyXia Game sur Zoom</h3>
+          <div class="price">49 $ <small>CAD • paiement unique</small></div>
+          <p>Une soirée immersive animée en direct, sans abonnement.</p>
+          <ul class="clean">
+            <li>Une aventure complète à vivre en groupe</li>
+            <li>Interactions, choix, énigmes et rebondissements</li>
+            <li>Participation à distance sur Zoom</li>
+            <li>Aucune préparation technique compliquée</li>
+          </ul>
+          <a class="btn primary" data-link="zoom" href="#">🎥 Réserver ma soirée</a>
+          <div class="note">Tarif non-membre pour une soirée NyXia Game.</div>
+        </article>
+
+        <article class="card featured">
+          <div class="ribbon">MEMBRE</div>
+          <div class="tag">Je veux jouer régulièrement</div>
+          <h3>Club NyXia Game</h3>
+          <div class="price">29 $ <small>CAD / mois</small></div>
+          <p>Ton accès membre pour découvrir de nouvelles aventures régulièrement.</p>
+          <ul class="clean">
+            <li>2 nouveaux jeux ajoutés chaque mois</li>
+            <li>Accès depuis ton espace NyXia Game</li>
+            <li>Une bibliothèque qui continue de s’enrichir</li>
+            <li>Accès membre aux nouveautés et expériences NyXia Game</li>
+          </ul>
+          <a class="btn gold" data-link="member" href="#">💜 Devenir membre</a>
+          <div class="note">
+            Les modalités précises d’accès aux jeux membres peuvent être définies
+            dans les conditions d’abonnement.
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="tag">Je veux garder cette aventure</div>
+          <h3>Licence NyXia Game</h3>
+          <div class="price">99 $ <small>CAD • par jeu</small></div>
+          <p>Une licence pour jouer et organiser l’aventure dans le cadre autorisé.</p>
+          <ul class="clean">
+            <li>Droit de jouer au jeu acheté</li>
+            <li>Accès durable à l’aventure selon la licence</li>
+            <li>Organisation possible pour ton propre groupe</li>
+            <li>Aucun droit de revente ou redistribution</li>
+          </ul>
+          <a class="btn primary" data-link="game" href="#">🗝️ Acheter un jeu</a>
+          <div class="note">
+            L’achat d’un jeu ne donne pas automatiquement le droit de le revendre,
+            le redistribuer ou le commercialiser.
+          </div>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap split">
+      <div class="panel">
+        <span class="eyebrow">Une soirée NyXia Game</span>
+        <h2>Tu joues. L’histoire réagit.</h2>
+        <p style="color:var(--muted)">
+          NyXia Game mélange narration, enquête, RPG, personnages, secrets,
+          décisions collectives et surprises. Le but n’est pas simplement de
+          “finir un scénario”, mais de vivre une expérience dont ton groupe se souvient.
+        </p>
+        <div class="steps">
+          <div class="step"><div class="num">1</div><div><b>Entre dans l’univers</b><span>Découvre le contexte, les rôles, les premières tensions et les premiers indices.</span></div></div>
+          <div class="step"><div class="num">2</div><div><b>Prends des décisions</b><span>Discute, enquête, choisis, lance les dés et influence ce qui arrive ensuite.</span></div></div>
+          <div class="step"><div class="num">3</div><div><b>Interagis avec les personnages</b><span>Les PNJ peuvent cacher des informations, avoir des objectifs et réagir à ce qui se passe.</span></div></div>
+          <div class="step"><div class="num">4</div><div><b>Découvre ta propre fin</b><span>Les conséquences dépendent des choix, des indices trouvés et du parcours du groupe.</span></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <span class="eyebrow">Promotion & Cercle</span>
+        <h2>Tu veux recommander NyXia Game ?</h2>
+        <p style="color:var(--muted)">
+          La promotion commerciale de NyXia Game est réservée aux membres autorisés
+          du Cercle d’entraide disposant de leur propre empreinte unique.
+        </p>
+        <ul class="clean">
+          <li>Ton empreinte identifie tes recommandations</li>
+          <li>NyXia conserve la vente et la livraison des accès</li>
+          <li>Le jeu n’est jamais revendu ou redistribué par le promoteur</li>
+          <li>Les commissions suivent les règles du Cercle en vigueur</li>
+        </ul>
+        <a class="btn gold" data-link="circle" href="#">🤝 Découvrir le Cercle d’entraide</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="sur-mesure">
+    <div class="wrap">
+      <div class="custom">
+        <div class="custom-grid">
+          <div>
+            <span class="eyebrow">Création personnalisée</span>
+            <h2>Tu veux ton propre jeu ou ta propre soirée ?</h2>
+            <p style="font-size:18px;color:#d6daeb;max-width:700px">
+              On peut concevoir une expérience NyXia Game autour de ton univers,
+              ton événement, ton entreprise, ta communauté ou ton idée.
+            </p>
+
+            <ul class="clean">
+              <li>Jeu personnalisé avec ton thème et tes personnages</li>
+              <li>Soirée privée ou expérience Zoom sur mesure</li>
+              <li>Anniversaire, communauté, équipe, lancement ou événement spécial</li>
+              <li>Énigmes, indices, personnages, décors, audio, cartes et scénario</li>
+              <li>Adaptation possible d’une aventure NyXia existante</li>
+            </ul>
+
+            <a class="btn primary" data-link="booking" href="#">🎯 Réserver un appel de création</a>
+          </div>
+
+          <aside class="custom-side">
+            <div class="tag">Appel de création</div>
+            <h3>30 à 40 minutes</h3>
+            <p style="color:var(--muted)">
+              Un rendez-vous pour comprendre ton idée, ton groupe,
+              le nombre de joueurs, le format désiré et le niveau de personnalisation.
+            </p>
+            <div class="note">
+              Les projets personnalisés sont proposés sur devis selon la complexité,
+              le format, le nombre de joueurs et les éléments à produire.
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Questions fréquentes</span>
+        <h2>Avant d’entrer dans le jeu</h2>
+      </div>
+
+      <div class="faq">
+        <details>
+          <summary>Est-ce que je dois connaître les jeux de rôle ?</summary>
+          <p>Non. NyXia Game est conçu pour pouvoir être vécu sans expérience préalable. L’animateur guide la progression et les outils du jeu indiquent quoi faire au bon moment.</p>
+        </details>
+        <details>
+          <summary>Quelle est la différence entre la soirée à 49 $ et l’abonnement à 29 $ ?</summary>
+          <p>Le 49 $ correspond à une participation ponctuelle à une soirée NyXia Game sur Zoom. L’abonnement à 29 $/mois donne accès à l’espace membre et à deux nouveaux jeux ajoutés chaque mois, selon les modalités de l’abonnement.</p>
+        </details>
+        <details>
+          <summary>Si j’achète un jeu à 99 $, puis-je le revendre ?</summary>
+          <p>Non. La licence à 99 $ donne un droit d’utilisation et de jeu selon les conditions prévues. Elle ne transfère pas les droits de propriété intellectuelle et n’autorise pas la revente, la redistribution ou la commercialisation du jeu.</p>
+        </details>
+        <details>
+          <summary>Qui peut promouvoir NyXia Game ?</summary>
+          <p>La promotion commerciale est réservée aux membres autorisés du Cercle d’entraide qui disposent de leur empreinte unique. L’achat d’un jeu ne crée pas automatiquement un droit de promotion.</p>
+        </details>
+        <details>
+          <summary>Peut-on créer un jeu pour une entreprise ou un événement privé ?</summary>
+          <p>Oui. Un rendez-vous de création permet de définir le thème, le format, le nombre de joueurs, l’ambiance, les mécaniques et le niveau de personnalisation avant de préparer un devis.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="wrap">
+      <div class="cta-box">
+        <span class="eyebrow">NyXia Game</span>
+        <h2>La prochaine histoire pourrait être la tienne.</h2>
+        <p style="color:var(--muted);font-size:17px;max-width:720px;margin:0 auto 24px">
+          Viens vivre une soirée, rejoins le Club, choisis une aventure
+          ou transforme ton idée en expérience de jeu complète.
+        </p>
+        <div class="hero-actions">
+          <a class="btn primary" href="#offres">🎲 Voir les façons de jouer</a>
+          <a class="btn gold" data-link="booking" href="#sur-mesure">✨ Créer mon expérience</a>
+        </div>
+      </div>
+
+      <div class="legal">
+        Les prix affichés sont en dollars canadiens. Les conditions complètes de licence,
+        d’abonnement, d’utilisation et de promotion doivent être précisées dans les documents
+        contractuels applicables à NyXia Game.
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap footer-inner">
+      <div>© 2026 NyXia Game — Univers NyXia</div>
+      <div>Une expérience conçue pour être vécue ensemble.</div>
+    </div>
+  </footer>
+
+  <script>
+    // === LIENS À CONNECTER ===
+    // Remplace les # par tes vraies URLs quand elles sont prêtes.
+    const CONFIG = {
+      zoom: "#",
+      member: "#",
+      game: "#",
+      booking: "#",
+      circle: "#"
+    };
+
+    document.querySelectorAll("[data-link]").forEach(function(el){
+      const key = el.dataset.link;
+      if(CONFIG[key] && CONFIG[key] !== "#"){
+        el.href = CONFIG[key];
+      } else {
+        el.addEventListener("click", function(e){
+          if(el.getAttribute("href") === "#"){
+            e.preventDefault();
+            alert("Ce bouton est prêt. Il reste seulement à connecter son lien.");
+          }
+        });
+      }
+    });
+  </script>
+</body>
+</html>
