@@ -260,6 +260,20 @@ async function synthesizeGoogle(env, body) {
   return json({ audioContent: data.audioContent, mimeType: 'audio/mpeg', voiceName: voiceName || null, languageCode, speakingRate, pitch })
 }
 
+
+async function proxyCartography(request, env, targetPath) {
+  if (!env.CARTOGRAPHY) return json({ error: 'Service NyXia Cartographie non lié au Labo' }, 503)
+  const incoming = new URL(request.url)
+  const target = new URL(targetPath || '/', 'https://nyxia-cartographie.internal')
+  target.search = incoming.search
+  const headers = new Headers(request.headers)
+  headers.delete('host')
+  headers.delete('authorization') // l'auth reste au Labo; le Worker Cartographie est interne par Service Binding
+  const init = { method: request.method, headers }
+  if (request.method !== 'GET' && request.method !== 'HEAD') init.body = request.body
+  return env.CARTOGRAPHY.fetch(new Request(target.toString(), init))
+}
+
 async function handleAtelier(request, env, ctx) {
   const url = new URL(request.url)
   const parts = url.pathname.split('/').filter(Boolean)
@@ -272,8 +286,15 @@ async function handleAtelier(request, env, ctx) {
       ok: true,
       kv: !!env.HUB_CONFIG,
       googleTts: googleTtsConfigured(env),
-      version: 'atelier-equipe-1.0'
+      cartography: !!env.CARTOGRAPHY,
+      version: 'atelier-equipe-2.0'
     })
+  }
+
+  // NyXia Cartographie — Worker séparé (Browser Run + R2), accessible uniquement via Service Binding.
+  if (url.pathname.startsWith('/api/atelier/cartography')) {
+    const targetPath = url.pathname.replace('/api/atelier/cartography', '') || '/health'
+    return proxyCartography(request, env, targetPath)
   }
 
   // Projets Atelier — index léger + un objet KV par projet.
