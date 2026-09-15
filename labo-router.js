@@ -30,6 +30,14 @@ const GAME_LIVE_MAX_PLAYERS = 60
 const GAME_LIVE_MAX_LOG = 220
 const GAME_LIVE_DEFAULT_MODEL = 'anthropic/claude-sonnet-5'
 
+// NyXia Game — catalogue, licences clients et bibliothèque.
+const GAME_PRODUCT_INDEX_KEY = 'game:products:index'
+const GAME_PRODUCT_PREFIX = 'game:product:'
+const GAME_LICENSE_PREFIX = 'game:license:'
+const GAME_LIBRARY_SESSION_PREFIX = 'game:library-session:'
+const GAME_LIBRARY_SESSION_TTL = 30 * 24 * 60 * 60
+const GAME_LIBRARY_MAX_RECENT_SESSIONS = 30
+
 function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
@@ -652,6 +660,353 @@ async function handleCartography(request, env, path) {
 }
 
 
+
+function gameProductKey(id) { return GAME_PRODUCT_PREFIX + cleanText(id, 120).replace(/[^a-zA-Z0-9_-]/g, '') }
+function gameLicenseKey(hash) { return GAME_LICENSE_PREFIX + hash }
+function gameLibrarySessionKey(hash) { return GAME_LIBRARY_SESSION_PREFIX + hash }
+
+async function gameSha256Hex(value) {
+  const bytes = new TextEncoder().encode(String(value || ''))
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+function gameNormalizeAccessKey(value) {
+  return cleanText(value, 120).toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+function gameRandomAccessKey() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const bytes = new Uint8Array(20)
+  crypto.getRandomValues(bytes)
+  let raw = ''
+  for (const b of bytes) raw += alphabet[b % alphabet.length]
+  return 'NYX-' + raw.slice(0,4) + '-' + raw.slice(4,8) + '-' + raw.slice(8,12) + '-' + raw.slice(12,16) + '-' + raw.slice(16,20)
+}
+
+function gameProductPublic(product) {
+  if (!product) return null
+  return {
+    id: product.id,
+    title: product.title,
+    subtitle: product.subtitle || '',
+    description: product.description || '',
+    coverUrl: product.coverUrl || '',
+    category: product.category || product.gameType || 'NyXia Game',
+    gameType: product.gameType || '',
+    audience: product.audience || '16+',
+    playMode: product.playMode || 'Hybride',
+    players: product.players || '',
+    duration: product.duration || '',
+    genre: product.genre || '',
+    version: product.version || '1.0',
+    publishedAt: product.publishedAt || '',
+    updatedAt: product.updatedAt || '',
+    active: product.active !== false
+  }
+}
+
+async function gameLoadProductIndex(env) {
+  if (!env.HUB_CONFIG) return []
+  return (await env.HUB_CONFIG.get(GAME_PRODUCT_INDEX_KEY, 'json')) || []
+}
+async function gameSaveProductIndex(env, index) {
+  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
+  const clean = [...index].filter(Boolean).slice(0, 500)
+  await env.HUB_CONFIG.put(GAME_PRODUCT_INDEX_KEY, JSON.stringify(clean))
+}
+async function gameGetProduct(env, id) {
+  if (!env.HUB_CONFIG) return null
+  const key = gameProductKey(id)
+  if (!key || key === GAME_PRODUCT_PREFIX) return null
+  return await env.HUB_CONFIG.get(key, 'json')
+}
+async function gameSaveProduct(env, product) {
+  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
+  await env.HUB_CONFIG.put(gameProductKey(product.id), JSON.stringify(product))
+  const index = await gameLoadProductIndex(env)
+  const next = index.filter(x => x.id !== product.id)
+  next.unshift(gameProductPublic(product))
+  await gameSaveProductIndex(env, next)
+}
+
+function gameRuntimeSnapshotFromData(d = {}) {
+  return {
+    lockedCanon: d.lockedCanon || '',
+    worldBible: d.worldBible || '',
+    storyStructure: d.storyStructure || '',
+    scenesQuests: d.scenesQuests || '',
+    characters: d.characters || '',
+    npcIntelligence: d.npcIntelligence || '',
+    npcRuntimeJson: d.npcRuntimeJson || '',
+    npcMemoryRules: d.npcMemoryRules || '',
+    npcRelationshipRules: d.npcRelationshipRules || '',
+    npcAutonomyRules: d.npcAutonomyRules || '',
+    npcVoicePlan: d.npcVoicePlan || '',
+    npcModel: d.npcModel || '',
+    factionsCreatures: d.factionsCreatures || '',
+    itemsRewards: d.itemsRewards || '',
+    mechanics: d.mechanics || '',
+    combatRules: d.combatRules || '',
+    progression: d.progression || '',
+    livePlan: d.livePlan || '',
+    hostMaterials: d.hostMaterials || '',
+    playerMaterials: d.playerMaterials || '',
+    imageBriefs: d.imageBriefs || '',
+    audioPlan: d.audioPlan || '',
+    videoPlan: d.videoPlan || '',
+    mapPlan: d.mapPlan || ''
+  }
+}
+
+function gameHostPackageFromData(d = {}) {
+  return {
+    storyStructure: d.storyStructure || '',
+    scenesQuests: d.scenesQuests || '',
+    hostMaterials: d.hostMaterials || '',
+    livePlan: d.livePlan || '',
+    lockedCanon: d.lockedCanon || '',
+    worldBible: d.worldBible || '',
+    characters: d.characters || '',
+    mechanics: d.mechanics || '',
+    combatRules: d.combatRules || '',
+    progression: d.progression || ''
+  }
+}
+
+async function gamePublishProject(env, project, body = {}) {
+  if (!project || project.kind !== 'nyxia-game') throw new Error('Projet NyXia Game introuvable')
+  const d = project.data || {}
+  const requestedId = cleanText(body.productId || project.id, 120).replace(/[^a-zA-Z0-9_-]/g, '')
+  const id = requestedId || project.id
+  const prior = await gameGetProduct(env, id)
+  const stamp = gameLiveNow()
+  const product = {
+    id,
+    sourceProjectId: project.id,
+    title: cleanText(body.title || project.title || 'Jeu NyXia', 180),
+    subtitle: cleanText(body.subtitle || d.packageSubtitle || '', 240),
+    description: cleanText(body.description || d.packageNotes || d.idea || '', 4000),
+    coverUrl: cleanText(body.coverUrl || d.coverUrl || '', 1600),
+    category: cleanText(body.category || d.gameType || 'NyXia Game', 120),
+    gameType: cleanText(d.gameType || 'Soirée immersive', 120),
+    audience: cleanText(d.audience || '16+', 40),
+    playMode: cleanText(d.playMode || 'Hybride', 80),
+    players: String(d.playerCount || ''),
+    duration: cleanText(d.duration || '', 80),
+    genre: cleanText(d.genre || '', 120),
+    version: cleanText(body.version || prior?.version || '1.0', 40),
+    active: body.active !== false,
+    defaultTeams: gameLiveTeams(body.teams || d.liveTeams),
+    runtimeSnapshot: gameRuntimeSnapshotFromData(d),
+    hostPackage: gameHostPackageFromData(d),
+    starterRuntime: gameLiveCleanRuntime({
+      phase: 'Accueil',
+      sceneTitle: cleanText(body.startScene || '', 220),
+      objective: cleanText(body.startObjective || '', 1400),
+      announcement: cleanText(body.startAnnouncement || '', 1800),
+      allowNpc: true,
+      allowDice: true,
+      sharedClues: [],
+      teamClues: {}
+    }),
+    createdAt: prior?.createdAt || stamp,
+    publishedAt: prior?.publishedAt || stamp,
+    updatedAt: stamp
+  }
+  await gameSaveProduct(env, product)
+  return product
+}
+
+async function gameLoadLicenseByRawKey(env, rawKey) {
+  const normalized = gameNormalizeAccessKey(rawKey)
+  if (!normalized) return null
+  const hash = await gameSha256Hex(normalized)
+  const license = await env.HUB_CONFIG.get(gameLicenseKey(hash), 'json')
+  return license ? { license, hash } : null
+}
+
+function gameLicenseExpired(license) {
+  return !!(license?.expiresAt && Date.parse(license.expiresAt) < Date.now())
+}
+
+async function gameCreateLicense(env, body = {}) {
+  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
+  const productIds = [...new Set((Array.isArray(body.productIds) ? body.productIds : [body.productId]).map(x => cleanText(x, 120)).filter(Boolean))]
+  if (!productIds.length) throw new Error('Au moins un produit est requis')
+  for (const id of productIds) {
+    const product = await gameGetProduct(env, id)
+    if (!product || product.active === false) throw new Error(`Produit introuvable ou inactif : ${id}`)
+  }
+  const accessKey = gameRandomAccessKey()
+  const normalized = gameNormalizeAccessKey(accessKey)
+  const hash = await gameSha256Hex(normalized)
+  const stamp = gameLiveNow()
+  const license = {
+    id: crypto.randomUUID(),
+    label: cleanText(body.label || '', 180),
+    email: cleanText(body.email || '', 240).toLowerCase(),
+    productIds,
+    active: true,
+    maxSessionsPerProduct: Math.max(0, Math.min(9999, Number(body.maxSessionsPerProduct) || 0)),
+    expiresAt: body.expiresAt ? cleanText(body.expiresAt, 80) : '',
+    usage: {},
+    sessions: [],
+    createdAt: stamp,
+    updatedAt: stamp
+  }
+  await env.HUB_CONFIG.put(gameLicenseKey(hash), JSON.stringify(license))
+  return { accessKey, license }
+}
+
+async function gameSaveLicense(env, hash, license) {
+  license.updatedAt = gameLiveNow()
+  license.sessions = Array.isArray(license.sessions) ? license.sessions.slice(-GAME_LIBRARY_MAX_RECENT_SESSIONS) : []
+  await env.HUB_CONFIG.put(gameLicenseKey(hash), JSON.stringify(license))
+}
+
+function gameLibraryToken(request, body = null) {
+  return cleanText(request.headers.get('X-NyXia-Library-Token') || body?.libraryToken || '', 260)
+}
+
+async function gameLibraryAuth(env, token) {
+  if (!token || !env.HUB_CONFIG) return null
+  const tokenHash = await gameSha256Hex(token)
+  const auth = await env.HUB_CONFIG.get(gameLibrarySessionKey(tokenHash), 'json')
+  if (!auth?.licenseHash) return null
+  const license = await env.HUB_CONFIG.get(gameLicenseKey(auth.licenseHash), 'json')
+  if (!license || license.active === false || gameLicenseExpired(license)) return null
+  return { auth, license, licenseHash: auth.licenseHash }
+}
+
+async function gameLibraryState(env, authInfo, origin) {
+  const { license } = authInfo
+  const products = []
+  for (const id of license.productIds || []) {
+    const product = await gameGetProduct(env, id)
+    if (product && product.active !== false) products.push(gameProductPublic(product))
+  }
+  const sessions = []
+  for (const ref of (license.sessions || []).slice(-GAME_LIBRARY_MAX_RECENT_SESSIONS).reverse()) {
+    const session = await gameLiveLoad(env, ref.code)
+    if (!session) continue
+    sessions.push({
+      code: session.code,
+      title: session.title,
+      productId: session.productId || ref.productId || '',
+      status: session.status,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+      playerCount: (session.players || []).length,
+      joinUrl: `${origin}/game-live.html?code=${session.code}`,
+      hostUrl: `${origin}/game-host.html?code=${session.code}&host=${encodeURIComponent(session.hostToken)}`
+    })
+  }
+  return {
+    license: {
+      id: license.id,
+      label: license.label || '',
+      email: license.email || '',
+      expiresAt: license.expiresAt || '',
+      maxSessionsPerProduct: Number(license.maxSessionsPerProduct) || 0
+    },
+    products,
+    sessions
+  }
+}
+
+async function gameCreateSessionFromProduct(env, product, owner = {}, overrides = {}) {
+  if (!product) throw new Error('Produit NyXia Game introuvable')
+  const newCode = await gameLiveUniqueCode(env)
+  const session = {
+    code: newCode,
+    id: crypto.randomUUID(),
+    hostToken: crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', ''),
+    productId: product.id,
+    sourceProjectId: product.sourceProjectId || '',
+    ownerLicenseId: owner.licenseId || '',
+    title: product.title,
+    gameType: product.gameType || 'Soirée immersive',
+    audience: product.audience || '16+',
+    status: 'lobby',
+    createdAt: gameLiveNow(),
+    updatedAt: gameLiveNow(),
+    teams: gameLiveTeams(overrides.teams || product.defaultTeams || []),
+    players: [],
+    log: [],
+    npcState: {},
+    runtime: gameLiveCleanRuntime({ ...(product.starterRuntime || {}), sharedClues: [], teamClues: {} }),
+    projectSnapshot: structuredClone(product.runtimeSnapshot || {}),
+    hostPackage: structuredClone(product.hostPackage || {})
+  }
+  gameLiveLog(session, { type: 'session-created', text: 'Session créée depuis la bibliothèque NyXia Game' })
+  await gameLiveSave(env, session)
+  return session
+}
+
+async function handleGameLibrary(request, env) {
+  const url = new URL(request.url)
+  const path = url.pathname.replace('/api/game/library', '') || '/'
+  const body = request.method === 'POST' ? await request.json().catch(() => ({})) : {}
+
+  if (request.method === 'POST' && path === '/redeem') {
+    const found = await gameLoadLicenseByRawKey(env, body.accessKey)
+    if (!found || found.license.active === false || gameLicenseExpired(found.license)) return json({ error: 'Clé d’accès invalide ou expirée' }, 401)
+    const suppliedEmail = cleanText(body.email || '', 240).toLowerCase()
+    if (found.license.email && suppliedEmail !== found.license.email) return json({ error: 'Cette clé est liée à une autre adresse courriel' }, 401)
+    const token = crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '')
+    const tokenHash = await gameSha256Hex(token)
+    await env.HUB_CONFIG.put(gameLibrarySessionKey(tokenHash), JSON.stringify({
+      licenseHash: found.hash,
+      email: suppliedEmail || found.license.email || '',
+      createdAt: gameLiveNow()
+    }), { expirationTtl: GAME_LIBRARY_SESSION_TTL })
+    return json({ ok: true, libraryToken: token, ...(await gameLibraryState(env, { license: found.license, licenseHash: found.hash }, url.origin)) })
+  }
+
+  const token = gameLibraryToken(request, body)
+  const authInfo = await gameLibraryAuth(env, token)
+  if (!authInfo) return json({ error: 'Accès bibliothèque invalide ou expiré' }, 401)
+
+  if (request.method === 'GET' && (path === '/' || path === '/me')) {
+    return json(await gameLibraryState(env, authInfo, url.origin))
+  }
+
+  if (request.method === 'POST' && path === '/sessions') {
+    const productId = cleanText(body.productId || '', 120)
+    if (!authInfo.license.productIds?.includes(productId)) return json({ error: 'Ce jeu n’appartient pas à cette bibliothèque' }, 403)
+    const product = await gameGetProduct(env, productId)
+    if (!product || product.active === false) return json({ error: 'Jeu indisponible' }, 404)
+    const currentUse = Number(authInfo.license.usage?.[productId]) || 0
+    const limit = Number(authInfo.license.maxSessionsPerProduct) || 0
+    if (limit > 0 && currentUse >= limit) return json({ error: `Limite de ${limit} soirées atteinte pour ce jeu` }, 409)
+    const session = await gameCreateSessionFromProduct(env, product, { licenseId: authInfo.license.id }, { teams: body.teams })
+    authInfo.license.usage = authInfo.license.usage || {}
+    authInfo.license.usage[productId] = currentUse + 1
+    authInfo.license.sessions = [...(authInfo.license.sessions || []), { code: session.code, productId, title: session.title, createdAt: session.createdAt }]
+    await gameSaveLicense(env, authInfo.licenseHash, authInfo.license)
+    return json({
+      ok: true,
+      code: session.code,
+      joinUrl: `${url.origin}/game-live.html?code=${session.code}`,
+      hostUrl: `${url.origin}/game-host.html?code=${session.code}&host=${encodeURIComponent(session.hostToken)}`,
+      state: gameLiveHostState(session)
+    }, 201)
+  }
+
+  return json({ error: 'Route bibliothèque NyXia Game inconnue' }, 404)
+}
+
+async function handleGameSalesGrant(request, env) {
+  if (request.method !== 'POST') return json({ error: 'Méthode non permise' }, 405)
+  if (!env.NYXIA_GAME_SALES_SECRET) return json({ error: 'Connexion Boutique non activée' }, 503)
+  const secret = request.headers.get('X-NyXia-Sales-Secret') || ''
+  if (!secret || secret !== env.NYXIA_GAME_SALES_SECRET) return json({ error: 'Non autorisé' }, 401)
+  const body = await request.json().catch(() => ({}))
+  const created = await gameCreateLicense(env, body)
+  return json({ ok: true, accessKey: created.accessKey, license: created.license }, 201)
+}
+
 function gameLiveKey(code) { return GAME_LIVE_PREFIX + String(code || '').toUpperCase() }
 function gameLiveCode(value) { return cleanText(value, 12).toUpperCase().replace(/[^A-Z0-9]/g, '') }
 function gameLivePlayerToken(request, body = null) {
@@ -737,6 +1092,13 @@ function gameLiveHostState(session) {
   clone.players = (clone.players || []).map(p => ({ ...p, token: undefined }))
   if (clone.npcState) {
     Object.values(clone.npcState).forEach(v => { if (v && v.history) v.history = v.history.slice(-6) })
+  }
+  if (clone.projectSnapshot) {
+    delete clone.projectSnapshot.npcRuntimeJson
+    delete clone.projectSnapshot.npcMemoryRules
+    delete clone.projectSnapshot.npcRelationshipRules
+    delete clone.projectSnapshot.npcAutonomyRules
+    delete clone.projectSnapshot.npcModel
   }
   return clone
 }
@@ -986,30 +1348,19 @@ async function handleGameHost(request, env) {
     const project = await getProject(env, cleanText(body.projectId, 120))
     if (!project || project.kind !== 'nyxia-game') return json({ error: 'Projet NyXia Game introuvable' }, 404)
     const d = project.data || {}
-    const newCode = await gameLiveUniqueCode(env)
-    const session = {
-      code: newCode,
-      id: crypto.randomUUID(),
-      hostToken: crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', ''),
-      projectId: project.id,
+    const testProduct = {
+      id: `atelier-${project.id}`,
+      sourceProjectId: project.id,
       title: project.title,
       gameType: d.gameType || 'Soirée immersive',
       audience: d.audience || '16+',
-      status: 'lobby',
-      createdAt: gameLiveNow(), updatedAt: gameLiveNow(),
-      teams: gameLiveTeams(body.teams || d.liveTeams),
-      players: [], log: [], npcState: {},
-      runtime: gameLiveCleanRuntime({ phase: 'Accueil', allowNpc: true, allowDice: true, sharedClues: [], teamClues: {} }),
-      projectSnapshot: {
-        lockedCanon: d.lockedCanon || '', worldBible: d.worldBible || '', storyStructure: d.storyStructure || '', scenesQuests: d.scenesQuests || '',
-        characters: d.characters || '', npcIntelligence: d.npcIntelligence || '', npcRuntimeJson: d.npcRuntimeJson || '', npcMemoryRules: d.npcMemoryRules || '',
-        npcRelationshipRules: d.npcRelationshipRules || '', npcAutonomyRules: d.npcAutonomyRules || '', npcVoicePlan: d.npcVoicePlan || '', npcModel: d.npcModel || '',
-        mechanics: d.mechanics || '', combatRules: d.combatRules || '', livePlan: d.livePlan || ''
-      }
+      defaultTeams: gameLiveTeams(body.teams || d.liveTeams),
+      runtimeSnapshot: gameRuntimeSnapshotFromData(d),
+      hostPackage: gameHostPackageFromData(d),
+      starterRuntime: gameLiveCleanRuntime({ phase: 'Accueil', allowNpc: true, allowDice: true, sharedClues: [], teamClues: {} })
     }
-    gameLiveLog(session, { type: 'session-created', text: 'Session créée' })
-    await gameLiveSave(env, session)
-    return json({ ok: true, session: gameLiveHostState(session), joinUrl: `${url.origin}/game-live.html?code=${newCode}`, hostUrl: `${url.origin}/game-host.html?code=${newCode}&host=${encodeURIComponent(session.hostToken)}` }, 201)
+    const session = await gameCreateSessionFromProduct(env, testProduct, { licenseId: 'ATELIER-TEST' }, { teams: body.teams || d.liveTeams })
+    return json({ ok: true, session: gameLiveHostState(session), joinUrl: `${url.origin}/game-live.html?code=${session.code}`, hostUrl: `${url.origin}/game-host.html?code=${session.code}&host=${encodeURIComponent(session.hostToken)}` }, 201)
   }
 
   if (!code) return json({ error: 'Code de partie requis' }, 400)
@@ -1048,7 +1399,7 @@ async function handleAtelier(request, env, ctx) {
       kv: !!env.HUB_CONFIG,
       googleTts: googleTtsConfigured(env),
       cartography: !!env.BROWSER && !!env.MAPS,
-      version: 'atelier-equipe-3.1-game-live-client-host'
+      version: 'atelier-equipe-4.0-game-library-entitlements'
     })
   }
 
@@ -1060,6 +1411,30 @@ async function handleAtelier(request, env, ctx) {
 
   // NyXia Game Live — console animateur protégée par la session du Labo.
   if (url.pathname.startsWith('/api/atelier/game/live')) return handleGameHost(request, env)
+
+  // NyXia Game — publication interne vers la bibliothèque client.
+  if (request.method === 'POST' && url.pathname === '/api/atelier/game/publish') {
+    const body = await request.json().catch(() => ({}))
+    const project = await getProject(env, cleanText(body.projectId, 120))
+    if (!project || project.kind !== 'nyxia-game') return json({ error: 'Projet NyXia Game introuvable' }, 404)
+    const product = await gamePublishProject(env, project, body)
+    return json({ ok: true, product: gameProductPublic(product) }, 201)
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/atelier/game/license') {
+    const body = await request.json().catch(() => ({}))
+    const created = await gameCreateLicense(env, body)
+    return json({
+      ok: true,
+      accessKey: created.accessKey,
+      license: created.license,
+      libraryUrl: `${url.origin}/game-library.html`
+    }, 201)
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/atelier/game/products') {
+    return json({ products: await gameLoadProductIndex(env) })
+  }
 
   // Projets Atelier — index léger + un objet KV par projet.
   if (parts[2] === 'projects') {
@@ -1157,6 +1532,20 @@ export default {
         return await cartoServeEditorAsset(request, env, ctx)
       } catch (err) {
         return new Response(err?.message || String(err), { status: 500 })
+      }
+    }
+    if (url.pathname.startsWith('/api/game/library')) {
+      try {
+        return await handleGameLibrary(request, env)
+      } catch (err) {
+        return json({ error: err?.message || String(err) }, 500)
+      }
+    }
+    if (url.pathname.startsWith('/api/game/sales/grant')) {
+      try {
+        return await handleGameSalesGrant(request, env)
+      } catch (err) {
+        return json({ error: err?.message || String(err) }, 500)
       }
     }
     if (url.pathname.startsWith('/api/game/host')) {
