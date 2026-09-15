@@ -654,9 +654,68 @@
     lastAI={system:system,prompt:prompt,target:target||'',toolId:tool.id,text:''};renderAIResult('… production en cours …',true)
     try{var d=await api('/api/chat',{method:'POST',body:JSON.stringify({providerId:tool.providerId,model:tool.model,system_prompt:(tool.system_prompt?tool.system_prompt+'\n\n':'')+system,max_tokens:Math.max(Number(tool.max_tokens)||2500,5000),temperature:(tool.temperature == null ? 0.7 : tool.temperature),messages:[{role:'user',content:prompt}]})});lastAI.text=d.text||'(réponse vide)';renderAIResult(lastAI.text,false)}catch(e){lastAI.text='⚠ '+e.message;renderAIResult(lastAI.text,false)}
   }
-  function renderAIResult(text,busy){var box=document.getElementById('ai-result');if(!box)return;box.className='result';box.textContent=text;var actions=document.getElementById('ai-actions');if(!actions)return;actions.innerHTML=busy?'':'<div class="result-actions"><button onclick="speakAI()">🔊 Écouter</button><button onclick="copyAI()">📋 Copier</button><button onclick="retryAI()">↺ Réessayer</button><button onclick="pdfAI()">⬇ PDF</button></div>'+applyBar()}
+  function renderAIResult(text,busy){var box=document.getElementById('ai-result');if(!box)return;box.className='result';box.textContent=text;var actions=document.getElementById('ai-actions');if(!actions)return;actions.innerHTML=busy?'':'<div class="result-actions"><button onclick="speakAI()" title="Lecture vocale par ton navigateur — ne dépend pas de Google TTS">🔊 Écouter</button><button onclick="stopAISpeech()" title="Arrêter la lecture">⏹ Arrêter</button><button onclick="copyAI()">📋 Copier</button><button onclick="retryAI()">↺ Réessayer</button><button onclick="pdfAI()">⬇ PDF</button></div>'+applyBar()}
   function applyBar(){if(!lastAI.target)return '';if(lastAI.target==='__mystery_json__')return '<div class="applybar"><button class="btn gold" onclick="applyMysteryProposal()">Appliquer cette Bible proposée</button></div>';if(lastAI.target.indexOf('deliverable:')===0)return '<div class="applybar"><button class="btn gold" onclick="saveDeliverable(\''+lastAI.target.split(':')[1]+'\')">Conserver dans le projet</button></div>';return '<div class="applybar"><span class="tiny">Aucune modification automatique.</span><button class="btn gold" onclick="applyAITo(\''+lastAI.target+'\')">Utiliser cette proposition</button></div>'}
-  function speakAI(){speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(lastAI.text);u.lang='fr-FR';u.rate=.95;speechSynthesis.speak(u)}
+  var aiSpeechQueue=[],aiSpeechIndex=0,aiSpeechStopped=false;
+  function splitSpeechText(text,maxLen){
+    maxLen=maxLen||420;
+    var clean=String(text||'').replace(/\s+/g,' ').trim();
+    if(!clean)return [];
+    var sentences=clean.match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g)||[clean],out=[],buf='';
+    sentences.forEach(function(s){
+      s=s.trim();if(!s)return;
+      if((buf+' '+s).trim().length<=maxLen){buf=(buf+' '+s).trim();return}
+      if(buf){out.push(buf);buf=''}
+      if(s.length<=maxLen){buf=s;return}
+      var words=s.split(/\s+/),part='';
+      words.forEach(function(w){
+        var next=(part+' '+w).trim();
+        if(next.length<=maxLen)part=next;
+        else{if(part)out.push(part);part=w}
+      });
+      if(part)buf=part
+    });
+    if(buf)out.push(buf);
+    return out
+  }
+  function stopAISpeech(){
+    aiSpeechStopped=true;aiSpeechQueue=[];aiSpeechIndex=0;
+    if('speechSynthesis' in window)window.speechSynthesis.cancel();
+    toast('Lecture arrêtée')
+  }
+  function speakNextAIChunk(){
+    if(aiSpeechStopped||aiSpeechIndex>=aiSpeechQueue.length){
+      if(!aiSpeechStopped)toast('Lecture terminée ✓');
+      return
+    }
+    var part=aiSpeechQueue[aiSpeechIndex++];
+    var u=new SpeechSynthesisUtterance(part);
+    u.lang='fr-FR';u.rate=.95;
+    var voices=window.speechSynthesis.getVoices()||[];
+    var fr=voices.find(function(v){return /^fr(-|_)/i.test(v.lang||'')})||
+           voices.find(function(v){return /french|français|francais/i.test(v.name||'')});
+    if(fr)u.voice=fr;
+    u.onend=function(){setTimeout(speakNextAIChunk,80)};
+    u.onerror=function(e){
+      aiSpeechStopped=true;
+      toast('Lecture impossible : '+(e.error||'erreur du navigateur'));
+    };
+    window.speechSynthesis.speak(u)
+  }
+  function speakAI(){
+    var text=String(lastAI&&lastAI.text||'').trim();
+    if(!text){toast('Aucun texte à écouter');return}
+    if(!('speechSynthesis' in window)||typeof SpeechSynthesisUtterance==='undefined'){
+      toast('La lecture vocale n’est pas disponible dans ce navigateur');return
+    }
+    window.speechSynthesis.cancel();
+    aiSpeechStopped=false;
+    aiSpeechQueue=splitSpeechText(text,420);
+    aiSpeechIndex=0;
+    if(!aiSpeechQueue.length){toast('Aucun texte à écouter');return}
+    toast('🔊 Lecture du personnage…');
+    setTimeout(speakNextAIChunk,120)
+  }
   async function copyAI(){await navigator.clipboard.writeText(lastAI.text);toast('Copié')}
   function retryAI(){if(lastAI.prompt)runAI(lastAI.system,lastAI.prompt,lastAI.target)}
   function pdfAI(){if(!window.jspdf)return;var doc=new window.jspdf.jsPDF(),y=20,lines=doc.splitTextToSize(lastAI.text,175);doc.setFontSize(15);doc.text(currentProject?currentProject.title:'NyXiaLabo',18,y);y+=10;doc.setFontSize(11);lines.forEach(function(l){if(y>280){doc.addPage();y=20}doc.text(l,18,y);y+=6});doc.save(safeName(currentProject?currentProject.title:'nyxialabo')+'-'+Date.now()+'.pdf')}
