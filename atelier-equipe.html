@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <link rel="icon" type="image/png" href="/FavIcon.png">
+  <title>NyXiaLabo — Atelier Équipe</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,700;1,500&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    :root{
+      --night:#060A18;--night2:#0c1229;--panel:#111a38;--panel2:#151f46;
+      --violet:#7B5CFF;--lav:#A78BFA;--gold:#F4C56A;--text:#F7F4FF;--muted:#A7ADCC;
+      --line:rgba(167,139,250,.16);--green:#35d69a;--red:#ff7188;--shadow:0 22px 65px rgba(0,0,0,.34)
+    }
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--night);color:var(--text);font-family:Outfit,sans-serif}
+    body{background:radial-gradient(circle at 18% 0%,rgba(123,92,255,.18),transparent 34%),radial-gradient(circle at 88% 20%,rgba(244,197,106,.08),transparent 28%),var(--night)}
+    button,input,textarea,select{font:inherit}.hidden{display:none!important}
+    .shell{min-height:100vh;display:grid;grid-template-columns:270px 1fr}
+    aside{position:sticky;top:0;height:100vh;padding:20px 16px;background:rgba(6,10,24,.92);border-right:1px solid var(--line);backdrop-filter:blur(18px);overflow:auto}
+    .brand{display:flex;align-items:center;gap:12px;padding:4px 8px 20px}.orb{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,var(--violet),#4b6cff);box-shadow:0 0 34px rgba(123,92,255,.45);font-size:21px}.brand h1{font-size:17px;margin:0}.brand small{display:block;color:var(--gold);margin-top:2px}
+    .nav-label{font-size:10px;letter-spacing:1.3px;text-transform:uppercase;color:#606a94;font-weight:800;margin:18px 10px 7px}.nav-btn{width:100%;border:1px solid transparent;background:transparent;color:var(--muted);border-radius:12px;padding:11px 12px;display:flex;gap:10px;align-items:center;text-align:left;cursor:pointer;margin:2px 0}.nav-btn:hover,.nav-btn.active{background:rgba(123,92,255,.12);border-color:rgba(123,92,255,.25);color:#fff}.nav-btn .ico{width:24px;text-align:center}.back{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+    main{min-width:0}.topbar{height:66px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;border-bottom:1px solid var(--line);background:rgba(6,10,24,.64);backdrop-filter:blur(15px);position:sticky;top:0;z-index:20}.topbar h2{font-family:'Cormorant Garamond',serif;font-size:24px;margin:0;background:linear-gradient(120deg,#fff,var(--lav),var(--gold));-webkit-background-clip:text;color:transparent}.status{font-size:12px;color:var(--muted)}.status.ok{color:var(--green)}.status.warn{color:var(--gold)}
+    .content{padding:26px;max-width:1450px;margin:auto}.hero{padding:28px;border:1px solid var(--line);border-radius:24px;background:linear-gradient(135deg,rgba(123,92,255,.13),rgba(244,197,106,.04));box-shadow:var(--shadow)}.hero h3{font-family:'Cormorant Garamond',serif;font-size:34px;margin:0 0 6px}.hero p{max-width:850px;color:var(--muted);line-height:1.65;margin:0}.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(244,197,106,.25);background:rgba(244,197,106,.07);color:#f8d995;border-radius:999px;padding:6px 10px;font-size:11px;font-weight:700;margin-bottom:13px}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:18px}.card{background:rgba(17,26,56,.78);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 12px 36px rgba(0,0,0,.18)}.card h4{margin:0 0 6px;font-size:17px}.card p{margin:0;color:var(--muted);line-height:1.55;font-size:13px}.card .bigico{font-size:28px;margin-bottom:10px}.card-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+    .btn{border:1px solid rgba(123,92,255,.28);background:rgba(123,92,255,.10);color:#fff;border-radius:11px;padding:9px 13px;cursor:pointer;font-size:12px;font-weight:700}.btn:hover{background:rgba(123,92,255,.2)}.btn.primary{border:none;background:linear-gradient(135deg,var(--violet),#5a70ff);box-shadow:0 8px 25px rgba(123,92,255,.25)}.btn.gold{border-color:rgba(244,197,106,.28);background:rgba(244,197,106,.09);color:#ffe6a6}.btn.danger{border-color:rgba(255,113,136,.28);background:rgba(255,113,136,.08);color:#ff9cab}.btn:disabled{opacity:.5;cursor:not-allowed}
+    .section-title{display:flex;justify-content:space-between;align-items:end;gap:12px;margin:28px 0 12px}.section-title h3{margin:0;font-size:20px}.section-title p{margin:4px 0 0;color:var(--muted);font-size:12px}
+    .workspace{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(360px,.92fr);gap:18px}.panel{background:rgba(17,26,56,.82);border:1px solid var(--line);border-radius:18px;padding:18px}.panel h4{margin:0 0 14px}.field{margin-bottom:13px}.field label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#7f89b7;font-weight:800;margin-bottom:6px}.field input,.field textarea,.field select{width:100%;background:rgba(6,10,24,.55);border:1px solid rgba(167,139,250,.2);border-radius:11px;color:#fff;padding:10px 12px;outline:none}.field textarea{min-height:95px;resize:vertical;line-height:1.5}.field input:focus,.field textarea:focus,.field select:focus{border-color:rgba(167,139,250,.55);box-shadow:0 0 0 3px rgba(123,92,255,.08)}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.row.three{grid-template-columns:1fr 1fr 1fr}.muted{color:var(--muted);font-size:12px}.tiny{font-size:11px;color:#6e789f}.locked{border-color:rgba(244,197,106,.35)!important;background:rgba(244,197,106,.04)!important}.tools-line{display:flex;gap:8px;flex-wrap:wrap}.divider{height:1px;background:var(--line);margin:16px 0}
+    .projectbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.projectbar select{max-width:380px;background:rgba(6,10,24,.65);border:1px solid var(--line);color:#fff;padding:9px 12px;border-radius:10px}.save-state{font-size:11px;color:var(--muted)}
+    .result{min-height:160px;background:rgba(6,10,24,.5);border:1px solid rgba(167,139,250,.16);border-radius:14px;padding:14px;white-space:pre-wrap;line-height:1.6;color:#eef0ff;overflow:auto}.result.empty{display:grid;place-items:center;color:#606b94}.result-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.result-actions button{border:0;background:transparent;color:#8992b8;cursor:pointer;font-size:12px;padding:3px}.result-actions button:hover{color:#fff}.applybar{margin-top:10px;display:flex;gap:8px;align-items:center}.applybar select{max-width:230px}
+    .recent{width:100%;border-collapse:collapse}.recent td,.recent th{padding:10px;border-bottom:1px solid rgba(167,139,250,.08);text-align:left;font-size:12px}.recent th{color:#68739e;text-transform:uppercase;font-size:10px}.kind{font-size:10px;border:1px solid var(--line);padding:4px 7px;border-radius:999px;color:var(--lav)}
+    .chapter{border:1px solid rgba(167,139,250,.14);border-radius:14px;padding:12px;margin-bottom:10px;background:rgba(6,10,24,.32)}.chapter-head{display:flex;gap:8px;align-items:center}.chapter-head input{flex:1}.chapter textarea{margin-top:9px;min-height:120px}.chapter.selected{border-color:rgba(244,197,106,.38);box-shadow:inset 0 0 0 1px rgba(244,197,106,.08)}.audio-box{margin-top:10px;padding:10px;border-radius:12px;background:rgba(6,10,24,.45);border:1px solid var(--line)}audio{width:100%;margin-top:7px}
+    .checks{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.check{padding:10px;border-radius:11px;background:rgba(6,10,24,.4);border:1px solid var(--line);font-size:12px}.check.ok{border-color:rgba(53,214,154,.26);color:#9bf0d0}.check.bad{border-color:rgba(255,113,136,.26);color:#ffb4c1}.lockline{display:flex;align-items:center;gap:8px;padding:10px;border-radius:12px;background:rgba(244,197,106,.06);border:1px solid rgba(244,197,106,.2);color:#f5d890;font-size:12px}
+    .tool-list{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.tool-pill{padding:11px;border:1px solid var(--line);border-radius:12px;background:rgba(6,10,24,.35);font-size:12px;color:var(--muted)}
+    .toast{position:fixed;right:22px;bottom:22px;z-index:99;background:#111a38;color:#fff;border:1px solid var(--line);box-shadow:var(--shadow);padding:11px 14px;border-radius:12px;font-size:12px;opacity:0;transform:translateY(8px);pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:none}
+    @media(max-width:1050px){.grid{grid-template-columns:repeat(2,1fr)}.workspace{grid-template-columns:1fr}.shell{grid-template-columns:220px 1fr}.row.three{grid-template-columns:1fr 1fr}}
+    @media(max-width:720px){.shell{display:block}aside{position:relative;width:100%;height:auto}.grid{grid-template-columns:1fr}.content{padding:16px}.topbar{padding:0 16px}.row,.row.three{grid-template-columns:1fr}.tool-list{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="shell">
+  <aside>
+    <div class="brand"><div class="orb">🧪</div><div><h1>NyXiaLabo</h1><small>Atelier équipe humaine + IA</small></div></div>
+    <div class="nav-label">Atelier</div>
+    <button class="nav-btn active" data-view="home" onclick="showView('home')"><span class="ico">🏠</span>Vue d'ensemble</button>
+    <button class="nav-btn" data-view="ghost" onclick="showView('ghost')"><span class="ico">✍️</span>GhostWriting</button>
+    <button class="nav-btn" data-view="audio" onclick="showView('audio')"><span class="ico">🎧</span>Studio Livre Audio</button>
+    <button class="nav-btn" data-view="mystery" onclick="showView('mystery')"><span class="ico">🎲</span>Jeux & Expériences</button>
+    <button class="nav-btn" data-view="visual" onclick="showView('visual')"><span class="ico">🎨</span>Création visuelle</button>
+    <button class="nav-btn" data-view="video" onclick="showView('video')"><span class="ico">🎬</span>Vidéo</button>
+    <button class="nav-btn" data-view="models" onclick="showView('models')"><span class="ico">🧪</span>Modèles & API</button>
+    <div class="back"><button class="nav-btn" onclick="location.href='/dashboard.html'"><span class="ico">↩</span>Retour au Labo complet</button></div>
+  </aside>
+
+  <main>
+    <div class="topbar"><h2 id="top-title">Atelier Équipe</h2><div id="health" class="status">Connexion…</div></div>
+    <div class="content">
+      <section id="view-home" class="view"></section>
+      <section id="view-ghost" class="view hidden"></section>
+      <section id="view-audio" class="view hidden"></section>
+      <section id="view-mystery" class="view hidden"></section>
+      <section id="view-visual" class="view hidden"></section>
+      <section id="view-video" class="view hidden"></section>
+      <section id="view-models" class="view hidden"></section>
+    </div>
+  </main>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+  var token = sessionStorage.getItem('sandbox_token') || ''
+  var allProjects = []
+  var currentProject = null
+  var tools = []
+  var aiTools = []
+  var currentView = 'home'
+  var lastAI = { prompt:'', system:'', toolId:'', text:'', target:'' }
+  var saveTimer = null
+  var audioUrls = []
+  var selectedChapter = 0
+  var pendingMysteryProposal = null
+
+  function h(){ return { 'Content-Type':'application/json', 'Authorization':'Bearer '+token } }
+  function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML }
+  function toast(msg){ var e=document.getElementById('toast'); e.textContent=msg; e.classList.add('show'); setTimeout(function(){e.classList.remove('show')},1800) }
+  function kindLabel(k){ return ({ghostwriting:'GhostWriting',audiobook:'Livre Audio',mystery:'Meurtre & Mystère',visual:'Visuel',video:'Vidéo',api:'Modèles & API'})[k]||k }
+  function kindIcon(k){ return ({ghostwriting:'✍️',audiobook:'🎧',mystery:'🎲',visual:'🎨',video:'🎬',api:'🧪'})[k]||'🧪' }
+
+  async function api(url, opts){
+    opts=opts||{}; opts.headers=Object.assign({},h(),opts.headers||{})
+    var r=await fetch(url,opts); var data=await r.json().catch(function(){return {}})
+    if(r.status===401){ sessionStorage.removeItem('sandbox_token'); location.href='/login.html'; throw new Error('Session expirée') }
+    if(!r.ok) throw new Error(data.error||('HTTP '+r.status))
+    return data
+  }
+
+  async function boot(){
+    if(!token){ location.href='/login.html'; return }
+    try{
+      var auth=await fetch('/api/check-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:token})}).then(function(r){return r.json()})
+      if(!auth.valid){ location.href='/login.html'; return }
+      var data=await Promise.all([api('/api/atelier/health'),api('/api/atelier/projects'),api('/api/tools')])
+      var health=data[0]; allProjects=data[1].projects||[]; tools=data[2].tools||[]
+      aiTools=tools.filter(function(t){ return t.providerId && t.model && (!t.kind || t.kind==='chat') })
+      var he=document.getElementById('health'); he.textContent='● Atelier connecté'+(health.googleTts?' · Google TTS prêt':' · TTS Google à configurer'); he.className='status '+(health.googleTts?'ok':'warn')
+      renderHome()
+    }catch(e){ document.getElementById('health').textContent='⚠ '+e.message; document.getElementById('health').className='status warn'; renderHome() }
+  }
+
+  function showView(v){
+    currentView=v
+    document.querySelectorAll('.view').forEach(function(x){x.classList.add('hidden')})
+    document.getElementById('view-'+v).classList.remove('hidden')
+    document.querySelectorAll('.nav-btn[data-view]').forEach(function(b){b.classList.toggle('active',b.dataset.view===v)})
+    document.getElementById('top-title').textContent=({home:'Atelier Équipe',ghost:'Atelier GhostWriting',audio:'Studio Livre Audio',mystery:'Atelier Jeux & Expériences',visual:'Création visuelle',video:'Vidéo',models:'Modèles & API'})[v]
+    if(v==='home')renderHome(); if(v==='ghost')renderGhost(); if(v==='audio')renderAudio(); if(v==='mystery')renderMystery(); if(v==='visual')renderVisual(); if(v==='video')renderVideo(); if(v==='models')renderModels()
+  }
+
+  function renderHome(){
+    var recent=(allProjects||[]).slice(0,8).map(function(p){return '<tr><td>'+kindIcon(p.kind)+' <span class="kind">'+esc(kindLabel(p.kind))+'</span></td><td><b>'+esc(p.title)+'</b><div class="tiny">'+esc(p.client||'')+'</div></td><td>'+new Date(p.updatedAt).toLocaleDateString('fr-CA')+'</td><td><button class="btn" onclick="openProject(\''+p.id+'\')">Ouvrir</button></td></tr>'}).join('')
+    document.getElementById('view-home').innerHTML=''+
+      '<div class="hero"><div class="badge">ATELIER INTERNE · ÉQUIPE HUMAINE + IA</div><h3>Créer plus vite sans céder la direction créative.</h3><p>Le Labo reste ton atelier. Les modèles servent à produire, tester, comparer et contrôler. Les faits verrouillés, les décisions éditoriales et la relation client restent entre les mains de l’équipe humaine.</p></div>'+
+      '<div class="grid">'+
+        homeCard('✍️','GhostWriting','Idée → synopsis → plan → chapitres → cohérence. Les faits verrouillés sont injectés dans chaque demande IA.','ghost','Nouveau livre')+
+        homeCard('🎧','Studio Livre Audio','Aperçu gratuit dans le navigateur, puis production réelle avec Google Cloud Text-to-Speech.','audio','Nouveau livre audio')+
+        homeCard('🎲','Jeux & Expériences','Bible Maîtresse, Meurtre & Mystère, contrôle de solvabilité, dossiers et variantes.','mystery','Nouveau jeu')+
+        homeCard('🎨','Création visuelle','Retrouve les moteurs déjà présents dans le Labo pour couvertures, personnages et scènes.','visual','Ouvrir')+
+        homeCard('🎬','Vidéo','Bandes-annonces, teasers, scènes courtes et messages fictifs en réutilisant les outils existants.','video','Ouvrir')+
+        homeCard('🧪','Modèles & API','Comparer les modèles, outils API personnalisés, banques et fournisseurs avant intégration portail.','models','Ouvrir')+
+      '</div>'+
+      '<div class="section-title"><div><h3>Projets récents</h3><p>Stockés dans HUB_CONFIG, donc disponibles à l’équipe sur le Labo.</p></div></div>'+
+      '<div class="card">'+(recent?'<table class="recent"><tr><th>Atelier</th><th>Projet</th><th>Modifié</th><th></th></tr>'+recent+'</table>':'<p>Aucun projet Atelier pour l’instant.</p>')+'</div>'
+  }
+  function homeCard(i,t,p,v,b){return '<div class="card"><div class="bigico">'+i+'</div><h4>'+t+'</h4><p>'+p+'</p><div class="card-actions"><button class="btn primary" onclick="showView(\''+v+'\')">'+b+'</button></div></div>'}
+
+  async function openProject(id){
+    try{ var d=await api('/api/atelier/projects/'+id); currentProject=d.project; var v=({ghostwriting:'ghost',audiobook:'audio',mystery:'mystery',visual:'visual',video:'video',api:'models'})[currentProject.kind]||'home'; showView(v) }catch(e){alert(e.message)}
+  }
+
+  function projectSelector(kind,onchangeName){
+    var list=allProjects.filter(function(p){return p.kind===kind})
+    var opts='<option value="">— Choisir un projet —</option>'+list.map(function(p){return '<option value="'+p.id+'"'+(currentProject&&currentProject.id===p.id?' selected':'')+'>'+esc(p.title)+'</option>'}).join('')
+    return '<div class="projectbar"><select onchange="'+onchangeName+'(this.value)">'+opts+'</select><button class="btn primary" onclick="newProject(\''+kind+'\')">+ Nouveau</button>'+(currentProject&&currentProject.kind===kind?'<button class="btn" onclick="duplicateCurrent()">Dupliquer</button><button class="btn danger" onclick="deleteCurrent()">Supprimer</button><span id="save-state" class="save-state">Enregistré</span>':'')+'</div>'
+  }
+
+  async function chooseProject(kind,id,renderer){ if(!id){currentProject=null;renderer();return} try{currentProject=(await api('/api/atelier/projects/'+id)).project;renderer()}catch(e){alert(e.message)} }
+  function chooseGhost(id){chooseProject('ghostwriting',id,renderGhost)}
+  function chooseAudio(id){chooseProject('audiobook',id,renderAudio)}
+  function chooseMystery(id){chooseProject('mystery',id,renderMystery)}
+
+  async function newProject(kind){
+    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
+    var title=prompt('Titre du projet :','Nouveau '+kindLabel(kind))||('Nouveau '+kindLabel(kind))
+    try{var d=await api('/api/atelier/projects',{method:'POST',body:JSON.stringify({kind:kind,title:title,data:defaults[kind]||{}})}); currentProject=d.project; await reloadIndex(); showView(({ghostwriting:'ghost',audiobook:'audio',mystery:'mystery'})[kind]||'home'); toast('Projet créé') }catch(e){alert(e.message)}
+  }
+  async function reloadIndex(){allProjects=(await api('/api/atelier/projects')).projects||[]}
+  async function duplicateCurrent(){if(!currentProject)return; try{var d=await api('/api/atelier/projects/'+currentProject.id+'/duplicate',{method:'POST',body:JSON.stringify({})});currentProject=d.project;await reloadIndex();showView(currentView);toast('Copie créée')}catch(e){alert(e.message)}}
+  async function deleteCurrent(){if(!currentProject||!confirm('Supprimer ce projet Atelier ?'))return;try{await api('/api/atelier/projects/'+currentProject.id,{method:'DELETE'});currentProject=null;await reloadIndex();showView(currentView);toast('Projet supprimé')}catch(e){alert(e.message)}}
+
+  function markDirty(){var e=document.getElementById('save-state');if(e)e.textContent='Modification…';clearTimeout(saveTimer);saveTimer=setTimeout(saveCurrent,650)}
+  async function saveCurrent(){if(!currentProject)return;try{currentProject=(await api('/api/atelier/projects/'+currentProject.id,{method:'PUT',body:JSON.stringify(currentProject)})).project;await reloadIndex();var e=document.getElementById('save-state');if(e)e.textContent='Enregistré ✓'}catch(err){var e2=document.getElementById('save-state');if(e2)e2.textContent='Erreur sauvegarde';console.error(err)}}
+  function setRoot(field,value){if(!currentProject)return;currentProject[field]=value;markDirty()}
+  function setData(field,value){if(!currentProject)return;currentProject.data=currentProject.data||{};currentProject.data[field]=value;markDirty()}
+
+  function modelSelector(){var pref=aiTools.find(function(t){return t.category==='livre'})||aiTools[0];var selected=lastAI.toolId|| (pref?pref.id:'');return '<select id="ai-model">'+aiTools.map(function(t){return '<option value="'+t.id+'"'+(t.id===selected?' selected':'')+'>'+esc((t.icon||'🤖')+' '+t.name)+'</option>'}).join('')+'</select>'}
+  function aiPanel(){return '<div class="panel"><h4>🧠 Table de travail IA</h4><div class="field"><label>Modèle de travail</label>'+modelSelector()+'</div><div id="ai-result" class="result empty">La proposition IA apparaîtra ici. Rien ne remplace un champ automatiquement.</div><div id="ai-actions"></div></div>'}
+
+  function renderGhost(){
+    var host=document.getElementById('view-ghost'); var ok=currentProject&&currentProject.kind==='ghostwriting';
+    host.innerHTML=projectSelector('ghostwriting','chooseGhost')+(ok?ghostWorkspace():'<div class="hero"><div class="badge">SERVICE ÉQUIPE</div><h3>Atelier GhostWriting</h3><p>Pour les clients qui ont une bonne idée mais veulent que ton équipe écrive le livre avec l’aide du Labo. Crée un projet ou ouvre un dossier existant.</p></div>')
+  }
+  function ghostWorkspace(){var d=currentProject.data||{};return '<div class="workspace"><div class="panel"><h4>📚 Dossier éditorial</h4>'+
+    '<div class="row"><div class="field"><label>Titre</label><input value="'+esc(currentProject.title)+'" oninput="setRoot(\'title\',this.value)"></div><div class="field"><label>Client</label><input value="'+esc(currentProject.client||'')+'" oninput="setRoot(\'client\',this.value)"></div></div>'+
+    '<div class="row three"><div class="field"><label>Genre</label><input value="'+esc(d.genre||'')+'" oninput="setData(\'genre\',this.value)"></div><div class="field"><label>Public</label><input value="'+esc(d.audience||'')+'" oninput="setData(\'audience\',this.value)"></div><div class="field"><label>Ton / style</label><input value="'+esc(d.tone||'')+'" oninput="setData(\'tone\',this.value)"></div></div>'+
+    fieldArea('Idée / matière brute','idea',d.idea,5)+fieldArea('🔒 Faits verrouillés — ne jamais modifier silencieusement','lockedFacts',d.lockedFacts,5,'locked')+fieldArea('Synopsis','synopsis',d.synopsis,6)+fieldArea('Plan / structure','outline',d.outline,8)+fieldArea('Personnages & continuité','characters',d.characters,7)+fieldArea('Texte / chapitre en travail','draft',d.draft,12)+
+    '<div class="tools-line"><button class="btn primary" onclick="ghostAI(\'synopsis\')">Créer le synopsis</button><button class="btn" onclick="ghostAI(\'outline\')">Créer le plan</button><button class="btn" onclick="ghostAI(\'characters\')">Développer personnages</button><button class="btn gold" onclick="ghostAI(\'chapter\')">Écrire / poursuivre chapitre</button><button class="btn" onclick="ghostAI(\'continuity\')">Vérifier cohérence</button><button class="btn" onclick="ghostAI(\'rewrite\')">Réécrire le texte</button><button class="btn" onclick="ghostAI(\'correct\')">Corriger</button></div></div>'+aiPanel()+'</div>'}
+  function fieldArea(label,name,val,rows,cls){return '<div class="field"><label>'+label+'</label><textarea class="'+(cls||'')+'" rows="'+rows+'" oninput="setData(\''+name+'\',this.value)">'+esc(val||'')+'</textarea></div>'}
+
+  function ghostContext(){var d=currentProject.data||{};return 'PROJET\nTitre: '+currentProject.title+'\nClient: '+(currentProject.client||'')+'\nGenre: '+(d.genre||'')+'\nPublic: '+(d.audience||'')+'\nTon/style: '+(d.tone||'')+'\n\nIDÉE:\n'+(d.idea||'')+'\n\nFAITS VERROUILLÉS — INTERDICTION DE LES CHANGER:\n'+(d.lockedFacts||'(aucun)')+'\n\nSYNOPSIS ACTUEL:\n'+(d.synopsis||'')+'\n\nPLAN ACTUEL:\n'+(d.outline||'')+'\n\nPERSONNAGES / CONTINUITÉ:\n'+(d.characters||'')+'\n\nTEXTE EN TRAVAIL:\n'+(d.draft||'')}
+  async function ghostAI(action){
+    var map={synopsis:['Propose un synopsis complet, structuré et fidèle à l’idée.','synopsis'],outline:['Crée un plan détaillé chapitre par chapitre.','outline'],characters:['Développe les personnages, leurs voix, arcs, liens et points de continuité.','characters'],chapter:['Écris ou poursuis le chapitre en travail. Garde la voix et la continuité.','draft'],continuity:['Fais un audit de cohérence. Liste contradictions, risques et corrections proposées, sans réécrire silencieusement les faits.',''],rewrite:['Propose une réécriture plus fluide du texte en travail sans changer les faits verrouillés.','draft'],correct:['Corrige orthographe, syntaxe, répétitions et cohérence stylistique du texte en travail.','draft']}
+    var m=map[action];await runAI('Tu es l’assistant de production GhostWriting de l’équipe humaine NyXiaLabo. L’humain garde la direction éditoriale. Tu ne changes JAMAIS un fait verrouillé. Si une amélioration exige de modifier un fait verrouillé, tu le signales comme proposition séparée.','Voici le dossier complet :\n\n'+ghostContext()+'\n\nTÂCHE : '+m[0],m[1])
+  }
+
+  function renderAudio(){var host=document.getElementById('view-audio');var ok=currentProject&&currentProject.kind==='audiobook';host.innerHTML=projectSelector('audiobook','chooseAudio')+(ok?audioWorkspace():'<div class="hero"><div class="badge">SERVICE ÉQUIPE</div><h3>Studio Livre Audio</h3><p>Aperçu gratuit par la voix du navigateur. Production réelle par Google Cloud Text-to-Speech. Le service appartient à l’équipe; Alex peut seulement y orienter les clients.</p></div>');if(ok)loadVoices()}
+  function audioWorkspace(){var d=currentProject.data||{},chs=d.chapters||[];return '<div class="workspace"><div class="panel"><h4>🎧 Livre & chapitres</h4><div class="row"><div class="field"><label>Titre</label><input value="'+esc(currentProject.title)+'" oninput="setRoot(\'title\',this.value)"></div><div class="field"><label>Auteur</label><input value="'+esc(d.author||'')+'" oninput="setData(\'author\',this.value)"></div></div><div class="field"><label>Direction de narration</label><textarea oninput="setData(\'notes\',this.value)">'+esc(d.notes||'')+'</textarea></div><div class="divider"></div><div class="tools-line"><button class="btn primary" onclick="addChapter()">+ Ajouter un chapitre</button><span class="tiny">Le contenu texte est sauvegardé dans le projet. Les MP3 restent des fichiers de production à télécharger.</span></div><div id="chapters" style="margin-top:12px">'+chs.map(renderChapter).join('')+'</div></div>'+audioControlPanel()+'</div>'}
+  function renderChapter(c,i){return '<div class="chapter '+(i===selectedChapter?'selected':'')+'"><div class="chapter-head"><button class="btn" onclick="selectChapter('+i+')">'+(i===selectedChapter?'●':'○')+'</button><input value="'+esc(c.title||('Chapitre '+(i+1)))+'" oninput="updateChapter('+i+',\'title\',this.value)"><button class="btn danger" onclick="removeChapter('+i+')">✕</button></div><textarea oninput="updateChapter('+i+',\'text\',this.value)">'+esc(c.text||'')+'</textarea></div>'}
+  function audioControlPanel(){var d=currentProject.data||{};return '<div class="panel"><h4>🎙️ Production audio</h4><div class="field"><label>Voix française Google Cloud</label><select id="voice-select" onchange="setData(\'voiceName\',this.value)"><option value="">Chargement des voix…</option></select></div><div class="row"><div class="field"><label>Vitesse</label><input type="number" min="0.25" max="4" step="0.05" value="'+(d.speakingRate||1)+'" oninput="setData(\'speakingRate\',Number(this.value))"></div><div class="field"><label>Hauteur</label><input type="number" min="-20" max="20" step="1" value="'+(d.pitch||0)+'" oninput="setData(\'pitch\',Number(this.value))"></div></div><div class="tools-line"><button class="btn" onclick="browserPreview()">🔊 Aperçu gratuit</button><button class="btn primary" onclick="generateSelectedAudio()">🎧 Générer le chapitre</button><button class="btn gold" onclick="generateBookZip()">⬇ Livre complet en ZIP</button></div><p class="tiny">Les longs chapitres sont découpés automatiquement en segments MP3 pour respecter la limite Google.</p><div id="audio-results"></div></div>'}
+  function addChapter(){var d=currentProject.data;d.chapters=d.chapters||[];d.chapters.push({title:'Chapitre '+(d.chapters.length+1),text:''});selectedChapter=d.chapters.length-1;markDirty();renderAudio()}
+  function removeChapter(i){if(!confirm('Retirer ce chapitre ?'))return;currentProject.data.chapters.splice(i,1);selectedChapter=Math.max(0,Math.min(selectedChapter,currentProject.data.chapters.length-1));markDirty();renderAudio()}
+  function selectChapter(i){selectedChapter=i;renderAudio()}
+  function updateChapter(i,f,v){currentProject.data.chapters[i][f]=v;markDirty()}
+  async function loadVoices(){var sel=document.getElementById('voice-select');if(!sel)return;try{var d=await api('/api/atelier/tts/voices?languageCode=fr-FR');var current=currentProject.data.voiceName||'';sel.innerHTML='<option value="">Voix automatique fr-FR</option>'+d.voices.map(function(v){return '<option value="'+esc(v.name)+'"'+(v.name===current?' selected':'')+'>'+esc(v.name)+' · '+esc(v.ssmlGender||'')+'</option>'}).join('')}catch(e){sel.innerHTML='<option value="">'+esc(e.message)+'</option>'}}
+  function browserPreview(){var ch=(currentProject.data.chapters||[])[selectedChapter];if(!ch||!ch.text.trim()){alert('Ajoute du texte dans le chapitre.');return}speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(ch.text.slice(0,4500));u.lang='fr-FR';u.rate=currentProject.data.speakingRate||1;speechSynthesis.speak(u)}
+  function splitTts(text){var enc=new TextEncoder(),paras=String(text||'').split(/\n\s*\n/),out=[],buf='';function fits(s){return enc.encode(s).length<4300}paras.forEach(function(p){if(!p)return;if(fits(buf+'\n\n'+p)){buf+=(buf?'\n\n':'')+p}else{if(buf)out.push(buf);if(fits(p)){buf=p}else{var words=p.split(/\s+/);buf='';words.forEach(function(w){var n=(buf?buf+' ':'')+w;if(fits(n))buf=n;else{if(buf)out.push(buf);buf=w}})}}});if(buf)out.push(buf);return out}
+  async function synthPart(text){var d=currentProject.data;return api('/api/atelier/tts',{method:'POST',body:JSON.stringify({text:text,voiceName:d.voiceName||'',languageCode:'fr-FR',speakingRate:d.speakingRate||1,pitch:d.pitch||0})})}
+  function base64Blob(b64){var bin=atob(b64),a=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:'audio/mpeg'})}
+  async function generateSelectedAudio(){var ch=(currentProject.data.chapters||[])[selectedChapter];if(!ch||!ch.text.trim()){alert('Chapitre vide.');return}var box=document.getElementById('audio-results');box.innerHTML='<div class="audio-box">Production en cours…</div>';try{var parts=splitTts(ch.text),html='';for(var i=0;i<parts.length;i++){box.innerHTML='<div class="audio-box">Génération '+(i+1)+' / '+parts.length+'…</div>';var d=await synthPart(parts[i]);var blob=base64Blob(d.audioContent),url=URL.createObjectURL(blob);audioUrls.push(url);html+='<div class="audio-box"><b>'+esc(ch.title)+' — partie '+(i+1)+'</b><audio controls src="'+url+'"></audio><a class="btn" download="'+safeName(ch.title)+'-partie-'+(i+1)+'.mp3" href="'+url+'">⬇ MP3</a></div>'}box.innerHTML=html}catch(e){box.innerHTML='<div class="audio-box" style="color:var(--red)">'+esc(e.message)+'</div>'}}
+  async function generateBookZip(){var chapters=currentProject.data.chapters||[];if(!chapters.some(function(c){return c.text.trim()})){alert('Le livre est vide.');return}if(!confirm('Générer tous les chapitres maintenant ? Cela utilisera Google Cloud Text-to-Speech.'))return;var box=document.getElementById('audio-results'),zip=new JSZip(),total=0;chapters.forEach(function(c){total+=splitTts(c.text).length});var done=0;try{for(var c=0;c<chapters.length;c++){var ch=chapters[c],parts=splitTts(ch.text);for(var i=0;i<parts.length;i++){done++;box.innerHTML='<div class="audio-box">Production du livre : '+done+' / '+total+'</div>';var d=await synthPart(parts[i]);zip.file(String(c+1).padStart(2,'0')+'-'+safeName(ch.title)+'-partie-'+String(i+1).padStart(2,'0')+'.mp3',d.audioContent,{base64:true})}}var blob=await zip.generateAsync({type:'blob'}),url=URL.createObjectURL(blob);audioUrls.push(url);box.innerHTML='<div class="audio-box"><b>Livre audio préparé.</b><div style="margin-top:8px"><a class="btn primary" download="'+safeName(currentProject.title)+'-livre-audio.zip" href="'+url+'">⬇ Télécharger le ZIP</a></div></div>'}catch(e){box.innerHTML='<div class="audio-box" style="color:var(--red)">'+esc(e.message)+'</div>'}}
+  function safeName(s){return String(s||'audio').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'audio'}
+
+  function renderMystery(){var host=document.getElementById('view-mystery');var ok=currentProject&&currentProject.kind==='mystery';host.innerHTML=projectSelector('mystery','chooseMystery')+(ok?mysteryWorkspace():'<div class="hero"><div class="badge">PRIORITÉ JEUX & EXPÉRIENCES</div><h3>Meurtre & Mystère</h3><p>Le moteur repose sur une Bible Maîtresse verrouillée : meurtrier, mobile, méthode, chronologie, secrets, relations, vrais indices, fausses pistes et solution.</p></div>')}
+  function mysteryWorkspace(){var d=currentProject.data||{},lock=!!d.locked;return '<div class="workspace"><div class="panel"><h4>📕 Bible Maîtresse</h4><div class="lockline"><input type="checkbox" '+(lock?'checked':'')+' onchange="toggleBibleLock(this.checked)"> <b>Verrouiller les faits maîtres</b> — l’IA peut les analyser, jamais les modifier silencieusement.</div><div class="row" style="margin-top:12px"><div class="field"><label>Titre</label><input value="'+esc(currentProject.title)+'" oninput="setRoot(\'title\',this.value)"></div><div class="field"><label>Client / événement</label><input value="'+esc(currentProject.client||'')+'" oninput="setRoot(\'client\',this.value)"></div></div><div class="row three"><div class="field"><label>Joueurs</label><input type="number" value="'+(d.playerCount||8)+'" oninput="setData(\'playerCount\',Number(this.value))"></div><div class="field"><label>Durée</label><input value="'+esc(d.duration||'')+'" oninput="setData(\'duration\',this.value)"></div><div class="field"><label>Difficulté</label><select onchange="setData(\'difficulty\',this.value)">'+['Facile','Intermédiaire','Difficile','Expert'].map(function(x){return '<option'+(d.difficulty===x?' selected':'')+'>'+x+'</option>'}).join('')+'</select></div></div><div class="row three"><div class="field"><label>Époque</label><input value="'+esc(d.era||'')+'" oninput="setData(\'era\',this.value)"></div><div class="field"><label>Lieu</label><input value="'+esc(d.place||'')+'" oninput="setData(\'place\',this.value)"></div><div class="field"><label>Thème</label><input value="'+esc(d.theme||'')+'" oninput="setData(\'theme\',this.value)"></div></div>'+mystArea('Prémisse / idée de départ','premise',d.premise,false)+mystArea('Vrai meurtrier','murderer',d.murderer,lock)+mystArea('Mobile','motive',d.motive,lock)+mystArea('Méthode','method',d.method,lock)+mystArea('Chronologie','timeline',d.timeline,lock)+mystArea('Secrets','secrets',d.secrets,lock)+mystArea('Relations','relationships',d.relationships,lock)+mystArea('Vrais indices','trueClues',d.trueClues,lock)+mystArea('Fausses pistes','redHerrings',d.redHerrings,lock)+mystArea('Solution complète','solution',d.solution,lock)+'<div class="tools-line"><button class="btn primary" onclick="generateMysteryBible()">🧠 Créer / compléter la Bible</button><button class="btn gold" onclick="controlMystery()">🔎 NyXia Contrôle du jeu</button><button class="btn" onclick="mysteryDeliverable(\'master\')">Dossier Maître de jeu</button><button class="btn" onclick="mysteryDeliverable(\'players\')">Dossiers joueurs</button><button class="btn" onclick="mysteryDeliverable(\'clues\')">Indices & faux documents</button><button class="btn" onclick="mysteryDeliverable(\'invite\')">Invitations</button><button class="btn" onclick="createMysteryVariant()">Créer une variante</button></div><div id="local-checks" style="margin-top:12px">'+localMysteryChecks()+'</div></div>'+aiPanel()+'</div>'}
+  function mystArea(label,name,val,lock){return '<div class="field"><label>'+label+'</label><textarea '+(lock?'readonly class="locked"':'')+' oninput="setData(\''+name+'\',this.value)">'+esc(val||'')+'</textarea></div>'}
+  function toggleBibleLock(v){setData('locked',v);renderMystery()}
+  function localMysteryChecks(){var d=currentProject.data||{},items=[['Meurtrier',d.murderer],['Mobile',d.motive],['Méthode',d.method],['Chronologie',d.timeline],['Vrais indices',d.trueClues],['Solution',d.solution],['Fausses pistes',d.redHerrings],['Secrets',d.secrets]];return '<div class="checks">'+items.map(function(x){var ok=String(x[1]||'').trim().length>8;return '<div class="check '+(ok?'ok':'bad')+'">'+(ok?'✓ ':'⚠ ')+x[0]+'</div>'}).join('')+'</div>'}
+  function mysteryContext(){var d=currentProject.data||{};return JSON.stringify({title:currentProject.title,playerCount:d.playerCount,duration:d.duration,era:d.era,place:d.place,theme:d.theme,difficulty:d.difficulty,premise:d.premise,murderer:d.murderer,motive:d.motive,method:d.method,timeline:d.timeline,secrets:d.secrets,relationships:d.relationships,trueClues:d.trueClues,redHerrings:d.redHerrings,solution:d.solution},null,2)}
+  async function generateMysteryBible(){var d=currentProject.data||{};if(d.locked){alert('La Bible est verrouillée. Déverrouille-la pour appliquer une nouvelle proposition.');return}var system='Tu es concepteur senior de Meurtre & Mystère dans NyXiaLabo. Le jeu doit être réellement résoluble, cohérent et jouable. Tu dois répondre uniquement avec un objet JSON valide, sans markdown, contenant exactement: murderer, motive, method, timeline, secrets, relationships, trueClues, redHerrings, solution. Les champs peuvent contenir du texte structuré.';await runAI(system,'Complète cette Bible Maîtresse à partir des informations existantes. Ne détruis pas une information déjà précise : améliore et complète.\n\n'+mysteryContext(),'__mystery_json__')}
+  async function controlMystery(){var local=localMysteryChecks().replace(/<[^>]+>/g,' ');await runAI('Tu es NyXia Contrôle du jeu. Tu audites un Meurtre & Mystère avec une exigence stricte. Vérifie: 1) crime réellement résoluble, 2) tous les indices nécessaires existent, 3) contradictions involontaires, 4) faux indices ne rendent pas la solution impossible, 5) séparation des connaissances joueurs, 6) chaque joueur a assez à faire. Donne PASS / RISQUE / ÉCHEC pour chaque point, explique pourquoi et donne les corrections minimales sans changer les faits maîtres.','BIBLE MAÎTRESSE:\n'+mysteryContext()+'\n\nContrôle local préliminaire: '+local,'')}
+  async function mysteryDeliverable(type){var task={master:'Crée le dossier complet du Maître de jeu: préparation, déroulé, chronologie, solution, indices et déclencheurs.',players:'Crée des dossiers joueurs séparés. Pour chaque joueur: identité, objectifs, secrets connus, relations, ce qu’il ignore, actions possibles. Aucun joueur ne doit recevoir une information qu’il ne devrait pas connaître.',clues:'Crée la liste des cartes d’indices, lettres et faux documents imprimables avec contenu exact, moment de remise et fonction narrative.',invite:'Crée l’invitation de l’événement, le texte d’ambiance et les informations pratiques sans révéler la solution.'}[type];await runAI('Tu es l’atelier de production Jeux & Expériences. Tu respectes intégralement la Bible Maîtresse verrouillée. Tu ne changes ni meurtrier, ni mobile, ni méthode, ni chronologie, ni solution.','BIBLE MAÎTRESSE:\n'+mysteryContext()+'\n\nTÂCHE:\n'+task,'deliverable:'+type)}
+  async function createMysteryVariant(){var players=prompt('Nombre de joueurs pour la variante :',String(currentProject.data.playerCount||8));if(!players)return;var duration=prompt('Durée :',currentProject.data.duration||'2 h 30')||currentProject.data.duration;var era=prompt('Époque :',currentProject.data.era||'Contemporain')||currentProject.data.era;var place=prompt('Lieu :',currentProject.data.place||'')||currentProject.data.place;try{var dup=await api('/api/atelier/projects/'+currentProject.id+'/duplicate',{method:'POST',body:JSON.stringify({title:currentProject.title+' — variante '+players+' joueurs',dataPatch:{playerCount:Number(players),duration:duration,era:era,place:place,locked:false}})});currentProject=dup.project;await reloadIndex();renderMystery();toast('Variante créée — Bible déverrouillée pour adaptation')}catch(e){alert(e.message)}}
+
+  function renderVisual(){var cats=['image','banque-gratuite'];var list=tools.filter(function(t){return cats.indexOf(t.category)>=0||t.kind==='image'||t.kind==='image-async'});document.getElementById('view-visual').innerHTML='<div class="hero"><div class="badge">RÉUTILISE L’EXISTANT</div><h3>Création visuelle</h3><p>Pas de second moteur : couvertures, personnages, scènes, cartes, faux documents et matériel promo passent par les outils déjà présents dans le Labo.</p><div class="card-actions"><button class="btn primary" onclick="location.href=\'/dashboard.html\'">Ouvrir le Labo complet</button></div></div><div class="section-title"><div><h3>Outils visuels détectés</h3></div></div><div class="tool-list">'+list.map(toolPill).join('')+'</div>'}
+  function renderVideo(){var list=tools.filter(function(t){return t.category==='video'||String(t.kind||'').indexOf('video')>=0});document.getElementById('view-video').innerHTML='<div class="hero"><div class="badge">BANDES-ANNONCES · TEASERS · SCÈNES</div><h3>Vidéo</h3><p>Les moteurs vidéo du Labo restent la source unique. L’Atelier les utilise pour les livres, les jeux et les campagnes sans dupliquer leur configuration.</p><div class="card-actions"><button class="btn primary" onclick="location.href=\'/dashboard.html\'">Ouvrir les outils vidéo</button><button class="btn" onclick="location.href=\'/wan-video.html\'">Wan vidéo</button></div></div><div class="section-title"><div><h3>Outils vidéo détectés</h3></div></div><div class="tool-list">'+list.map(toolPill).join('')+'</div>'}
+  function renderModels(){var list=tools.filter(function(t){return t.kind==='custom-api'||['conversation','utilites','transcription','banque-gratuite'].indexOf(t.category)>=0});document.getElementById('view-models').innerHTML='<div class="hero"><div class="badge">BAC À SABLE DE DIANE</div><h3>Modèles & API</h3><p>Tester de nouveaux modèles, comparer les fournisseurs et conserver l’ajout d’API personnalisées par cURL dans le Labo existant.</p><div class="card-actions"><button class="btn primary" onclick="location.href=\'/dashboard.html\'">Ouvrir Modèles & API</button></div></div><div class="section-title"><div><h3>Outils utiles détectés</h3></div></div><div class="tool-list">'+list.map(toolPill).join('')+'</div>'}
+  function toolPill(t){return '<div class="tool-pill">'+esc((t.icon||'⚙️')+' '+t.name)+'<div class="tiny">'+esc(t.category||t.kind||'')+'</div></div>'}
+
+  async function runAI(system,prompt,target){
+    var sel=document.getElementById('ai-model'),tool=aiTools.find(function(t){return t.id===(sel?sel.value:lastAI.toolId)})||aiTools[0];if(!tool){alert('Aucun modèle de chat disponible.');return}
+    lastAI={system:system,prompt:prompt,target:target||'',toolId:tool.id,text:''};renderAIResult('… production en cours …',true)
+    try{var d=await api('/api/chat',{method:'POST',body:JSON.stringify({providerId:tool.providerId,model:tool.model,system_prompt:(tool.system_prompt?tool.system_prompt+'\n\n':'')+system,max_tokens:Math.max(Number(tool.max_tokens)||2500,5000),temperature:(tool.temperature == null ? 0.7 : tool.temperature),messages:[{role:'user',content:prompt}]})});lastAI.text=d.text||'(réponse vide)';renderAIResult(lastAI.text,false)}catch(e){lastAI.text='⚠ '+e.message;renderAIResult(lastAI.text,false)}
+  }
+  function renderAIResult(text,busy){var box=document.getElementById('ai-result');if(!box)return;box.className='result';box.textContent=text;var actions=document.getElementById('ai-actions');if(!actions)return;actions.innerHTML=busy?'':'<div class="result-actions"><button onclick="speakAI()">🔊 Écouter</button><button onclick="copyAI()">📋 Copier</button><button onclick="retryAI()">↺ Réessayer</button><button onclick="pdfAI()">⬇ PDF</button></div>'+applyBar()}
+  function applyBar(){if(!lastAI.target)return '';if(lastAI.target==='__mystery_json__')return '<div class="applybar"><button class="btn gold" onclick="applyMysteryProposal()">Appliquer cette Bible proposée</button></div>';if(lastAI.target.indexOf('deliverable:')===0)return '<div class="applybar"><button class="btn gold" onclick="saveDeliverable(\''+lastAI.target.split(':')[1]+'\')">Conserver dans le projet</button></div>';return '<div class="applybar"><span class="tiny">Aucune modification automatique.</span><button class="btn gold" onclick="applyAITo(\''+lastAI.target+'\')">Utiliser cette proposition</button></div>'}
+  function speakAI(){speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(lastAI.text);u.lang='fr-FR';u.rate=.95;speechSynthesis.speak(u)}
+  async function copyAI(){await navigator.clipboard.writeText(lastAI.text);toast('Copié')}
+  function retryAI(){if(lastAI.prompt)runAI(lastAI.system,lastAI.prompt,lastAI.target)}
+  function pdfAI(){if(!window.jspdf)return;var doc=new window.jspdf.jsPDF(),y=20,lines=doc.splitTextToSize(lastAI.text,175);doc.setFontSize(15);doc.text(currentProject?currentProject.title:'NyXiaLabo',18,y);y+=10;doc.setFontSize(11);lines.forEach(function(l){if(y>280){doc.addPage();y=20}doc.text(l,18,y);y+=6});doc.save(safeName(currentProject?currentProject.title:'nyxialabo')+'-'+Date.now()+'.pdf')}
+  function applyAITo(field){if(!currentProject||!field)return;if(!confirm('Remplacer le contenu du champ « '+field+' » par cette proposition ?'))return;setData(field,lastAI.text);if(currentView==='ghost')renderGhost();toast('Proposition appliquée')}
+  function parseJsonLoose(txt){var t=String(txt||'').trim().replace(/^```json\s*/i,'').replace(/```$/,'').trim();return JSON.parse(t)}
+  function applyMysteryProposal(){try{var obj=parseJsonLoose(lastAI.text),keys=['murderer','motive','method','timeline','secrets','relationships','trueClues','redHerrings','solution'];keys.forEach(function(k){if(obj[k]!=null)currentProject.data[k]=String(obj[k])});markDirty();renderMystery();toast('Bible appliquée — tu peux maintenant la verrouiller')}catch(e){alert('La réponse n’est pas un JSON exploitable. Copie-la ou réessaie avec le bouton ↺.') }}
+  function saveDeliverable(type){currentProject.data.deliverables=currentProject.data.deliverables||{};currentProject.data.deliverables[type]=lastAI.text;markDirty();toast('Livrable conservé dans le projet')}
+
+  window.addEventListener('beforeunload',function(){audioUrls.forEach(function(u){try{URL.revokeObjectURL(u)}catch(e){}})})
+  boot()
+</script>
+</body>
+</html>
