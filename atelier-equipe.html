@@ -279,10 +279,13 @@
     var job=cartoJob||mapSaved();if(!job||!job.files||!job.files[kind])return
     try{var f=job.files[kind],r=await fetch('/api/atelier/cartography'+f.path,{headers:h()});if(!r.ok)throw new Error('Téléchargement impossible');var b=await r.blob(),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=f.name||('carte.'+kind);document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},2000)}catch(e){alert(e.message)}
   }
-  function openCartoEditor(){
-    var job=cartoJob||mapSaved(),url=job&&job.editorUrl?job.editorUrl:'https://azgaar.github.io/Fantasy-Map-Generator/'
-    if(!job){var seed=(document.getElementById('map-seed')||{}).value||'';if(seed)url+='?seed='+encodeURIComponent(seed)+'&options=default'}
-    window.open(url,'_blank','noopener')
+  async function openCartoEditor(){
+    var job=cartoJob||mapSaved(),url=job&&job.editorUrl?job.editorUrl:'/cartographie/azgaar/'
+    if(!job){var seed=(document.getElementById('map-seed')||{}).value||'';if(seed)url+=(url.indexOf('?')>=0?'&':'?')+'seed='+encodeURIComponent(seed)+'&options=default'}
+    try{
+      await api('/api/atelier/cartography/editor-session',{method:'POST'})
+      window.open(url,'_blank','noopener')
+    }catch(err){toast('Impossible d’ouvrir l’éditeur Azgaar : '+(err.message||err),'error')}
   }
   function toggleMapLock(v){
     if(!currentProject){toast('Choisis un projet pour verrouiller sa carte');return}
