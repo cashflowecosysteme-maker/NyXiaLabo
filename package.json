@@ -2,10 +2,14 @@
   "name": "nyxialabo",
   "private": true,
   "type": "module",
+  "scripts": {
+    "build:azgaar": "node scripts/build-azgaar.mjs",
+    "deploy": "wrangler deploy"
+  },
   "dependencies": {
-    "@cloudflare/puppeteer": "^1.1.0"
+    "@cloudflare/puppeteer": "1.4.0"
   },
   "devDependencies": {
-    "wrangler": "^4.0.0"
+    "wrangler": "4.132.0"
   }
 }
