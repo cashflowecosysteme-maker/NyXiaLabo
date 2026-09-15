@@ -174,7 +174,7 @@
   function chooseGame(id){chooseProject('nyxia-game',id,renderGame)}
 
   async function newProject(kind){
-    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',packageNotes:'',deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
+    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
     var title=prompt('Titre du projet :','Nouveau '+kindLabel(kind))||('Nouveau '+kindLabel(kind))
     try{var d=await api('/api/atelier/projects',{method:'POST',body:JSON.stringify({kind:kind,title:title,data:defaults[kind]||{}})}); currentProject=d.project; await reloadIndex(); showView(({ghostwriting:'ghost',audiobook:'audio','nyxia-game':'game',mystery:'mystery'})[kind]||'home'); toast('Projet créé') }catch(e){alert(e.message)}
   }
@@ -270,7 +270,43 @@
   async function setGameLivePlayerTeam(playerId,team){var code=currentProject.data.liveSessionCode;try{var r=await api('/api/atelier/game/live/'+code,{method:'PUT',body:JSON.stringify({playerTeam:{playerId:playerId,team:team}})});gameLiveHostState=r.session;renderGameLiveHost()}catch(e){alert(e.message)}}
   async function endGameLiveSession(){if(!confirm('Terminer cette session de répétition ?'))return;var code=currentProject.data.liveSessionCode;try{await api('/api/atelier/game/live/'+code,{method:'DELETE'});currentProject.data.liveSessionCode='';markDirty();await saveCurrent();gameLiveHostState=null;renderGame();toast('Session terminée')}catch(e){alert(e.message)}}
   function gameControl(d){return '<h4>🧠 NyXia Contrôle</h4><div class="game-note">Contrôle éditorial : cohérence, trous de logique, rythme, difficulté, informations disponibles, matériel manquant, expérience 16+ et possibilité réelle de terminer le jeu.</div>'+gameArea('Rapport de contrôle','controlReport',d.controlReport,18)+'<div class="tools-line"><button class="btn gold" onclick="gameAI(\'control\')">🔎 Auditer le jeu complet</button><button class="btn" onclick="gameAI(\'playtest\')">🎲 Simuler un playtest</button></div>'}
-  function gamePackage(d){var map=d.cartography;return '<h4>📦 NyXia Game Package</h4><div class="game-note">Le package est la version transportable du projet : données de jeu + matériel texte + métadonnées + carte Azgaar si elle est déjà reliée. Les gros médias pourront ensuite être joints depuis R2 dans les versions suivantes.</div>'+gameArea('Notes de publication / version / collection','packageNotes',d.packageNotes,6)+'<div class="game-file-list"><b>Contenu actuel :</b><br>manifest.json · project.json · <b>runtime/npc-ai-config.json</b> · <b>runtime/live-config.json</b> · bible.md · story.md · characters.md · <b>pnj-ia.md</b> · rules.md · materials.md · media.md · live.md · control.md'+(map?'<br>🗺️ Carte Azgaar liée : oui':'<br>🗺️ Carte Azgaar liée : non')+'</div><div class="tools-line" style="margin-top:14px"><button class="btn primary" onclick="packageNyxiaGame()">📦 Générer .nyxgame</button><button class="btn" onclick="exportGamePDF()">⬇ Dossier PDF</button><button class="btn gold" onclick="gameAI(\'store\')">🛍️ Préparer la fiche Boutique</button></div>'}
+  function gamePackage(d){
+    var map=d.cartography
+    var access=d.testAccessKey?'<div class="game-note" style="margin-top:12px"><b>Accès client test créé</b><br><span class="live-code" style="font-size:18px">'+esc(d.testAccessKey)+'</span><br><span class="tiny">'+esc(d.testLibraryUrl||location.origin+'/game-library.html')+'</span><div class="tools-line" style="margin-top:8px"><button class="btn" onclick="copyText(\''+esc(d.testAccessKey).replace(/'/g,"\'")+'\')">📋 Copier la clé</button><button class="btn gold" onclick="window.open(\''+esc(d.testLibraryUrl||location.origin+'/game-library.html').replace(/'/g,"\'")+'\',\'_blank\')">🎮 Ouvrir la bibliothèque client</button></div></div>':''
+    return '<h4>📦 NyXia Game Package</h4><div class="game-note">Le package maître reste interne. Le client, lui, reçoit son jeu dans <b>Ma bibliothèque NyXia Game</b> et peut créer ses propres soirées sans entrer dans le Labo.</div>'+
+      gameArea('Notes de publication / fiche Boutique','packageNotes',d.packageNotes,6)+
+      '<div class="row three"><div class="field"><label>Sous-titre client</label><input value="'+esc(d.packageSubtitle||'')+'" oninput="setData(\'packageSubtitle\',this.value)"></div><div class="field"><label>Version</label><input value="'+esc(d.productVersion||'1.0')+'" oninput="setData(\'productVersion\',this.value)"></div><div class="field"><label>Image couverture URL</label><input value="'+esc(d.coverUrl||'')+'" oninput="setData(\'coverUrl\',this.value)"></div></div>'+
+      '<div class="game-file-list"><b>Package maître :</b><br>manifest.json · project.json · <b>runtime/npc-ai-config.json</b> · <b>runtime/live-config.json</b> · bible.md · story.md · characters.md · pnj-ia.md · rules.md · materials.md · media.md · live.md · control.md'+(map?'<br>🗺️ Carte Azgaar liée : oui':'<br>🗺️ Carte Azgaar liée : non')+'</div>'+
+      '<div class="tools-line" style="margin-top:14px"><button class="btn primary" onclick="packageNyxiaGame()">📦 Générer .nyxgame maître</button><button class="btn" onclick="exportGamePDF()">⬇ Dossier PDF</button><button class="btn gold" onclick="gameAI(\'store\')">🛍️ Préparer la fiche Boutique</button></div>'+
+      '<div class="divider"></div><div class="game-kicker">Test du vrai parcours client</div><div class="game-note">Publie une copie runtime du jeu dans la bibliothèque, puis crée une clé d’accès. Tu pourras tester exactement ce que verra un acheteur : <b>Bibliothèque → Organiser une soirée → Console Hôte → Joueurs</b>.</div>'+
+      '<div class="row"><div class="field"><label>Courriel client test (optionnel)</label><input value="'+esc(d.clientTestEmail||'')+'" oninput="setData(\'clientTestEmail\',this.value)"></div><div class="field"><label>Nombre maximum de soirées (0 = illimité)</label><input type="number" min="0" value="'+(Number(d.clientSessionLimit)||0)+'" oninput="setData(\'clientSessionLimit\',Number(this.value)||0)"></div></div>'+
+      '<div class="tools-line"><button class="btn primary" onclick="publishGameClient()">🚀 Publier la version client test</button><button class="btn gold" onclick="createGameClientAccess()">🔑 Créer un accès acheteur test</button><button class="btn" onclick="window.open(\'/game-library.html\',\'_blank\')">🎮 Voir NyXia Game client</button></div>'+
+      (d.publishedProductId?'<div class="tiny" style="margin-top:8px">Produit runtime publié : '+esc(d.publishedProductId)+'</div>':'')+access
+  }
+
+  async function publishGameClient(){
+    if(!currentProject)return
+    await saveCurrent()
+    var d=currentProject.data||{}
+    try{
+      var r=await api('/api/atelier/game/publish',{method:'POST',body:JSON.stringify({projectId:currentProject.id,productId:d.publishedProductId||currentProject.id,title:currentProject.title,subtitle:d.packageSubtitle||'',description:d.packageNotes||d.idea||'',coverUrl:d.coverUrl||'',version:d.productVersion||'1.0',teams:d.liveTeams})})
+      currentProject.data.publishedProductId=r.product.id
+      markDirty();await saveCurrent();renderGame();toast('Version client publiée ✓')
+      return r.product
+    }catch(e){alert('Publication impossible : '+e.message);throw e}
+  }
+
+  async function createGameClientAccess(){
+    if(!currentProject)return
+    var d=currentProject.data||{}
+    if(!d.publishedProductId){try{await publishGameClient()}catch(e){return};d=currentProject.data||{}}
+    try{
+      var r=await api('/api/atelier/game/license',{method:'POST',body:JSON.stringify({productId:d.publishedProductId,email:d.clientTestEmail||'',maxSessionsPerProduct:Number(d.clientSessionLimit)||0,label:'Test '+currentProject.title})})
+      currentProject.data.testAccessKey=r.accessKey
+      currentProject.data.testLibraryUrl=r.libraryUrl
+      markDirty();await saveCurrent();renderGame();toast('Accès acheteur test créé ✓')
+    }catch(e){alert('Accès client impossible : '+e.message)}
+  }
 
   function gameContext(){
     var d=currentProject.data||{}
