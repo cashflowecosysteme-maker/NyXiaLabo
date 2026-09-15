@@ -112,7 +112,7 @@
       var data=await Promise.all([api('/api/atelier/health'),api('/api/atelier/projects'),api('/api/tools')])
       var health=data[0]; allProjects=data[1].projects||[]; tools=data[2].tools||[]
       aiTools=tools.filter(function(t){ return t.providerId && t.model && (!t.kind || t.kind==='chat') })
-      cartoReady=!!health.cartography; var he=document.getElementById('health'); he.textContent='● Atelier connecté'+(health.googleTts?' · TTS prêt':' · TTS à configurer')+(cartoReady?' · Cartographie prête':' · Cartographie à déployer'); he.className='status '+(health.googleTts&&cartoReady?'ok':'warn')
+      cartoReady=!!health.cartography; var he=document.getElementById('health'); he.textContent='● Atelier connecté'+(health.googleTts?' · TTS prêt':' · TTS à configurer')+(cartoReady?' · Cartographie prête':' · Cartographie à configurer'); he.className='status '+(health.googleTts&&cartoReady?'ok':'warn')
       renderHome()
     }catch(e){ document.getElementById('health').textContent='⚠ '+e.message; document.getElementById('health').className='status warn'; renderHome() }
   }
@@ -255,12 +255,12 @@
     return {title:document.getElementById('map-title').value.trim()||'Carte NyXia',seed:document.getElementById('map-seed').value.trim(),width:Number(document.getElementById('map-width').value)||1600,height:Number(document.getElementById('map-height').value)||1000,preset:document.getElementById('map-preset').value,layers:layers,outputs:['map','json','svg','png'],projectId:currentProject?currentProject.id:'',projectKind:currentProject?currentProject.kind:''}
   }
   async function generateCartography(){
-    if(!cartoReady){alert('Le Worker NyXia Cartographie doit d’abord être déployé et lié au Labo.');return}
+    if(!cartoReady){alert('La Cartographie doit d’abord être activée dans le Worker NyXiaLabo (Browser + R2).');return}
     var btn=document.getElementById('map-generate');btn.disabled=true;btn.textContent='⏳ Azgaar construit le monde…';document.getElementById('map-result').innerHTML='<div class="result">Génération de la géographie, fleuves, biomes, États, routes et villes…</div>'
     try{
       var d=await api('/api/atelier/cartography/generate',{method:'POST',body:JSON.stringify(cartoPayload())});cartoJob=d.job
       if(currentProject){currentProject.data=currentProject.data||{};currentProject.data.cartography=Object.assign({},cartoJob,{locked:false});markDirty()}
-      renderMaps();toast('Carte Azgaar générée et conservée dans R2')
+      renderMaps();toast('Carte Azgaar générée dans NyXiaLabo et conservée dans R2')
     }catch(e){document.getElementById('map-result').innerHTML='<div class="result">⚠ '+esc(e.message)+'</div>';btn.disabled=false;btn.textContent='🗺️ Générer la carte'}
   }
   function cartoResultHtml(job){
@@ -280,7 +280,7 @@
     try{var f=job.files[kind],r=await fetch('/api/atelier/cartography'+f.path,{headers:h()});if(!r.ok)throw new Error('Téléchargement impossible');var b=await r.blob(),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=f.name||('carte.'+kind);document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},2000)}catch(e){alert(e.message)}
   }
   function openCartoEditor(){
-    var job=cartoJob||mapSaved(),url=job&&job.editorUrl?job.editorUrl:'https://maps.nyxia.top/'
+    var job=cartoJob||mapSaved(),url=job&&job.editorUrl?job.editorUrl:'https://azgaar.github.io/Fantasy-Map-Generator/'
     if(!job){var seed=(document.getElementById('map-seed')||{}).value||'';if(seed)url+='?seed='+encodeURIComponent(seed)+'&options=default'}
     window.open(url,'_blank','noopener')
   }
