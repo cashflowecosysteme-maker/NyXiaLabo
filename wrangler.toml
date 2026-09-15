@@ -1,6 +1,6 @@
 name = "nyxialabo"
 main = "labo-router.js"
-compatibility_date = "2026-07-01"
+compatibility_date = "2026-09-15"
 
 # Sert les fichiers statiques (login.html, dashboard.html, atelier-equipe.html, js/) via env.ASSETS.fetch().
 # Le routeur Atelier délègue toutes les routes existantes à _worker.js.
@@ -33,7 +33,15 @@ id = "75b93baac0974f8cb8d1f2089eceb4e6"
 # GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY et
 # GOOGLE_CLOUD_PROJECT_ID. Ne mets jamais ces valeurs dans ce fichier.
 
-# Moteur cartographique Azgaar (Worker séparé, non exposé publiquement).
-[[services]]
-binding = "CARTOGRAPHY"
-service = "nyxia-cartographie"
+
+# NyXia Cartographie — dans le MÊME Worker nyxialabo.
+[browser]
+binding = "BROWSER"
+
+[[r2_buckets]]
+binding = "MAPS"
+bucket_name = "nyxia-cartographie"
+
+# Optionnel : si un jour Azgaar est auto-hébergé DANS ce même dépôt,
+# définir AZGAAR_BASE_URL vers son chemin. Sans variable, le moteur utilise
+# le site officiel Azgaar comme source de génération.
