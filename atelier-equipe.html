@@ -36,6 +36,8 @@
     .checks{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.check{padding:10px;border-radius:11px;background:rgba(6,10,24,.4);border:1px solid var(--line);font-size:12px}.check.ok{border-color:rgba(53,214,154,.26);color:#9bf0d0}.check.bad{border-color:rgba(255,113,136,.26);color:#ffb4c1}.lockline{display:flex;align-items:center;gap:8px;padding:10px;border-radius:12px;background:rgba(244,197,106,.06);border:1px solid rgba(244,197,106,.2);color:#f5d890;font-size:12px}
     .tool-list{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.tool-pill{padding:11px;border:1px solid var(--line);border-radius:12px;background:rgba(6,10,24,.35);font-size:12px;color:var(--muted)}
     .toast{position:fixed;right:22px;bottom:22px;z-index:99;background:#111a38;color:#fff;border:1px solid var(--line);box-shadow:var(--shadow);padding:11px 14px;border-radius:12px;font-size:12px;opacity:0;transform:translateY(8px);pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:none}
+
+    .map-preview{margin-top:14px;border:1px solid var(--line);border-radius:16px;padding:10px;background:rgba(6,10,24,.48);min-height:180px;display:grid;place-items:center;overflow:auto}.map-preview img{max-width:100%;height:auto;border-radius:10px;display:block}.file-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}.file-btn{padding:10px;border:1px solid var(--line);border-radius:11px;background:rgba(123,92,255,.07);color:#fff;cursor:pointer;text-align:center;font-size:12px}.file-btn:hover{background:rgba(123,92,255,.16)}@media(max-width:850px){.file-grid{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:1050px){.grid{grid-template-columns:repeat(2,1fr)}.workspace{grid-template-columns:1fr}.shell{grid-template-columns:220px 1fr}.row.three{grid-template-columns:1fr 1fr}}
     @media(max-width:720px){.shell{display:block}aside{position:relative;width:100%;height:auto}.grid{grid-template-columns:1fr}.content{padding:16px}.topbar{padding:0 16px}.row,.row.three{grid-template-columns:1fr}.tool-list{grid-template-columns:1fr}}
   </style>
@@ -49,6 +51,7 @@
     <button class="nav-btn" data-view="ghost" onclick="showView('ghost')"><span class="ico">✍️</span>GhostWriting</button>
     <button class="nav-btn" data-view="audio" onclick="showView('audio')"><span class="ico">🎧</span>Studio Livre Audio</button>
     <button class="nav-btn" data-view="mystery" onclick="showView('mystery')"><span class="ico">🎲</span>Jeux & Expériences</button>
+    <button class="nav-btn" data-view="maps" onclick="showView('maps')"><span class="ico">🗺️</span>Cartographie & Mondes</button>
     <button class="nav-btn" data-view="visual" onclick="showView('visual')"><span class="ico">🎨</span>Création visuelle</button>
     <button class="nav-btn" data-view="video" onclick="showView('video')"><span class="ico">🎬</span>Vidéo</button>
     <button class="nav-btn" data-view="models" onclick="showView('models')"><span class="ico">🧪</span>Modèles & API</button>
@@ -62,6 +65,7 @@
       <section id="view-ghost" class="view hidden"></section>
       <section id="view-audio" class="view hidden"></section>
       <section id="view-mystery" class="view hidden"></section>
+      <section id="view-maps" class="view hidden"></section>
       <section id="view-visual" class="view hidden"></section>
       <section id="view-video" class="view hidden"></section>
       <section id="view-models" class="view hidden"></section>
@@ -82,6 +86,9 @@
   var audioUrls = []
   var selectedChapter = 0
   var pendingMysteryProposal = null
+  var cartoJob = null
+  var cartoPreviewUrl = ''
+  var cartoReady = false
 
   function h(){ return { 'Content-Type':'application/json', 'Authorization':'Bearer '+token } }
   function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML }
@@ -105,7 +112,7 @@
       var data=await Promise.all([api('/api/atelier/health'),api('/api/atelier/projects'),api('/api/tools')])
       var health=data[0]; allProjects=data[1].projects||[]; tools=data[2].tools||[]
       aiTools=tools.filter(function(t){ return t.providerId && t.model && (!t.kind || t.kind==='chat') })
-      var he=document.getElementById('health'); he.textContent='● Atelier connecté'+(health.googleTts?' · Google TTS prêt':' · TTS Google à configurer'); he.className='status '+(health.googleTts?'ok':'warn')
+      cartoReady=!!health.cartography; var he=document.getElementById('health'); he.textContent='● Atelier connecté'+(health.googleTts?' · TTS prêt':' · TTS à configurer')+(cartoReady?' · Cartographie prête':' · Cartographie à déployer'); he.className='status '+(health.googleTts&&cartoReady?'ok':'warn')
       renderHome()
     }catch(e){ document.getElementById('health').textContent='⚠ '+e.message; document.getElementById('health').className='status warn'; renderHome() }
   }
@@ -115,8 +122,8 @@
     document.querySelectorAll('.view').forEach(function(x){x.classList.add('hidden')})
     document.getElementById('view-'+v).classList.remove('hidden')
     document.querySelectorAll('.nav-btn[data-view]').forEach(function(b){b.classList.toggle('active',b.dataset.view===v)})
-    document.getElementById('top-title').textContent=({home:'Atelier Équipe',ghost:'Atelier GhostWriting',audio:'Studio Livre Audio',mystery:'Atelier Jeux & Expériences',visual:'Création visuelle',video:'Vidéo',models:'Modèles & API'})[v]
-    if(v==='home')renderHome(); if(v==='ghost')renderGhost(); if(v==='audio')renderAudio(); if(v==='mystery')renderMystery(); if(v==='visual')renderVisual(); if(v==='video')renderVideo(); if(v==='models')renderModels()
+    document.getElementById('top-title').textContent=({home:'Atelier Équipe',ghost:'Atelier GhostWriting',audio:'Studio Livre Audio',mystery:'Atelier Jeux & Expériences',maps:'Cartographie & Mondes',visual:'Création visuelle',video:'Vidéo',models:'Modèles & API'})[v]
+    if(v==='home')renderHome(); if(v==='ghost')renderGhost(); if(v==='audio')renderAudio(); if(v==='mystery')renderMystery(); if(v==='maps')renderMaps(); if(v==='visual')renderVisual(); if(v==='video')renderVideo(); if(v==='models')renderModels()
   }
 
   function renderHome(){
@@ -127,6 +134,7 @@
         homeCard('✍️','GhostWriting','Idée → synopsis → plan → chapitres → cohérence. Les faits verrouillés sont injectés dans chaque demande IA.','ghost','Nouveau livre')+
         homeCard('🎧','Studio Livre Audio','Aperçu gratuit dans le navigateur, puis production réelle avec Google Cloud Text-to-Speech.','audio','Nouveau livre audio')+
         homeCard('🎲','Jeux & Expériences','Bible Maîtresse, Meurtre & Mystère, contrôle de solvabilité, dossiers et variantes.','mystery','Nouveau jeu')+
+        homeCard('🗺️','Cartographie & Mondes','Azgaar devient la vérité géographique : seed verrouillée, villes, États, rivières, routes et exports .map / JSON / SVG / PNG.','maps','Créer une carte')+
         homeCard('🎨','Création visuelle','Retrouve les moteurs déjà présents dans le Labo pour couvertures, personnages et scènes.','visual','Ouvrir')+
         homeCard('🎬','Vidéo','Bandes-annonces, teasers, scènes courtes et messages fictifs en réutilisant les outils existants.','video','Ouvrir')+
         homeCard('🧪','Modèles & API','Comparer les modèles, outils API personnalisés, banques et fournisseurs avant intégration portail.','models','Ouvrir')+
@@ -203,7 +211,7 @@
   function safeName(s){return String(s||'audio').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'audio'}
 
   function renderMystery(){var host=document.getElementById('view-mystery');var ok=currentProject&&currentProject.kind==='mystery';host.innerHTML=projectSelector('mystery','chooseMystery')+(ok?mysteryWorkspace():'<div class="hero"><div class="badge">PRIORITÉ JEUX & EXPÉRIENCES</div><h3>Meurtre & Mystère</h3><p>Le moteur repose sur une Bible Maîtresse verrouillée : meurtrier, mobile, méthode, chronologie, secrets, relations, vrais indices, fausses pistes et solution.</p></div>')}
-  function mysteryWorkspace(){var d=currentProject.data||{},lock=!!d.locked;return '<div class="workspace"><div class="panel"><h4>📕 Bible Maîtresse</h4><div class="lockline"><input type="checkbox" '+(lock?'checked':'')+' onchange="toggleBibleLock(this.checked)"> <b>Verrouiller les faits maîtres</b> — l’IA peut les analyser, jamais les modifier silencieusement.</div><div class="row" style="margin-top:12px"><div class="field"><label>Titre</label><input value="'+esc(currentProject.title)+'" oninput="setRoot(\'title\',this.value)"></div><div class="field"><label>Client / événement</label><input value="'+esc(currentProject.client||'')+'" oninput="setRoot(\'client\',this.value)"></div></div><div class="row three"><div class="field"><label>Joueurs</label><input type="number" value="'+(d.playerCount||8)+'" oninput="setData(\'playerCount\',Number(this.value))"></div><div class="field"><label>Durée</label><input value="'+esc(d.duration||'')+'" oninput="setData(\'duration\',this.value)"></div><div class="field"><label>Difficulté</label><select onchange="setData(\'difficulty\',this.value)">'+['Facile','Intermédiaire','Difficile','Expert'].map(function(x){return '<option'+(d.difficulty===x?' selected':'')+'>'+x+'</option>'}).join('')+'</select></div></div><div class="row three"><div class="field"><label>Époque</label><input value="'+esc(d.era||'')+'" oninput="setData(\'era\',this.value)"></div><div class="field"><label>Lieu</label><input value="'+esc(d.place||'')+'" oninput="setData(\'place\',this.value)"></div><div class="field"><label>Thème</label><input value="'+esc(d.theme||'')+'" oninput="setData(\'theme\',this.value)"></div></div>'+mystArea('Prémisse / idée de départ','premise',d.premise,false)+mystArea('Vrai meurtrier','murderer',d.murderer,lock)+mystArea('Mobile','motive',d.motive,lock)+mystArea('Méthode','method',d.method,lock)+mystArea('Chronologie','timeline',d.timeline,lock)+mystArea('Secrets','secrets',d.secrets,lock)+mystArea('Relations','relationships',d.relationships,lock)+mystArea('Vrais indices','trueClues',d.trueClues,lock)+mystArea('Fausses pistes','redHerrings',d.redHerrings,lock)+mystArea('Solution complète','solution',d.solution,lock)+'<div class="tools-line"><button class="btn primary" onclick="generateMysteryBible()">🧠 Créer / compléter la Bible</button><button class="btn gold" onclick="controlMystery()">🔎 NyXia Contrôle du jeu</button><button class="btn" onclick="mysteryDeliverable(\'master\')">Dossier Maître de jeu</button><button class="btn" onclick="mysteryDeliverable(\'players\')">Dossiers joueurs</button><button class="btn" onclick="mysteryDeliverable(\'clues\')">Indices & faux documents</button><button class="btn" onclick="mysteryDeliverable(\'invite\')">Invitations</button><button class="btn" onclick="createMysteryVariant()">Créer une variante</button></div><div id="local-checks" style="margin-top:12px">'+localMysteryChecks()+'</div></div>'+aiPanel()+'</div>'}
+  function mysteryWorkspace(){var d=currentProject.data||{},lock=!!d.locked;return '<div class="workspace"><div class="panel"><h4>📕 Bible Maîtresse</h4><div class="lockline"><input type="checkbox" '+(lock?'checked':'')+' onchange="toggleBibleLock(this.checked)"> <b>Verrouiller les faits maîtres</b> — l’IA peut les analyser, jamais les modifier silencieusement.</div><div class="row" style="margin-top:12px"><div class="field"><label>Titre</label><input value="'+esc(currentProject.title)+'" oninput="setRoot(\'title\',this.value)"></div><div class="field"><label>Client / événement</label><input value="'+esc(currentProject.client||'')+'" oninput="setRoot(\'client\',this.value)"></div></div><div class="row three"><div class="field"><label>Joueurs</label><input type="number" value="'+(d.playerCount||8)+'" oninput="setData(\'playerCount\',Number(this.value))"></div><div class="field"><label>Durée</label><input value="'+esc(d.duration||'')+'" oninput="setData(\'duration\',this.value)"></div><div class="field"><label>Difficulté</label><select onchange="setData(\'difficulty\',this.value)">'+['Facile','Intermédiaire','Difficile','Expert'].map(function(x){return '<option'+(d.difficulty===x?' selected':'')+'>'+x+'</option>'}).join('')+'</select></div></div><div class="row three"><div class="field"><label>Époque</label><input value="'+esc(d.era||'')+'" oninput="setData(\'era\',this.value)"></div><div class="field"><label>Lieu</label><input value="'+esc(d.place||'')+'" oninput="setData(\'place\',this.value)"></div><div class="field"><label>Thème</label><input value="'+esc(d.theme||'')+'" oninput="setData(\'theme\',this.value)"></div></div>'+mystArea('Prémisse / idée de départ','premise',d.premise,false)+mystArea('Vrai meurtrier','murderer',d.murderer,lock)+mystArea('Mobile','motive',d.motive,lock)+mystArea('Méthode','method',d.method,lock)+mystArea('Chronologie','timeline',d.timeline,lock)+mystArea('Secrets','secrets',d.secrets,lock)+mystArea('Relations','relationships',d.relationships,lock)+mystArea('Vrais indices','trueClues',d.trueClues,lock)+mystArea('Fausses pistes','redHerrings',d.redHerrings,lock)+mystArea('Solution complète','solution',d.solution,lock)+'<div class="tools-line"><button class="btn primary" onclick="generateMysteryBible()">🧠 Créer / compléter la Bible</button><button class="btn gold" onclick="controlMystery()">🔎 NyXia Contrôle du jeu</button><button class="btn gold" onclick="showView(\'maps\')">🗺️ Cartographier ce jeu</button><button class="btn" onclick="mysteryDeliverable(\'master\')">Dossier Maître de jeu</button><button class="btn" onclick="mysteryDeliverable(\'players\')">Dossiers joueurs</button><button class="btn" onclick="mysteryDeliverable(\'clues\')">Indices & faux documents</button><button class="btn" onclick="mysteryDeliverable(\'invite\')">Invitations</button><button class="btn" onclick="createMysteryVariant()">Créer une variante</button></div><div id="local-checks" style="margin-top:12px">'+localMysteryChecks()+'</div></div>'+aiPanel()+'</div>'}
   function mystArea(label,name,val,lock){return '<div class="field"><label>'+label+'</label><textarea '+(lock?'readonly class="locked"':'')+' oninput="setData(\''+name+'\',this.value)">'+esc(val||'')+'</textarea></div>'}
   function toggleBibleLock(v){setData('locked',v);renderMystery()}
   function localMysteryChecks(){var d=currentProject.data||{},items=[['Meurtrier',d.murderer],['Mobile',d.motive],['Méthode',d.method],['Chronologie',d.timeline],['Vrais indices',d.trueClues],['Solution',d.solution],['Fausses pistes',d.redHerrings],['Secrets',d.secrets]];return '<div class="checks">'+items.map(function(x){var ok=String(x[1]||'').trim().length>8;return '<div class="check '+(ok?'ok':'bad')+'">'+(ok?'✓ ':'⚠ ')+x[0]+'</div>'}).join('')+'</div>'}
@@ -212,6 +220,75 @@
   async function controlMystery(){var local=localMysteryChecks().replace(/<[^>]+>/g,' ');await runAI('Tu es NyXia Contrôle du jeu. Tu audites un Meurtre & Mystère avec une exigence stricte. Vérifie: 1) crime réellement résoluble, 2) tous les indices nécessaires existent, 3) contradictions involontaires, 4) faux indices ne rendent pas la solution impossible, 5) séparation des connaissances joueurs, 6) chaque joueur a assez à faire. Donne PASS / RISQUE / ÉCHEC pour chaque point, explique pourquoi et donne les corrections minimales sans changer les faits maîtres.','BIBLE MAÎTRESSE:\n'+mysteryContext()+'\n\nContrôle local préliminaire: '+local,'')}
   async function mysteryDeliverable(type){var task={master:'Crée le dossier complet du Maître de jeu: préparation, déroulé, chronologie, solution, indices et déclencheurs.',players:'Crée des dossiers joueurs séparés. Pour chaque joueur: identité, objectifs, secrets connus, relations, ce qu’il ignore, actions possibles. Aucun joueur ne doit recevoir une information qu’il ne devrait pas connaître.',clues:'Crée la liste des cartes d’indices, lettres et faux documents imprimables avec contenu exact, moment de remise et fonction narrative.',invite:'Crée l’invitation de l’événement, le texte d’ambiance et les informations pratiques sans révéler la solution.'}[type];await runAI('Tu es l’atelier de production Jeux & Expériences. Tu respectes intégralement la Bible Maîtresse verrouillée. Tu ne changes ni meurtrier, ni mobile, ni méthode, ni chronologie, ni solution.','BIBLE MAÎTRESSE:\n'+mysteryContext()+'\n\nTÂCHE:\n'+task,'deliverable:'+type)}
   async function createMysteryVariant(){var players=prompt('Nombre de joueurs pour la variante :',String(currentProject.data.playerCount||8));if(!players)return;var duration=prompt('Durée :',currentProject.data.duration||'2 h 30')||currentProject.data.duration;var era=prompt('Époque :',currentProject.data.era||'Contemporain')||currentProject.data.era;var place=prompt('Lieu :',currentProject.data.place||'')||currentProject.data.place;try{var dup=await api('/api/atelier/projects/'+currentProject.id+'/duplicate',{method:'POST',body:JSON.stringify({title:currentProject.title+' — variante '+players+' joueurs',dataPatch:{playerCount:Number(players),duration:duration,era:era,place:place,locked:false}})});currentProject=dup.project;await reloadIndex();renderMystery();toast('Variante créée — Bible déverrouillée pour adaptation')}catch(e){alert(e.message)}}
+
+  function cartoProjectOptions(){
+    var eligible=allProjects.filter(function(p){return p.kind==='mystery'||p.kind==='ghostwriting'})
+    return '<option value="">— Aucun projet lié —</option>'+eligible.map(function(p){return '<option value="'+p.id+'"'+(currentProject&&currentProject.id===p.id?' selected':'')+'>'+kindIcon(p.kind)+' '+esc(p.title)+'</option>'}).join('')
+  }
+  async function chooseCartoProject(id){
+    if(!id){currentProject=null;renderMaps();return}
+    try{currentProject=(await api('/api/atelier/projects/'+id)).project;cartoJob=(currentProject.data||{}).cartography||null;renderMaps()}catch(e){alert(e.message)}
+  }
+  function mapSaved(){return currentProject&&currentProject.data&&currentProject.data.cartography?currentProject.data.cartography:null}
+  function renderMaps(){
+    var saved=mapSaved(); if(!cartoJob&&saved)cartoJob=saved
+    var layers=(saved&&saved.layers?saved.layers:['states','borders','lakes','rivers','routes','burgIcons','labels','scaleBar']).join(',')
+    var seed=saved&&saved.seed?saved.seed:''
+    var w=saved&&saved.width?saved.width:1600,h=saved&&saved.height?saved.height:1000
+    var locked=!!(saved&&saved.locked)
+    document.getElementById('view-maps').innerHTML=''+
+      '<div class="hero"><div class="badge">AZGAAR · VÉRITÉ GÉOGRAPHIQUE</div><h3>Cartographie & Mondes</h3><p>NyXia génère un monde structuré et reproductible, pas seulement une image. La seed, les dimensions, les couches et la version du moteur restent enregistrées avec le projet. Les exports servent ensuite aux romans, Meurtres & Mystères, jeux de rôle et expériences.</p></div>'+
+      '<div class="workspace" style="margin-top:18px"><div class="panel"><h4>🗺️ Générer avec Azgaar</h4>'+
+        '<div class="field"><label>Relier à un projet</label><select onchange="chooseCartoProject(this.value)">'+cartoProjectOptions()+'</select></div>'+
+        '<div class="row"><div class="field"><label>Titre de la carte</label><input id="map-title" value="'+esc(currentProject?currentProject.title:(saved&&saved.title)||'Carte NyXia')+'"></div><div class="field"><label>Seed</label><div style="display:flex;gap:7px"><input id="map-seed" value="'+esc(seed)+'" placeholder="vide = seed aléatoire" '+(locked?'disabled':'')+'><button class="btn" onclick="newMapSeed()" '+(locked?'disabled':'')+'>🎲</button></div></div></div>'+
+        '<div class="row three"><div class="field"><label>Largeur</label><input id="map-width" type="number" min="400" max="2400" value="'+w+'" '+(locked?'disabled':'')+'></div><div class="field"><label>Hauteur</label><input id="map-height" type="number" min="400" max="2400" value="'+h+'" '+(locked?'disabled':'')+'></div><div class="field"><label>Preset</label><select id="map-preset" '+(locked?'disabled':'')+'>'+['political','religions','heightmap','biomes','cultures'].map(function(x){return '<option value="'+x+'">'+x+'</option>'}).join('')+'</select></div></div>'+
+        '<div class="field"><label>Couches Azgaar (séparées par virgules)</label><input id="map-layers" value="'+esc(layers)+'" '+(locked?'disabled':'')+'></div>'+
+        '<div class="lockline"><input type="checkbox" id="map-lock" '+(locked?'checked':'')+' onchange="toggleMapLock(this.checked)"> <b>Verrouiller la carte du projet</b> — empêche de changer sa seed par accident.</div>'+
+        '<div class="tools-line" style="margin-top:14px"><button class="btn primary" id="map-generate" onclick="generateCartography()" '+(!cartoReady||locked?'disabled':'')+'>🗺️ Générer la carte</button><button class="btn" onclick="openCartoEditor()">✏️ Ouvrir dans Azgaar</button>'+(locked?'<button class="btn gold" onclick="toggleMapLock(false)">🔓 Déverrouiller pour variante</button>':'')+'</div>'+
+        '<p class="tiny" style="margin-top:10px">La version exacte `.map` est conservée dans R2. JSON = données du monde; SVG = vectoriel; PNG = prêt à imprimer / illustrer.</p>'+
+      '</div><div class="panel"><h4>📦 Résultat</h4><div id="map-result">'+cartoResultHtml(cartoJob)+'</div></div></div>'
+    if(cartoJob&&cartoJob.files&&cartoJob.files.png)loadCartoPreview(cartoJob).catch(function(){})
+  }
+  function newMapSeed(){var e=document.getElementById('map-seed');if(e)e.value=String(Math.floor(100000000+Math.random()*900000000))}
+  function cartoPayload(){
+    var layers=(document.getElementById('map-layers').value||'').split(',').map(function(x){return x.trim()}).filter(Boolean)
+    return {title:document.getElementById('map-title').value.trim()||'Carte NyXia',seed:document.getElementById('map-seed').value.trim(),width:Number(document.getElementById('map-width').value)||1600,height:Number(document.getElementById('map-height').value)||1000,preset:document.getElementById('map-preset').value,layers:layers,outputs:['map','json','svg','png'],projectId:currentProject?currentProject.id:'',projectKind:currentProject?currentProject.kind:''}
+  }
+  async function generateCartography(){
+    if(!cartoReady){alert('Le Worker NyXia Cartographie doit d’abord être déployé et lié au Labo.');return}
+    var btn=document.getElementById('map-generate');btn.disabled=true;btn.textContent='⏳ Azgaar construit le monde…';document.getElementById('map-result').innerHTML='<div class="result">Génération de la géographie, fleuves, biomes, États, routes et villes…</div>'
+    try{
+      var d=await api('/api/atelier/cartography/generate',{method:'POST',body:JSON.stringify(cartoPayload())});cartoJob=d.job
+      if(currentProject){currentProject.data=currentProject.data||{};currentProject.data.cartography=Object.assign({},cartoJob,{locked:false});markDirty()}
+      renderMaps();toast('Carte Azgaar générée et conservée dans R2')
+    }catch(e){document.getElementById('map-result').innerHTML='<div class="result">⚠ '+esc(e.message)+'</div>';btn.disabled=false;btn.textContent='🗺️ Générer la carte'}
+  }
+  function cartoResultHtml(job){
+    if(!job)return '<div class="result empty">Aucune carte générée pour l’instant.</div>'
+    if(job.status==='failed')return '<div class="result">⚠ '+esc(job.error||'Génération échouée')+'</div>'
+    var files=job.files||{}, buttons=['map','json','svg','png'].filter(function(k){return files[k]}).map(function(k){return '<button class="file-btn" onclick="downloadCartoFile(\''+k+'\')">⬇ '+k.toUpperCase()+'</button>'}).join('')
+    return '<div class="result"><b>'+esc(job.title||'Carte NyXia')+'</b>\nSeed : '+esc(job.seed)+'\nMoteur : '+esc(job.engine||'Azgaar')+' '+esc(job.engineVersion||'')+'\nDimensions : '+esc(job.width)+' × '+esc(job.height)+'\nCouches : '+esc((job.layers||[]).join(', '))+'</div><div class="file-grid">'+buttons+'</div><div class="map-preview" id="map-preview"><span class="muted">Chargement de l’aperçu PNG…</span></div>'
+  }
+  async function loadCartoPreview(job){
+    if(!job||!job.files||!job.files.png)return
+    var r=await fetch('/api/atelier/cartography'+job.files.png.path,{headers:h()});if(!r.ok)return
+    var b=await r.blob();if(cartoPreviewUrl)URL.revokeObjectURL(cartoPreviewUrl);cartoPreviewUrl=URL.createObjectURL(b)
+    var host=document.getElementById('map-preview');if(host)host.innerHTML='<img src="'+cartoPreviewUrl+'" alt="Aperçu de la carte Azgaar">'
+  }
+  async function downloadCartoFile(kind){
+    var job=cartoJob||mapSaved();if(!job||!job.files||!job.files[kind])return
+    try{var f=job.files[kind],r=await fetch('/api/atelier/cartography'+f.path,{headers:h()});if(!r.ok)throw new Error('Téléchargement impossible');var b=await r.blob(),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=f.name||('carte.'+kind);document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},2000)}catch(e){alert(e.message)}
+  }
+  function openCartoEditor(){
+    var job=cartoJob||mapSaved(),url=job&&job.editorUrl?job.editorUrl:'https://maps.nyxia.top/'
+    if(!job){var seed=(document.getElementById('map-seed')||{}).value||'';if(seed)url+='?seed='+encodeURIComponent(seed)+'&options=default'}
+    window.open(url,'_blank','noopener')
+  }
+  function toggleMapLock(v){
+    if(!currentProject){toast('Choisis un projet pour verrouiller sa carte');return}
+    currentProject.data=currentProject.data||{};currentProject.data.cartography=currentProject.data.cartography||cartoJob||{}
+    currentProject.data.cartography.locked=!!v;cartoJob=currentProject.data.cartography;markDirty();renderMaps();toast(v?'Carte verrouillée':'Carte déverrouillée')
+  }
 
   function renderVisual(){var cats=['image','banque-gratuite'];var list=tools.filter(function(t){return cats.indexOf(t.category)>=0||t.kind==='image'||t.kind==='image-async'});document.getElementById('view-visual').innerHTML='<div class="hero"><div class="badge">RÉUTILISE L’EXISTANT</div><h3>Création visuelle</h3><p>Pas de second moteur : couvertures, personnages, scènes, cartes, faux documents et matériel promo passent par les outils déjà présents dans le Labo.</p><div class="card-actions"><button class="btn primary" onclick="location.href=\'/dashboard.html\'">Ouvrir le Labo complet</button></div></div><div class="section-title"><div><h3>Outils visuels détectés</h3></div></div><div class="tool-list">'+list.map(toolPill).join('')+'</div>'}
   function renderVideo(){var list=tools.filter(function(t){return t.category==='video'||String(t.kind||'').indexOf('video')>=0});document.getElementById('view-video').innerHTML='<div class="hero"><div class="badge">BANDES-ANNONCES · TEASERS · SCÈNES</div><h3>Vidéo</h3><p>Les moteurs vidéo du Labo restent la source unique. L’Atelier les utilise pour les livres, les jeux et les campagnes sans dupliquer leur configuration.</p><div class="card-actions"><button class="btn primary" onclick="location.href=\'/dashboard.html\'">Ouvrir les outils vidéo</button><button class="btn" onclick="location.href=\'/wan-video.html\'">Wan vidéo</button></div></div><div class="section-title"><div><h3>Outils vidéo détectés</h3></div></div><div class="tool-list">'+list.map(toolPill).join('')+'</div>'}
@@ -234,7 +311,7 @@
   function applyMysteryProposal(){try{var obj=parseJsonLoose(lastAI.text),keys=['murderer','motive','method','timeline','secrets','relationships','trueClues','redHerrings','solution'];keys.forEach(function(k){if(obj[k]!=null)currentProject.data[k]=String(obj[k])});markDirty();renderMystery();toast('Bible appliquée — tu peux maintenant la verrouiller')}catch(e){alert('La réponse n’est pas un JSON exploitable. Copie-la ou réessaie avec le bouton ↺.') }}
   function saveDeliverable(type){currentProject.data.deliverables=currentProject.data.deliverables||{};currentProject.data.deliverables[type]=lastAI.text;markDirty();toast('Livrable conservé dans le projet')}
 
-  window.addEventListener('beforeunload',function(){audioUrls.forEach(function(u){try{URL.revokeObjectURL(u)}catch(e){}})})
+  window.addEventListener('beforeunload',function(){audioUrls.forEach(function(u){try{URL.revokeObjectURL(u)}catch(e){}});if(cartoPreviewUrl)try{URL.revokeObjectURL(cartoPreviewUrl)}catch(e){}})
   boot()
 </script>
 </body>
