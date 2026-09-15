@@ -1,24 +1,25 @@
-# NyXiaLabo — fichiers à NE PAS publier comme assets statiques
-
-# Code Worker / configuration
+# Code Worker et configuration — jamais publiés comme assets
 _worker.js
 labo-router.js
 wrangler.toml
-
-# Dépendances installées pendant le build
-node_modules/
-**/node_modules
-
-# Fichiers de dépendances / build
 package.json
 package-lock.json
 bun.lock
 bun.lockb
 
-# Métadonnées / outils
+# Dépendances / sources temporaires de build
+node_modules/
+**/node_modules/
+.azgaar-src/
+scripts/
+
+# Métadonnées / documentation de maintenance
 .git/
-**/.git
+**/.git/
 .github/
 .wrangler/
 .dev.vars*
 README.md
+INSTALLATION.txt
+VALIDATION.txt
+CORRECTION-CARTOGRAPHIE.txt
