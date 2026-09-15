@@ -232,7 +232,7 @@
   function gameStory(d){
     var imported=(d.importedSourceNames||'').trim()
     var sourceBox=(d.sourceDocuments||'').trim()?'<details style="margin:12px 0 16px"><summary class="btn" style="display:inline-block;cursor:pointer">📚 Voir les documents sources importés'+(imported?' — '+esc(imported):'')+'</summary><div style="margin-top:12px">'+gameArea('Source originale conservée — ne sera jamais perdue','sourceDocuments',d.sourceDocuments,14)+'</div></details>':''
-    return '<h4>📖 Architecture jouable</h4><div class="game-note"><b>Tu as déjà écrit quelque chose ?</b> Importe un ou plusieurs documents. Ils peuvent contenir l’histoire, la structure, les scènes et les fins dans le même fichier : NyXiaLabo garde l’original au complet et range automatiquement les sections reconnaissables. Rien n’est supprimé.</div><div class="tools-line" style="margin-bottom:14px"><button class="btn gold" onclick="document.getElementById(\'game-import-docs\').click()">📄 Importer mes documents existants</button><input id="game-import-docs" type="file" multiple accept=".md,.markdown,.txt,.json,.rtf,.docx,text/plain,text/markdown,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" onchange="importGameDocuments(this.files);this.value=\'\'"></div>'+sourceBox+gameArea('Structure globale — actes / phases / épisodes','storyStructure',d.storyStructure,12)+gameArea('Scènes, quêtes, événements et embranchements','scenesQuests',d.scenesQuests,15)+gameArea('Fins possibles / conséquences','endings',d.endings||'',8)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'story\')">📖 Créer / enrichir la structure jouable</button><button class="btn" onclick="gameAI(\'scenes\')">Créer / enrichir scènes & quêtes</button><button class="btn" onclick="gameAI(\'endings\')">Créer / enrichir les fins</button></div>'
+    return '<h4>📖 Architecture jouable</h4><div class="game-note"><b>Tu as déjà écrit quelque chose ?</b> Importe un ou plusieurs documents. Ils peuvent contenir l’histoire, la structure, les scènes et les fins dans le même fichier : NyXiaLabo garde l’original au complet et range automatiquement les sections reconnaissables, y compris les prompts graphiques, audio, vidéo et cartographie. Rien n’est supprimé.</div><div class="tools-line" style="margin-bottom:14px"><button class="btn gold" onclick="document.getElementById(\'game-import-docs\').click()">📄 Importer mes documents existants</button><input id="game-import-docs" type="file" multiple accept=".md,.markdown,.txt,.json,.rtf,.docx,text/plain,text/markdown,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" onchange="importGameDocuments(this.files);this.value=\'\'"></div>'+sourceBox+gameArea('Structure globale — actes / phases / épisodes','storyStructure',d.storyStructure,12)+gameArea('Scènes, quêtes, événements et embranchements','scenesQuests',d.scenesQuests,15)+gameArea('Fins possibles / conséquences','endings',d.endings||'',8)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'story\')">📖 Créer / enrichir la structure jouable</button><button class="btn" onclick="gameAI(\'scenes\')">Créer / enrichir scènes & quêtes</button><button class="btn" onclick="gameAI(\'endings\')">Créer / enrichir les fins</button></div>'
   }
 
   function gameImportAppend(existing,label,text){
@@ -244,13 +244,17 @@
     var raw=String(line||'').trim(),level=0,title=raw
     var m=raw.match(/^(#{1,6})\s+(.+)$/)
     if(m){level=m[1].length;title=m[2].trim()}
-    else if(/^([IVXLCDM]+\.|\d+[.)])\s+.+/i.test(raw)||(/^[A-ZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŒ0-9][A-ZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŒ0-9 '\-—–:()]{4,90}$/.test(raw)&&raw.length<100)){level=1}
-    else if(/^(ACTE|PHASE|ÉPISODE|EPISODE|SCÈNE|SCENE|FIN|FINALE|QUÊTE|QUETE|ÉVÉNEMENT|EVENEMENT|EMBRANCHEMENT|CLIFFHANGER|ÉPILOGUE|EPILOGUE)\b/i.test(raw)){level=2}
+    else if(/^([IVXLCDM]+\.|\d+[.)])\s+.+/i.test(raw)||(/^[A-ZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŒ0-9][A-ZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŒ0-9 '\-—–:()]{4,120}$/.test(raw)&&raw.length<130)){level=1}
+    else if(/^(ACTE|PHASE|ÉPISODE|EPISODE|SCÈNE|SCENE|FIN|FINALE|QUÊTE|QUETE|ÉVÉNEMENT|EVENEMENT|EMBRANCHEMENT|CLIFFHANGER|ÉPILOGUE|EPILOGUE|PROMPT|IMAGE|IMAGES|VISUEL|VISUELS|ILLUSTRATION|ILLUSTRATIONS|PORTRAIT|PORTRAITS|COUVERTURE|COVER|AUDIO|SON|SONS|MUSIQUE|MUSIQUES|VOIX|VIDÉO|VIDEO|VIDÉOS|VIDEOS|CLIP|CLIPS|CARTE|CARTES|MAP|MAPS|BATTLEMAP|BATTLEMAPS)\b/i.test(raw)){level=2}
     else return null
     return {level:level,title:title}
   }
   function gameImportCategory(title,current,endingMode){
     var t=String(title||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+    if(/\b(prompt(?:s)? (?:graphique|graphiques|image|images|visuel|visuels)|image|images|graphique|graphiques|visuel|visuels|illustration|illustrations|portrait|portraits|token|tokens|couverture|cover|midjourney|dall[- ]?e|imagegen)\b/.test(t))return 'images'
+    if(/\b(prompt(?:s)? audio|audio|son|sons|musique|musiques|bruitage|bruitages|voix|tts|ambiance sonore|ambiances sonores)\b/.test(t))return 'audio'
+    if(/\b(prompt(?:s)? video|video|videos|clip|clips|cinematique|cinematiques|storyboard|transition|transitions)\b/.test(t))return 'video'
+    if(/\b(prompt(?:s)? carte|carte|cartes|map|maps|battlemap|battlemaps|cartographie|azgaar|plan des lieux|plans des lieux)\b/.test(t))return 'maps'
     if(/\b(fin|fins|finale|finales|consequence|consequences|cliffhanger|epilogue|resolution|resolutions)\b/.test(t))return 'endings'
     if(endingMode)return 'endings'
     if(/\b(scene|scenes|quete|quetes|evenement|evenements|embranchement|embranchements|declencheur|declencheurs|moment wow)\b/.test(t))return 'scenes'
@@ -258,8 +262,8 @@
     return current||'story'
   }
   function gameImportSplit(text){
-    var lines=String(text||'').replace(/\r\n?/g,'\n').split('\n'),parts={story:[],scenes:[],endings:[]},current='story',endingMode=false,block=[]
-    function flush(){var val=block.join('\n').trim();if(val)parts[current].push(val);block=[]}
+    var lines=String(text||'').replace(/\r\n?/g,'\n').split('\n'),parts={story:[],scenes:[],endings:[],images:[],audio:[],video:[],maps:[]},current='story',endingMode=false,block=[]
+    function flush(){var val=block.join('\n').trim();if(val&&parts[current])parts[current].push(val);block=[]}
     lines.forEach(function(line){
       var h=gameImportHeadingInfo(line)
       if(h){
@@ -267,13 +271,21 @@
         var norm=String(h.title||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
         if(h.level<=1){
           if(/\b(fin|fins|finale|finales|consequence|consequences|cliffhanger|resolutions?)\b/.test(norm))endingMode=true
-          else if(/\b(acte|structure|histoire|architecture|recapitulatif|rythme)\b/.test(norm))endingMode=false
+          else if(/\b(acte|structure|histoire|architecture|recapitulatif|rythme|media|medias|graphique|visuel|audio|video|carte|cartographie)\b/.test(norm))endingMode=false
         }
         current=gameImportCategory(h.title,current,endingMode)
       }
       block.push(line)
     });flush()
-    return {story:parts.story.join('\n\n').trim(),scenes:parts.scenes.join('\n\n').trim(),endings:parts.endings.join('\n\n').trim()}
+    return {
+      story:parts.story.join('\n\n').trim(),
+      scenes:parts.scenes.join('\n\n').trim(),
+      endings:parts.endings.join('\n\n').trim(),
+      images:parts.images.join('\n\n').trim(),
+      audio:parts.audio.join('\n\n').trim(),
+      video:parts.video.join('\n\n').trim(),
+      maps:parts.maps.join('\n\n').trim()
+    }
   }
   function gameImportRtf(text){return String(text||'').replace(/\\par[d]?/g,'\n').replace(/\\'[0-9a-fA-F]{2}/g,'').replace(/\\[a-zA-Z]+-?\d* ?/g,'').replace(/[{}]/g,'').replace(/\n{3,}/g,'\n\n').trim()}
   async function gameImportDocx(file){
@@ -306,10 +318,14 @@
         if(split.story)d.storyStructure=gameImportAppend(d.storyStructure,file.name,split.story)
         if(split.scenes)d.scenesQuests=gameImportAppend(d.scenesQuests,file.name,split.scenes)
         if(split.endings)d.endings=gameImportAppend(d.endings,file.name,split.endings)
+        if(split.images)d.imageBriefs=gameImportAppend(d.imageBriefs,file.name,split.images)
+        if(split.audio)d.audioPlan=gameImportAppend(d.audioPlan,file.name,split.audio)
+        if(split.video)d.videoPlan=gameImportAppend(d.videoPlan,file.name,split.video)
+        if(split.maps)d.mapPlan=gameImportAppend(d.mapPlan,file.name,split.maps)
         var names=String(d.importedSourceNames||'').split(' · ').filter(Boolean);if(!names.includes(file.name))names.push(file.name);d.importedSourceNames=names.join(' · ')
         count++
       }
-      currentProject.data=d;markDirty();await saveCurrent();renderGame();toast(count+' document(s) importé(s) et classé(s) ✓')
+      currentProject.data=d;markDirty();await saveCurrent();renderGame();toast(count+' document(s) importé(s) — histoire, scènes, fins et médias classés ✓')
     }catch(e){alert('Import impossible : '+e.message)}
   }
 
