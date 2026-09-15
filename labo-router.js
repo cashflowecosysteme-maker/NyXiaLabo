@@ -19,7 +19,8 @@ const CARTO_MIN_DIMENSION = 400
 const CARTO_MAX_DIMENSION = 2400
 const CARTO_DEFAULT_LAYERS = ['states', 'borders', 'lakes', 'rivers', 'routes', 'burgIcons', 'labels', 'scaleBar']
 const CARTO_ALLOWED_OUTPUTS = new Set(['map', 'json', 'svg', 'png'])
-const CARTO_DEFAULT_BASE_URL = 'https://azgaar.github.io/Fantasy-Map-Generator/'
+const CARTO_DEFAULT_PATH = '/cartographie/azgaar/'
+const CARTO_NONCE_PREFIX = 'atelier:carto:editor-nonce:'
 
 function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
@@ -296,8 +297,13 @@ function cartoRequestedOutputs(value) {
   return valid.length ? valid : ['map', 'json', 'svg', 'png']
 }
 
-function cartoMapUrl(env, cfg) {
-  const base = new URL(env.AZGAAR_BASE_URL || CARTO_DEFAULT_BASE_URL)
+function cartoBaseUrl(request, env) {
+  const configured = cleanText(env.AZGAAR_BASE_URL || '', 500)
+  return new URL(configured || CARTO_DEFAULT_PATH, request.url)
+}
+
+function cartoMapUrl(request, env, cfg) {
+  const base = cartoBaseUrl(request, env)
   base.searchParams.set('seed', cfg.seed)
   base.searchParams.set('width', String(cfg.width))
   base.searchParams.set('height', String(cfg.height))
@@ -417,7 +423,14 @@ async function cartoGenerateMap(request, env) {
   const jobId = crypto.randomUUID()
   const createdAt = new Date().toISOString()
   const prefix = `jobs/${jobId}`
-  const targetUrl = cartoMapUrl(env, cfg)
+  const targetUrl = cartoMapUrl(request, env, cfg)
+  const browserTargetUrl = new URL(targetUrl)
+  const bearer = cartoBearerValue(request)
+  if (bearer && env.HUB_CONFIG) {
+    const nonce = crypto.randomUUID()
+    await env.HUB_CONFIG.put(CARTO_NONCE_PREFIX + nonce, bearer, { expirationTtl: 120 })
+    browserTargetUrl.searchParams.set('nx_auth', nonce)
+  }
   const browser = await puppeteer.launch(env.BROWSER)
 
   let mapData = ''
@@ -428,7 +441,7 @@ async function cartoGenerateMap(request, env) {
   try {
     const page = await browser.newPage()
     await page.setViewport({ width: cfg.width, height: cfg.height, deviceScaleFactor: 1 })
-    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 120000 })
+    await page.goto(browserTargetUrl.toString(), { waitUntil: 'domcontentloaded', timeout: 120000 })
     await page.waitForFunction(
       () => Array.isArray(globalThis.mapHistory) && globalThis.mapHistory.length > 0 && globalThis.Services?.Save && globalThis.Services?.ExportMap,
       { timeout: 120000 }
@@ -477,12 +490,12 @@ async function cartoGenerateMap(request, env) {
       files.png = cartoFileDescriptor(jobId, name, 'image/png', size)
     }
 
-    const sourceUrl = env.AZGAAR_BASE_URL || CARTO_DEFAULT_BASE_URL
+    const sourceUrl = cartoBaseUrl(request, env)
     const manifest = {
       id: jobId,
       status: 'completed', createdAt,
       engine: CARTO_ENGINE_NAME, engineVersion,
-      source: new URL(sourceUrl).origin,
+      source: sourceUrl.toString(),
       title: cfg.title,
       projectId: cfg.projectId || null,
       projectKind: cfg.projectKind || null,
@@ -534,6 +547,74 @@ async function cartoDeleteJob(env, jobId) {
   return json({ ok: true })
 }
 
+
+function cartoCookieValue(request, name) {
+  const cookie = request.headers.get('Cookie') || ''
+  const prefix = name + '='
+  for (const part of cookie.split(';')) {
+    const item = part.trim()
+    if (item.startsWith(prefix)) return decodeURIComponent(item.slice(prefix.length))
+  }
+  return ''
+}
+
+function cartoBearerValue(request) {
+  const header = request.headers.get('Authorization') || ''
+  return header.startsWith('Bearer ') ? header.slice(7) : ''
+}
+
+function cartoEditorCookie(token) {
+  return `nyxia_carto=${encodeURIComponent(token)}; Path=${CARTO_DEFAULT_PATH}; HttpOnly; Secure; SameSite=Strict; Max-Age=7200`
+}
+
+async function cartoAssetAuthorized(request, env, ctx) {
+  const token = cartoBearerValue(request) || cartoCookieValue(request, 'nyxia_carto')
+  if (!token) return false
+  const headers = new Headers()
+  headers.set('Authorization', 'Bearer ' + token)
+  const checkReq = new Request(new URL('/api/tools', request.url).toString(), { method: 'GET', headers })
+  const res = await baseWorker.fetch(checkReq, env, ctx)
+  return res.ok
+}
+
+async function cartoServeEditorAsset(request, env, ctx) {
+  if (!env.ASSETS) return new Response('Assets non configurés', { status: 503 })
+  const url = new URL(request.url)
+
+  // Browser Rendering reçoit un nonce à usage unique, jamais le token de session dans l'URL.
+  const nonce = url.searchParams.get('nx_auth')
+  if (nonce && env.HUB_CONFIG) {
+    const key = CARTO_NONCE_PREFIX + cleanText(nonce, 100)
+    const token = await env.HUB_CONFIG.get(key)
+    if (token) {
+      await env.HUB_CONFIG.delete(key)
+      const headers = new Headers()
+      headers.set('Authorization', 'Bearer ' + token)
+      const checkReq = new Request(new URL('/api/tools', request.url).toString(), { method: 'GET', headers })
+      const check = await baseWorker.fetch(checkReq, env, ctx)
+      if (check.ok) {
+        url.searchParams.delete('nx_auth')
+        return new Response(null, {
+          status: 302,
+          headers: {
+            'Location': url.toString(),
+            'Set-Cookie': cartoEditorCookie(token),
+            'Cache-Control': 'no-store'
+          }
+        })
+      }
+    }
+  }
+
+  if (!(await cartoAssetAuthorized(request, env, ctx))) {
+    if (url.pathname === CARTO_DEFAULT_PATH || url.pathname.endsWith('/index.html')) {
+      return Response.redirect(new URL('/login.html', request.url).toString(), 302)
+    }
+    return new Response('Non autorisé', { status: 401 })
+  }
+  return env.ASSETS.fetch(request)
+}
+
 async function handleCartography(request, env, path) {
   const parts = path.split('/').filter(Boolean)
   if (request.method === 'GET' && (path === '/' || path === '/health')) {
@@ -543,8 +624,17 @@ async function handleCartography(request, env, path) {
       engine: CARTO_ENGINE_NAME,
       browser: !!env.BROWSER,
       r2: !!env.MAPS,
-      azgaarBaseUrl: env.AZGAAR_BASE_URL || CARTO_DEFAULT_BASE_URL
+      azgaarBaseUrl: CARTO_DEFAULT_PATH
     })
+  }
+  if (request.method === 'POST' && path === '/editor-session') {
+    const token = cartoBearerValue(request)
+    if (!token) return json({ error: 'Session Labo introuvable' }, 401)
+    return json(
+      { ok: true, editorUrl: CARTO_DEFAULT_PATH },
+      200,
+      { 'Set-Cookie': cartoEditorCookie(token) }
+    )
   }
   if (request.method === 'POST' && path === '/generate') return cartoGenerateMap(request, env)
   if (parts[0] === 'jobs' && parts[1] && request.method === 'GET') return cartoGetJob(env, parts[1])
@@ -566,7 +656,7 @@ async function handleAtelier(request, env, ctx) {
       kv: !!env.HUB_CONFIG,
       googleTts: googleTtsConfigured(env),
       cartography: !!env.BROWSER && !!env.MAPS,
-      version: 'atelier-equipe-2.1-integrated'
+      version: 'atelier-equipe-2.2-azgaar-selfhosted'
     })
   }
 
@@ -667,6 +757,13 @@ async function handleAtelier(request, env, ctx) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
+    if (url.pathname.startsWith(CARTO_DEFAULT_PATH)) {
+      try {
+        return await cartoServeEditorAsset(request, env, ctx)
+      } catch (err) {
+        return new Response(err?.message || String(err), { status: 500 })
+      }
+    }
     if (url.pathname.startsWith('/api/atelier/')) {
       try {
         return await handleAtelier(request, env, ctx)
