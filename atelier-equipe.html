@@ -174,7 +174,7 @@
   function chooseGame(id){chooseProject('nyxia-game',id,renderGame)}
 
   async function newProject(kind){
-    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',guidedScenesJson:'',deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
+    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',sourceDocuments:'',importedSourceNames:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',guidedScenesJson:'',deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
     var title=prompt('Titre du projet :','Nouveau '+kindLabel(kind))||('Nouveau '+kindLabel(kind))
     try{var d=await api('/api/atelier/projects',{method:'POST',body:JSON.stringify({kind:kind,title:title,data:defaults[kind]||{}})}); currentProject=d.project; await reloadIndex(); showView(({ghostwriting:'ghost',audiobook:'audio','nyxia-game':'game',mystery:'mystery'})[kind]||'home'); toast('Projet créé') }catch(e){alert(e.message)}
   }
@@ -229,7 +229,90 @@
   function gameMeter(label,field,value){var n=Number(value)||0;return '<div class="game-meter"><span>'+label+'</span><input type="range" min="0" max="5" step="1" value="'+n+'" oninput="setData(\''+field+'\',Number(this.value));this.nextElementSibling.textContent=this.value"><b>'+n+'</b></div>'}
   function gameConcept(d){return '<h4>✨ Identité du jeu</h4><div class="game-note">NyXia Game vise un public <b>16+</b> par défaut : expériences matures, immersives et non infantilisées. L’intensité se règle selon chaque création.</div><div class="row"><div class="field"><label>Titre</label><input value="'+esc(currentProject.title)+'" oninput="setRoot(\'title\',this.value)"></div><div class="field"><label>Client / collection</label><input value="'+esc(currentProject.client||'')+'" oninput="setRoot(\'client\',this.value)"></div></div><div class="row three"><div class="field"><label>Type</label><select onchange="setData(\'gameType\',this.value)">'+gameTypeOptions(d.gameType)+'</select></div>'+gameSelect('Mode','playMode',d.playMode,['Présentiel','À distance','Hybride'])+gameSelect('Public','audience',d.audience,['16+','18+'])+'</div><div class="row three"><div class="field"><label>Joueurs</label><input type="number" min="1" value="'+(d.playerCount||8)+'" oninput="setData(\'playerCount\',Number(this.value))"></div><div class="field"><label>Durée</label><input value="'+esc(d.duration||'')+'" oninput="setData(\'duration\',this.value)"></div>'+gameSelect('Difficulté','difficulty',d.difficulty,['Accessible','Intermédiaire','Difficile','Expert'])+'</div><div class="row"><div class="field"><label>Genre / univers</label><input value="'+esc(d.genre||'')+'" oninput="setData(\'genre\',this.value)"></div><div class="field"><label>Ton</label><input value="'+esc(d.tone||'')+'" oninput="setData(\'tone\',this.value)"></div></div>'+gameArea('Ton idée brute','idea',d.idea,7)+gameArea('Intention créative — ce que les joueurs doivent vivre / ressentir','creatorIntent',d.creatorIntent,5)+'<div class="divider"></div><div class="game-kicker">Intensité créative 0–5</div>'+gameMeter('Horreur','horror',d.horror)+gameMeter('Violence','violence',d.violence)+gameMeter('Sensualité','sensuality',d.sensuality)+gameMeter('Romance','romance',d.romance)+gameMeter('Langage adulte','language',d.language)+gameMeter('Tension psychologique','psychological',d.psychological)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'concept\')">🧠 Structurer mon concept</button><button class="btn" onclick="gameAI(\'pitch\')">Créer le pitch</button></div>'}
   function gameBible(d){return '<h4>🌍 Bible du monde</h4><div class="game-note">La Bible sert de vérité du projet : monde, époque, factions, magie/technologie, chronologie et faits qui ne doivent pas changer au hasard.</div>'+gameArea('🔒 Canon verrouillé / faits intouchables','lockedCanon',d.lockedCanon,6)+gameArea('Bible du monde','worldBible',d.worldBible,15)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'bible\')">🌍 Construire / enrichir la Bible</button><button class="btn gold" onclick="showView(\'maps\')">🗺️ Créer la carte Azgaar</button></div>'}
-  function gameStory(d){return '<h4>📖 Architecture jouable</h4>'+gameArea('Structure globale — actes / phases / épisodes','storyStructure',d.storyStructure,12)+gameArea('Scènes, quêtes, événements et embranchements','scenesQuests',d.scenesQuests,15)+gameArea('Fins possibles / conséquences','endings',d.endings||'',8)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'story\')">📖 Créer la structure jouable</button><button class="btn" onclick="gameAI(\'scenes\')">Créer scènes / quêtes</button><button class="btn" onclick="gameAI(\'endings\')">Créer les fins</button></div>'}
+  function gameStory(d){
+    var imported=(d.importedSourceNames||'').trim()
+    var sourceBox=(d.sourceDocuments||'').trim()?'<details style="margin:12px 0 16px"><summary class="btn" style="display:inline-block;cursor:pointer">📚 Voir les documents sources importés'+(imported?' — '+esc(imported):'')+'</summary><div style="margin-top:12px">'+gameArea('Source originale conservée — ne sera jamais perdue','sourceDocuments',d.sourceDocuments,14)+'</div></details>':''
+    return '<h4>📖 Architecture jouable</h4><div class="game-note"><b>Tu as déjà écrit quelque chose ?</b> Importe un ou plusieurs documents. Ils peuvent contenir l’histoire, la structure, les scènes et les fins dans le même fichier : NyXiaLabo garde l’original au complet et range automatiquement les sections reconnaissables. Rien n’est supprimé.</div><div class="tools-line" style="margin-bottom:14px"><button class="btn gold" onclick="document.getElementById(\'game-import-docs\').click()">📄 Importer mes documents existants</button><input id="game-import-docs" type="file" multiple accept=".md,.markdown,.txt,.json,.rtf,.docx,text/plain,text/markdown,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" onchange="importGameDocuments(this.files);this.value=\'\'"></div>'+sourceBox+gameArea('Structure globale — actes / phases / épisodes','storyStructure',d.storyStructure,12)+gameArea('Scènes, quêtes, événements et embranchements','scenesQuests',d.scenesQuests,15)+gameArea('Fins possibles / conséquences','endings',d.endings||'',8)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'story\')">📖 Créer / enrichir la structure jouable</button><button class="btn" onclick="gameAI(\'scenes\')">Créer / enrichir scènes & quêtes</button><button class="btn" onclick="gameAI(\'endings\')">Créer / enrichir les fins</button></div>'
+  }
+
+  function gameImportAppend(existing,label,text){
+    text=String(text||'').trim();if(!text)return existing||''
+    var block='## SOURCE — '+label+'\n\n'+text
+    return String(existing||'').trim()?String(existing).trim()+'\n\n---\n\n'+block:block
+  }
+  function gameImportHeadingInfo(line){
+    var raw=String(line||'').trim(),level=0,title=raw
+    var m=raw.match(/^(#{1,6})\s+(.+)$/)
+    if(m){level=m[1].length;title=m[2].trim()}
+    else if(/^([IVXLCDM]+\.|\d+[.)])\s+.+/i.test(raw)||(/^[A-ZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŒ0-9][A-ZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŒ0-9 '\-—–:()]{4,90}$/.test(raw)&&raw.length<100)){level=1}
+    else if(/^(ACTE|PHASE|ÉPISODE|EPISODE|SCÈNE|SCENE|FIN|FINALE|QUÊTE|QUETE|ÉVÉNEMENT|EVENEMENT|EMBRANCHEMENT|CLIFFHANGER|ÉPILOGUE|EPILOGUE)\b/i.test(raw)){level=2}
+    else return null
+    return {level:level,title:title}
+  }
+  function gameImportCategory(title,current,endingMode){
+    var t=String(title||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+    if(/\b(fin|fins|finale|finales|consequence|consequences|cliffhanger|epilogue|resolution|resolutions)\b/.test(t))return 'endings'
+    if(endingMode)return 'endings'
+    if(/\b(scene|scenes|quete|quetes|evenement|evenements|embranchement|embranchements|declencheur|declencheurs|moment wow)\b/.test(t))return 'scenes'
+    if(/\b(structure|schema|acte|phase|episode|architecture|histoire|synopsis|trame|boucle de jeu|rythme)\b/.test(t))return 'story'
+    return current||'story'
+  }
+  function gameImportSplit(text){
+    var lines=String(text||'').replace(/\r\n?/g,'\n').split('\n'),parts={story:[],scenes:[],endings:[]},current='story',endingMode=false,block=[]
+    function flush(){var val=block.join('\n').trim();if(val)parts[current].push(val);block=[]}
+    lines.forEach(function(line){
+      var h=gameImportHeadingInfo(line)
+      if(h){
+        flush()
+        var norm=String(h.title||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+        if(h.level<=1){
+          if(/\b(fin|fins|finale|finales|consequence|consequences|cliffhanger|resolutions?)\b/.test(norm))endingMode=true
+          else if(/\b(acte|structure|histoire|architecture|recapitulatif|rythme)\b/.test(norm))endingMode=false
+        }
+        current=gameImportCategory(h.title,current,endingMode)
+      }
+      block.push(line)
+    });flush()
+    return {story:parts.story.join('\n\n').trim(),scenes:parts.scenes.join('\n\n').trim(),endings:parts.endings.join('\n\n').trim()}
+  }
+  function gameImportRtf(text){return String(text||'').replace(/\\par[d]?/g,'\n').replace(/\\'[0-9a-fA-F]{2}/g,'').replace(/\\[a-zA-Z]+-?\d* ?/g,'').replace(/[{}]/g,'').replace(/\n{3,}/g,'\n\n').trim()}
+  async function gameImportDocx(file){
+    if(!window.JSZip)throw new Error('JSZip indisponible pour lire le DOCX')
+    var zip=await JSZip.loadAsync(file),entry=zip.file('word/document.xml');if(!entry)throw new Error('DOCX illisible')
+    var xml=await entry.async('text'),doc=new DOMParser().parseFromString(xml,'application/xml'),paras=[].slice.call(doc.getElementsByTagNameNS('*','p'))
+    return paras.map(function(p){
+      var txt=[].slice.call(p.getElementsByTagNameNS('*','t')).map(function(t){return t.textContent||''}).join('')
+      if(!txt.trim())return ''
+      var styles=[].slice.call(p.getElementsByTagNameNS('*','pStyle')),style=styles[0]?styles[0].getAttributeNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main','val')||styles[0].getAttribute('w:val')||styles[0].getAttribute('val')||'':''
+      var mh=String(style).match(/Heading\s*([1-6])/i);return mh?'#'.repeat(Number(mh[1]))+' '+txt:txt
+    }).join('\n\n').trim()
+  }
+  async function gameReadImportFile(file){
+    var name=String(file.name||'document'),lower=name.toLowerCase()
+    if(lower.endsWith('.docx'))return await gameImportDocx(file)
+    var text=await file.text()
+    if(lower.endsWith('.rtf'))return gameImportRtf(text)
+    if(lower.endsWith('.json')){try{var j=JSON.parse(text);return JSON.stringify(j,null,2)}catch(e){return text}}
+    return text
+  }
+  async function importGameDocuments(fileList){
+    if(!currentProject||!fileList||!fileList.length)return
+    var files=Array.from(fileList),d=currentProject.data||{},count=0
+    try{
+      for(var file of files){
+        var text=await gameReadImportFile(file);if(!String(text||'').trim())continue
+        d.sourceDocuments=gameImportAppend(d.sourceDocuments,file.name,text)
+        var split=gameImportSplit(text)
+        if(split.story)d.storyStructure=gameImportAppend(d.storyStructure,file.name,split.story)
+        if(split.scenes)d.scenesQuests=gameImportAppend(d.scenesQuests,file.name,split.scenes)
+        if(split.endings)d.endings=gameImportAppend(d.endings,file.name,split.endings)
+        var names=String(d.importedSourceNames||'').split(' · ').filter(Boolean);if(!names.includes(file.name))names.push(file.name);d.importedSourceNames=names.join(' · ')
+        count++
+      }
+      currentProject.data=d;markDirty();await saveCurrent();renderGame();toast(count+' document(s) importé(s) et classé(s) ✓')
+    }catch(e){alert('Import impossible : '+e.message)}
+  }
+
   function gameCast(d){return '<h4>🧙 Personnages, factions & adversaires</h4><div class="game-note">Ici on crée les personnages. Le volet <b>🧠 PNJ IA</b> transforme ensuite les PNJ retenus en acteurs intelligents avec connaissances limitées, mémoire, relations et autonomie contrôlée.</div>'+gameArea('Personnages / PNJ — rôle, personnalité, objectif, secret, connaissances, relations, voix','characters',d.characters,15)+gameArea('Factions, créatures, ennemis, boss','factionsCreatures',d.factionsCreatures,12)+gameArea('Objets, indices, récompenses, loot','itemsRewards',d.itemsRewards,10)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'characters\')">🧙 Créer le casting</button><button class="btn" onclick="gameAI(\'enemies\')">Créer adversaires / créatures</button><button class="btn" onclick="gameAI(\'items\')">Créer objets / récompenses</button><button class="btn gold" onclick="setGameTab(\'npcai\')">🧠 Donner une intelligence aux PNJ</button></div>'}
   function gameNpcAI(d){return '<h4>🧠 Intelligence des PNJ</h4><div class="game-note"><b>Principe NyXia :</b> le moteur du jeu décide ce qui est vrai. Le PNJ interprète son personnage à l’intérieur de cette réalité. Il peut mentir, hésiter, aimer, détester ou changer d’avis — mais il ne peut jamais inventer un nouveau canon ni connaître une information qu’il n’a pas reçue.</div>'+gameArea('Fiches Intelligence PNJ — savoir, croyances, ignorance, secrets, objectifs, seuils de révélation','npcIntelligence',d.npcIntelligence,18)+gameArea('Mémoire — ce qui mérite d’être retenu, résumé, oublié ou gardé privé','npcMemoryRules',d.npcMemoryRules,10)+gameArea('Relations — confiance, attirance, peur, dette, loyauté, hostilité et règles d’évolution','npcRelationshipRules',d.npcRelationshipRules,10)+gameArea('Autonomie — déclencheurs, actions permises, limites et décisions réservées au moteur / MJ','npcAutonomyRules',d.npcAutonomyRules,10)+gameArea('Voix & interprétation — ton, vocabulaire, rythme, accent/style, voix TTS prévue','npcVoicePlan',d.npcVoicePlan,8)+'<div class="row"><div class="field"><label>PNJ à tester</label><input value="'+esc(d.npcTestName||'')+'" placeholder="Ex. Morgane" oninput="setData(\'npcTestName\',this.value)"></div><div class="field"><label>Modèle runtime (optionnel)</label><input value="'+esc(d.npcModel||'')+'" placeholder="Vide = modèle NyXia par défaut" oninput="setData(\'npcModel\',this.value)"></div></div><div class="divider"></div><div class="game-kicker">Runtime du futur NyXia Game</div><div class="game-note">Ce JSON est la version lisible par le moteur pendant une vraie partie. Tu ne l’écris pas à la main : NyXia le génère à partir des fiches ci-dessus.</div>'+gameArea('PNJ structurés pour le moteur (JSON)','npcRuntimeJson',d.npcRuntimeJson,12)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'npcbrains\')">🧠 Construire les cerveaux PNJ</button><button class="btn" onclick="gameAI(\'npcmemory\')">Mémoire & relations</button><button class="btn" onclick="gameAI(\'npcautonomy\')">Autonomie & déclencheurs</button><button class="btn" onclick="gameAI(\'npcvoice\')">Voix & interprétation</button><button class="btn gold" onclick="gameAI(\'npcruntime\')">⚙️ Structurer pour le moteur</button><button class="btn gold" onclick="gameAI(\'npctest\')">🧪 Tester ce PNJ</button><button class="btn" onclick="gameAI(\'npcaudit\')">🔒 Audit anti-fuite / canon</button></div>'}
   function gameRules(d){return '<h4>⚔️ Mécaniques de jeu</h4>'+gameArea('Boucle de jeu / règles principales','mechanics',d.mechanics,12)+gameArea('Combat / conflits / dés / résolution','combatRules',d.combatRules,10)+gameArea('Progression / réputation / inventaire / ressources','progression',d.progression,9)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'rules\')">⚔️ Concevoir les règles</button><button class="btn" onclick="gameAI(\'combat\')">Concevoir les combats</button><button class="btn" onclick="gameAI(\'balance\')">Tester l’équilibre</button></div>'}
@@ -353,7 +436,7 @@
 
   function gameContext(){
     var d=currentProject.data||{}
-    return {title:currentProject.title,client:currentProject.client||'',gameType:d.gameType,audience:d.audience,playMode:d.playMode,playerCount:d.playerCount,duration:d.duration,genre:d.genre,tone:d.tone,difficulty:d.difficulty,intensity:{horror:d.horror,violence:d.violence,sensuality:d.sensuality,romance:d.romance,language:d.language,psychological:d.psychological},idea:d.idea,creatorIntent:d.creatorIntent,lockedCanon:d.lockedCanon,worldBible:d.worldBible,storyStructure:d.storyStructure,scenesQuests:d.scenesQuests,endings:d.endings,characters:d.characters,npcIntelligence:d.npcIntelligence,npcMemoryRules:d.npcMemoryRules,npcRelationshipRules:d.npcRelationshipRules,npcAutonomyRules:d.npcAutonomyRules,npcVoicePlan:d.npcVoicePlan,npcTestName:d.npcTestName,npcRuntimeJson:d.npcRuntimeJson,npcModel:d.npcModel,factionsCreatures:d.factionsCreatures,itemsRewards:d.itemsRewards,mechanics:d.mechanics,combatRules:d.combatRules,progression:d.progression,playerMaterials:d.playerMaterials,hostMaterials:d.hostMaterials,livePlan:d.livePlan,imageBriefs:d.imageBriefs,audioPlan:d.audioPlan,videoPlan:d.videoPlan,mapPlan:d.mapPlan,controlReport:d.controlReport,guidedScenesJson:d.guidedScenesJson||''}
+    return {title:currentProject.title,client:currentProject.client||'',gameType:d.gameType,audience:d.audience,playMode:d.playMode,playerCount:d.playerCount,duration:d.duration,genre:d.genre,tone:d.tone,difficulty:d.difficulty,intensity:{horror:d.horror,violence:d.violence,sensuality:d.sensuality,romance:d.romance,language:d.language,psychological:d.psychological},idea:d.idea,creatorIntent:d.creatorIntent,lockedCanon:d.lockedCanon,worldBible:d.worldBible,storyStructure:d.storyStructure,scenesQuests:d.scenesQuests,endings:d.endings,characters:d.characters,npcIntelligence:d.npcIntelligence,npcMemoryRules:d.npcMemoryRules,npcRelationshipRules:d.npcRelationshipRules,npcAutonomyRules:d.npcAutonomyRules,npcVoicePlan:d.npcVoicePlan,npcTestName:d.npcTestName,npcRuntimeJson:d.npcRuntimeJson,npcModel:d.npcModel,factionsCreatures:d.factionsCreatures,itemsRewards:d.itemsRewards,mechanics:d.mechanics,combatRules:d.combatRules,progression:d.progression,playerMaterials:d.playerMaterials,hostMaterials:d.hostMaterials,livePlan:d.livePlan,imageBriefs:d.imageBriefs,audioPlan:d.audioPlan,videoPlan:d.videoPlan,mapPlan:d.mapPlan,controlReport:d.controlReport,sourceDocuments:d.sourceDocuments||'',guidedScenesJson:d.guidedScenesJson||''}
   }
   function gamePromptBase(){return 'Tu travailles dans NyXiaLabo avec une équipe humaine qui garde la direction créative. Le projet est 16+ par défaut : mature, immersif, jamais infantilisant. Respecte exactement les niveaux d’intensité demandés. La sensualité peut être forte et romantique sans devenir pornographique explicite. L’horreur peut être sombre et dérangeante selon le niveau choisi. Ne modifie jamais les faits du CANON VERROUILLÉ. Pour les PNJ IA, la Bible + le Canon + l’état du moteur sont l’autorité de vérité : un PNJ peut mentir en personnage mais ne peut pas inventer un nouveau fait canonique, accéder à une connaissance interdite ni modifier l’état du jeu. Ton travail doit produire du matériel réellement jouable et exploitable, pas seulement une belle histoire. Quand une information manque, propose une solution éditoriale au lieu de bloquer.'}
   async function gameAI(mode){
@@ -403,6 +486,7 @@
     try{
       var d=currentProject.data||{},zip=new JSZip(),manifest=gameManifest()
       zip.file('manifest.json',JSON.stringify(manifest,null,2));zip.file('project.json',JSON.stringify(currentProject,null,2));zip.folder('runtime').file('npc-ai-config.json',JSON.stringify(gameNpcRuntimeConfig(),null,2));zip.folder('runtime').file('live-config.json',JSON.stringify(gameLiveRuntimeConfig(),null,2))
+      if(String(d.sourceDocuments||'').trim())zip.file('00-sources-originales.md',String(d.sourceDocuments))
       zip.file('01-concept.md',mdSection('Concept',d.idea)+'\n'+mdSection('Intention créative',d.creatorIntent)+'\n'+mdSection('Canon verrouillé',d.lockedCanon))
       zip.file('02-bible.md',mdSection('Bible du monde',d.worldBible));zip.file('03-histoire.md',mdSection('Structure',d.storyStructure)+'\n'+mdSection('Scènes et quêtes',d.scenesQuests)+'\n'+mdSection('Fins',d.endings))
       zip.file('04-personnages.md',mdSection('Personnages',d.characters)+'\n'+mdSection('Factions et créatures',d.factionsCreatures)+'\n'+mdSection('Objets et récompenses',d.itemsRewards))
