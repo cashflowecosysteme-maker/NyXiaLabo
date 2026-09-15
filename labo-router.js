@@ -759,8 +759,86 @@ function gameRuntimeSnapshotFromData(d = {}) {
   }
 }
 
+function gameGuidedScenesFromData(d = {}) {
+  const raw = d.guidedScenesJson || d.guidedScenes || ''
+  let parsed = raw
+  if (typeof raw === 'string') {
+    const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+    if (!cleaned) return []
+    try { parsed = JSON.parse(cleaned) } catch (_) { return [] }
+  }
+  const source = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.scenes) ? parsed.scenes : [])
+  return source.slice(0, 80).map((scene, index) => {
+    const breakout = scene?.breakout && typeof scene.breakout === 'object' ? scene.breakout : {}
+    const npc = scene?.npc && typeof scene.npc === 'object' ? scene.npc : {}
+    const dice = scene?.dice && typeof scene.dice === 'object' ? scene.dice : {}
+    const media = scene?.media && typeof scene.media === 'object' ? scene.media : {}
+    const clues = Array.isArray(scene?.clues) ? scene.clues.slice(0, 30).map((clue, ci) => ({
+      id: cleanText(clue?.id || `clue-${index + 1}-${ci + 1}`, 100),
+      label: cleanText(clue?.label || `Indice ${ci + 1}`, 160),
+      scope: clue?.scope === 'team' ? 'team' : 'all',
+      team: cleanText(clue?.team || '', 80),
+      text: cleanText(clue?.text || '', 1600)
+    })).filter(clue => clue.text) : []
+    return {
+      id: cleanText(scene?.id || `scene-${String(index + 1).padStart(2, '0')}`, 100),
+      phase: cleanText(scene?.phase || `Étape ${index + 1}`, 120),
+      title: cleanText(scene?.title || `Scène ${index + 1}`, 220),
+      durationMinutes: Math.max(0, Math.min(180, Number(scene?.durationMinutes) || 0)),
+      hostInstruction: cleanText(scene?.hostInstruction || '', 5000),
+      readAloud: cleanText(scene?.readAloud || '', 6000),
+      playerObjective: cleanText(scene?.playerObjective || '', 1800),
+      announcement: cleanText(scene?.announcement || '', 1800),
+      completion: cleanText(scene?.completion || '', 2400),
+      breakout: {
+        enabled: breakout.enabled === true,
+        instruction: cleanText(breakout.instruction || '', 2600),
+        teams: Array.isArray(breakout.teams) ? breakout.teams.map(x => cleanText(x, 80)).filter(Boolean).slice(0, 12) : []
+      },
+      npc: {
+        enabled: npc.enabled === true || !!cleanText(npc.name || '', 160),
+        name: cleanText(npc.name || '', 160),
+        instruction: cleanText(npc.instruction || '', 2200)
+      },
+      dice: {
+        enabled: dice.enabled !== false,
+        instruction: cleanText(dice.instruction || '', 2200)
+      },
+      media: {
+        imageUrl: cleanText(media.imageUrl || '', 1600),
+        audioUrl: cleanText(media.audioUrl || '', 1600),
+        videoUrl: cleanText(media.videoUrl || '', 1600),
+        instruction: cleanText(media.instruction || '', 2200)
+      },
+      clues
+    }
+  })
+}
+
+function gameRuntimeFromGuidedScene(scene, index = 0) {
+  if (!scene) return gameLiveCleanRuntime({ phase: 'Accueil', guidedSceneIndex: 0, allowNpc: true, allowDice: true, sharedClues: [], teamClues: {} })
+  return gameLiveCleanRuntime({
+    guidedSceneIndex: index,
+    guidedSceneId: scene.id || '',
+    phase: scene.phase || '',
+    sceneTitle: scene.title || '',
+    objective: scene.playerObjective || '',
+    announcement: scene.announcement || '',
+    narrative: scene.readAloud || '',
+    activeNpc: scene.npc?.name || '',
+    allowNpc: scene.npc?.enabled !== false && !!scene.npc?.name,
+    allowDice: scene.dice?.enabled !== false,
+    imageUrl: scene.media?.imageUrl || '',
+    audioUrl: scene.media?.audioUrl || '',
+    videoUrl: scene.media?.videoUrl || '',
+    sharedClues: [],
+    teamClues: {}
+  })
+}
+
 function gameHostPackageFromData(d = {}) {
   return {
+    guidedScenes: gameGuidedScenesFromData(d),
     storyStructure: d.storyStructure || '',
     scenesQuests: d.scenesQuests || '',
     hostMaterials: d.hostMaterials || '',
@@ -781,6 +859,7 @@ async function gamePublishProject(env, project, body = {}) {
   const id = requestedId || project.id
   const prior = await gameGetProduct(env, id)
   const stamp = gameLiveNow()
+  const guidedScenes = gameGuidedScenesFromData(d)
   const product = {
     id,
     sourceProjectId: project.id,
@@ -798,9 +877,10 @@ async function gamePublishProject(env, project, body = {}) {
     version: cleanText(body.version || prior?.version || '1.0', 40),
     active: body.active !== false,
     defaultTeams: gameLiveTeams(body.teams || d.liveTeams),
+    guidedScenes,
     runtimeSnapshot: gameRuntimeSnapshotFromData(d),
     hostPackage: gameHostPackageFromData(d),
-    starterRuntime: gameLiveCleanRuntime({
+    starterRuntime: guidedScenes.length ? gameRuntimeFromGuidedScene(guidedScenes[0], 0) : gameLiveCleanRuntime({
       phase: 'Accueil',
       sceneTitle: cleanText(body.startScene || '', 220),
       objective: cleanText(body.startObjective || '', 1400),
@@ -879,6 +959,17 @@ async function gameLibraryAuth(env, token) {
   return { auth, license, licenseHash: auth.licenseHash }
 }
 
+async function gameIssueLibraryToken(env, licenseHash, email = '') {
+  const token = crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '')
+  const tokenHash = await gameSha256Hex(token)
+  await env.HUB_CONFIG.put(gameLibrarySessionKey(tokenHash), JSON.stringify({
+    licenseHash,
+    email: cleanText(email || '', 240).toLowerCase(),
+    createdAt: gameLiveNow()
+  }), { expirationTtl: GAME_LIBRARY_SESSION_TTL })
+  return token
+}
+
 async function gameLibraryState(env, authInfo, origin) {
   const { license } = authInfo
   const products = []
@@ -936,6 +1027,7 @@ async function gameCreateSessionFromProduct(env, product, owner = {}, overrides 
     log: [],
     npcState: {},
     runtime: gameLiveCleanRuntime({ ...(product.starterRuntime || {}), sharedClues: [], teamClues: {} }),
+    guidedScenes: structuredClone(product.guidedScenes || product.hostPackage?.guidedScenes || []),
     projectSnapshot: structuredClone(product.runtimeSnapshot || {}),
     hostPackage: structuredClone(product.hostPackage || {})
   }
@@ -1068,6 +1160,8 @@ function gameLivePublicState(session, player) {
     players: (session.players || []).map(gameLivePublicPlayer),
     teams: session.teams || [],
     runtime: {
+      guidedSceneIndex: Number.isInteger(runtime.guidedSceneIndex) ? runtime.guidedSceneIndex : 0,
+      guidedSceneId: runtime.guidedSceneId || '',
       phase: runtime.phase || '',
       sceneTitle: runtime.sceneTitle || '',
       objective: runtime.objective || '',
@@ -1104,6 +1198,8 @@ function gameLiveHostState(session) {
 }
 function gameLiveCleanRuntime(runtime = {}) {
   return {
+    guidedSceneIndex: Math.max(0, Math.min(999, Number(runtime.guidedSceneIndex) || 0)),
+    guidedSceneId: cleanText(runtime.guidedSceneId || '', 100),
     phase: cleanText(runtime.phase || '', 120),
     sceneTitle: cleanText(runtime.sceneTitle || '', 220),
     objective: cleanText(runtime.objective || '', 1400),
@@ -1355,9 +1451,10 @@ async function handleGameHost(request, env) {
       gameType: d.gameType || 'Soirée immersive',
       audience: d.audience || '16+',
       defaultTeams: gameLiveTeams(body.teams || d.liveTeams),
+      guidedScenes: gameGuidedScenesFromData(d),
       runtimeSnapshot: gameRuntimeSnapshotFromData(d),
       hostPackage: gameHostPackageFromData(d),
-      starterRuntime: gameLiveCleanRuntime({ phase: 'Accueil', allowNpc: true, allowDice: true, sharedClues: [], teamClues: {} })
+      starterRuntime: gameGuidedScenesFromData(d).length ? gameRuntimeFromGuidedScene(gameGuidedScenesFromData(d)[0], 0) : gameLiveCleanRuntime({ phase: 'Accueil', allowNpc: true, allowDice: true, sharedClues: [], teamClues: {} })
     }
     const session = await gameCreateSessionFromProduct(env, testProduct, { licenseId: 'ATELIER-TEST' }, { teams: body.teams || d.liveTeams })
     return json({ ok: true, session: gameLiveHostState(session), joinUrl: `${url.origin}/game-live.html?code=${session.code}`, hostUrl: `${url.origin}/game-host.html?code=${session.code}&host=${encodeURIComponent(session.hostToken)}` }, 201)
@@ -1419,6 +1516,38 @@ async function handleAtelier(request, env, ctx) {
     if (!project || project.kind !== 'nyxia-game') return json({ error: 'Projet NyXia Game introuvable' }, 404)
     const product = await gamePublishProject(env, project, body)
     return json({ ok: true, product: gameProductPublic(product) }, 201)
+  }
+
+  // NyXia Game — test interne en un clic. Crée une vraie bibliothèque client temporaire
+  // sans demander à l'équipe de manipuler une clé d'accès.
+  if (request.method === 'POST' && url.pathname === '/api/atelier/game/test-client') {
+    const body = await request.json().catch(() => ({}))
+    const project = await getProject(env, cleanText(body.projectId, 120))
+    if (!project || project.kind !== 'nyxia-game') return json({ error: 'Projet NyXia Game introuvable' }, 404)
+    const product = await gamePublishProject(env, project, {
+      productId: body.productId || project.id,
+      title: body.title || project.title,
+      subtitle: body.subtitle || project.data?.packageSubtitle || '',
+      description: body.description || project.data?.packageNotes || project.data?.idea || '',
+      coverUrl: body.coverUrl || project.data?.coverUrl || '',
+      version: body.version || project.data?.productVersion || '1.0',
+      teams: body.teams || project.data?.liveTeams || ''
+    })
+    if (!Array.isArray(product.guidedScenes) || !product.guidedScenes.length) {
+      return json({ error: 'Le jeu n’a pas encore de scènes guidées. Finalise d’abord le conducteur dans le Labo.' }, 409)
+    }
+    const created = await gameCreateLicense(env, {
+      productId: product.id,
+      label: `TEST INTERNE — ${product.title}`,
+      maxSessionsPerProduct: 0
+    })
+    const licenseHash = await gameSha256Hex(gameNormalizeAccessKey(created.accessKey))
+    const libraryToken = await gameIssueLibraryToken(env, licenseHash, '')
+    return json({
+      ok: true,
+      product: gameProductPublic(product),
+      libraryUrl: `${url.origin}/game-library.html?test_token=${encodeURIComponent(libraryToken)}`
+    }, 201)
   }
 
   if (request.method === 'POST' && url.pathname === '/api/atelier/game/license') {
@@ -1527,6 +1656,25 @@ async function handleAtelier(request, env, ctx) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
+    const host = url.hostname.toLowerCase()
+    const isGamePortal = host === 'portailgame.nyxia.top'
+
+    // Portail public NyXia Game : même moteur, mais aucune porte vers NyXiaLabo.
+    if (isGamePortal) {
+      if (url.pathname === '/' || url.pathname === '/index.html') {
+        if (!env.ASSETS) return new Response('Assets non configurés', { status: 503 })
+        return env.ASSETS.fetch(new Request(new URL('/game-library.html', request.url), request))
+      }
+      const gameAssets = new Set(['/game-library.html', '/game-host.html', '/game-live.html', '/FavIcon.png'])
+      if (gameAssets.has(url.pathname)) {
+        if (!env.ASSETS) return new Response('Assets non configurés', { status: 503 })
+        return env.ASSETS.fetch(request)
+      }
+      if (!url.pathname.startsWith('/api/game/')) {
+        return new Response('Introuvable', { status: 404, headers: { 'Cache-Control': 'no-store' } })
+      }
+    }
+
     if (url.pathname.startsWith(CARTO_DEFAULT_PATH)) {
       try {
         return await cartoServeEditorAsset(request, env, ctx)
