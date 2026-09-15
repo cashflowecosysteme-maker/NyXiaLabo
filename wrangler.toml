@@ -2,39 +2,21 @@ name = "nyxialabo"
 main = "labo-router.js"
 compatibility_date = "2026-09-15"
 
-# Sert les fichiers statiques (login.html, dashboard.html, atelier-equipe.html, js/) via env.ASSETS.fetch().
-# Le routeur Atelier délègue toutes les routes existantes à _worker.js.
+# Le même Worker compile Azgaar avant chaque déploiement.
+[build]
+command = "node scripts/build-azgaar.mjs"
+
+# Même site, même domaine, même Worker.
 [assets]
 directory = "./"
 binding = "ASSETS"
+run_worker_first = ["/api/*", "/cartographie/azgaar/*"]
 
 [[kv_namespaces]]
 binding = "HUB_CONFIG"
 id = "75b93baac0974f8cb8d1f2089eceb4e6"
 
-# Secrets existants du Worker nyxialabo :
-#   ADMIN_PASSWORD
-#   SESSION_SECRET
-#   OPENROUTER_API_KEY
-#   AIMLAPI_API_KEY
-# + autres secrets déjà utilisés par _worker.js
-#
-# Studio Livre Audio (Google Cloud Text-to-Speech) — authentification recommandée :
-#   GOOGLE_TTS_SERVICE_ACCOUNT_JSON
-# Valeur : le JSON COMPLET d'un compte de service Google Cloud ayant accès
-# au projet où Cloud Text-to-Speech est activé.
-#
-# Alternative si tu préfères séparer les champs :
-#   GOOGLE_TTS_CLIENT_EMAIL
-#   GOOGLE_TTS_PRIVATE_KEY
-#   GOOGLE_TTS_PROJECT_ID
-#
-# Le routeur accepte aussi les noms génériques GOOGLE_SERVICE_ACCOUNT_JSON,
-# GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY et
-# GOOGLE_CLOUD_PROJECT_ID. Ne mets jamais ces valeurs dans ce fichier.
-
-
-# NyXia Cartographie — dans le MÊME Worker nyxialabo.
+# NyXia Cartographie dans CE MÊME Worker.
 [browser]
 binding = "BROWSER"
 
@@ -42,6 +24,6 @@ binding = "BROWSER"
 binding = "MAPS"
 bucket_name = "nyxia-cartographie"
 
-# Optionnel : si un jour Azgaar est auto-hébergé DANS ce même dépôt,
-# définir AZGAAR_BASE_URL vers son chemin. Sans variable, le moteur utilise
-# le site officiel Azgaar comme source de génération.
+# Secrets existants du Worker nyxialabo restent inchangés :
+# ADMIN_PASSWORD, SESSION_SECRET, OPENROUTER_API_KEY, AIMLAPI_API_KEY, etc.
+# Google TTS reste inchangé aussi.
