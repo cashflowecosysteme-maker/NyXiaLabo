@@ -22,6 +22,14 @@ const CARTO_ALLOWED_OUTPUTS = new Set(['map', 'json', 'svg', 'png'])
 const CARTO_DEFAULT_PATH = '/cartographie/azgaar/'
 const CARTO_NONCE_PREFIX = 'atelier:carto:editor-nonce:'
 
+
+// NyXia Game Live — répétitions et soirées Zoom dans le MÊME Worker.
+const GAME_LIVE_PREFIX = 'game:live:'
+const GAME_LIVE_TTL = 72 * 60 * 60
+const GAME_LIVE_MAX_PLAYERS = 60
+const GAME_LIVE_MAX_LOG = 220
+const GAME_LIVE_DEFAULT_MODEL = 'anthropic/claude-sonnet-5'
+
 function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
@@ -643,6 +651,390 @@ async function handleCartography(request, env, path) {
   return json({ error: 'Route Cartographie inconnue' }, 404)
 }
 
+
+function gameLiveKey(code) { return GAME_LIVE_PREFIX + String(code || '').toUpperCase() }
+function gameLiveCode(value) { return cleanText(value, 12).toUpperCase().replace(/[^A-Z0-9]/g, '') }
+function gameLivePlayerToken(request, body = null) {
+  return cleanText(request.headers.get('X-NyXia-Player-Token') || body?.playerToken || '', 180)
+}
+function gameLiveHostToken(request, body = null) {
+  return cleanText(request.headers.get('X-NyXia-Host-Token') || body?.hostToken || '', 220)
+}
+function gameLiveNow() { return new Date().toISOString() }
+function gameLiveTeams(value) {
+  const source = Array.isArray(value) ? value : String(value || '').split(/[\n,;]+/)
+  const names = source.map(v => cleanText(v, 80)).filter(Boolean).slice(0, 12)
+  return (names.length ? names : ['Équipe A', 'Équipe B']).map((name, i) => ({ id: `team-${i + 1}`, name }))
+}
+function gameLiveLog(session, event) {
+  session.log = Array.isArray(session.log) ? session.log : []
+  session.log.push({ id: crypto.randomUUID(), at: gameLiveNow(), ...event })
+  session.log = session.log.slice(-GAME_LIVE_MAX_LOG)
+}
+async function gameLiveLoad(env, code) {
+  if (!env.HUB_CONFIG) return null
+  const normalized = gameLiveCode(code)
+  if (!normalized) return null
+  return await env.HUB_CONFIG.get(gameLiveKey(normalized), 'json')
+}
+async function gameLiveSave(env, session) {
+  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
+  session.updatedAt = gameLiveNow()
+  await env.HUB_CONFIG.put(gameLiveKey(session.code), JSON.stringify(session), { expirationTtl: GAME_LIVE_TTL })
+}
+async function gameLiveUniqueCode(env) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const bytes = new Uint8Array(6)
+    crypto.getRandomValues(bytes)
+    let code = ''
+    for (const b of bytes) code += alphabet[b % alphabet.length]
+    if (!(await gameLiveLoad(env, code))) return code
+  }
+  throw new Error('Impossible de créer un code de partie unique')
+}
+function gameLiveFindPlayer(session, token) {
+  return (session.players || []).find(p => p.token === token) || null
+}
+function gameLivePublicPlayer(p) {
+  return { id: p.id, name: p.name, team: p.team, joinedAt: p.joinedAt, lastSeenAt: p.lastSeenAt }
+}
+function gameLivePublicState(session, player) {
+  const runtime = session.runtime || {}
+  const teamClues = runtime.teamClues || {}
+  return {
+    code: session.code,
+    title: session.title,
+    gameType: session.gameType,
+    audience: session.audience,
+    status: session.status,
+    updatedAt: session.updatedAt,
+    player: gameLivePublicPlayer(player),
+    players: (session.players || []).map(gameLivePublicPlayer),
+    teams: session.teams || [],
+    runtime: {
+      phase: runtime.phase || '',
+      sceneTitle: runtime.sceneTitle || '',
+      objective: runtime.objective || '',
+      announcement: runtime.announcement || '',
+      narrative: runtime.narrative || '',
+      activeNpc: runtime.activeNpc || '',
+      allowNpc: runtime.allowNpc !== false,
+      allowDice: runtime.allowDice !== false,
+      zoomUrl: runtime.zoomUrl || '',
+      imageUrl: runtime.imageUrl || '',
+      audioUrl: runtime.audioUrl || '',
+      videoUrl: runtime.videoUrl || '',
+      sharedClues: Array.isArray(runtime.sharedClues) ? runtime.sharedClues : [],
+      teamClues: Array.isArray(teamClues[player.team]) ? teamClues[player.team] : []
+    },
+    relationship: (session.npcState || {})[`${player.id}::${runtime.activeNpc || ''}`]?.relation || null
+  }
+}
+function gameLiveHostState(session) {
+  const clone = structuredClone(session)
+  clone.hostToken = undefined
+  clone.players = (clone.players || []).map(p => ({ ...p, token: undefined }))
+  if (clone.npcState) {
+    Object.values(clone.npcState).forEach(v => { if (v && v.history) v.history = v.history.slice(-6) })
+  }
+  return clone
+}
+function gameLiveCleanRuntime(runtime = {}) {
+  return {
+    phase: cleanText(runtime.phase || '', 120),
+    sceneTitle: cleanText(runtime.sceneTitle || '', 220),
+    objective: cleanText(runtime.objective || '', 1400),
+    announcement: cleanText(runtime.announcement || '', 1800),
+    narrative: cleanText(runtime.narrative || '', 6000),
+    activeNpc: cleanText(runtime.activeNpc || '', 160),
+    allowNpc: runtime.allowNpc !== false,
+    allowDice: runtime.allowDice !== false,
+    zoomUrl: cleanText(runtime.zoomUrl || '', 1000),
+    imageUrl: cleanText(runtime.imageUrl || '', 1600),
+    audioUrl: cleanText(runtime.audioUrl || '', 1600),
+    videoUrl: cleanText(runtime.videoUrl || '', 1600),
+    sharedClues: Array.isArray(runtime.sharedClues) ? runtime.sharedClues.map(x => cleanText(x, 1600)).filter(Boolean).slice(-60) : [],
+    teamClues: runtime.teamClues && typeof runtime.teamClues === 'object' ? runtime.teamClues : {}
+  }
+}
+async function gameLiveSecureDie(sides) {
+  const max = Math.max(2, Math.min(1000, Number(sides) || 20))
+  const limit = Math.floor(0x100000000 / max) * max
+  const buf = new Uint32Array(1)
+  let n
+  do { crypto.getRandomValues(buf); n = buf[0] } while (n >= limit)
+  return (n % max) + 1
+}
+function gameLiveNpcConfig(snapshot, npcName) {
+  const raw = String(snapshot.npcRuntimeJson || '').trim()
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    const list = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.npcs) ? parsed.npcs : [])
+    const target = String(npcName || '').toLowerCase()
+    return list.find(n => String(n.name || n.nom || n.id || '').toLowerCase() === target) || null
+  } catch (_) { return null }
+}
+function gameLiveClampRelation(value) { return Math.max(0, Math.min(100, Math.round(Number(value) || 0))) }
+function gameLiveParseAiJson(text) {
+  const cleaned = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+  try { return JSON.parse(cleaned) } catch (_) { return { reply: cleaned, memory: '', relationDelta: {} } }
+}
+async function gameLiveNpcReply(env, session, player, npcName, message) {
+  if (!env.OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY manquante pour les PNJ IA Live')
+  const snapshot = session.projectSnapshot || {}
+  const config = gameLiveNpcConfig(snapshot, npcName)
+  const key = `${player.id}::${npcName}`
+  session.npcState = session.npcState || {}
+  const state = session.npcState[key] || { relation: { trust: 50, affinity: 0, fear: 0 }, history: [], memories: [] }
+  const recent = (state.history || []).slice(-10)
+  const model = cleanText(snapshot.npcModel || env.NYXIA_GAME_NPC_MODEL || GAME_LIVE_DEFAULT_MODEL, 160)
+  const runtime = session.runtime || {}
+  const teamClues = (runtime.teamClues || {})[player.team] || []
+  const system = `Tu interprètes UNIQUEMENT le PNJ « ${npcName} » dans NyXia Game.\n\nRÈGLE ABSOLUE DE VÉRITÉ : Canon verrouillé + Bible + état moteur sont la réalité. Le PNJ peut mentir EN PERSONNAGE ou avoir une croyance fausse si sa fiche le prévoit, mais il ne peut jamais inventer un nouveau fait canonique, lire une connaissance interdite ni modifier l’état du monde. S’il ignore une information, il doit l’ignorer naturellement.\n\nLe jeu est destiné à un public ${session.audience || '16+'}; conserve le ton adulte et immersif prévu par le projet.\n\nRéponds exclusivement en JSON valide : {"reply":"réponse en personnage","memory":"fait court à mémoriser ou chaîne vide","relationDelta":{"trust":0,"affinity":0,"fear":0}}. Les deltas sont des entiers entre -10 et 10. Ne mets aucun commentaire hors JSON.`
+  const context = {
+    npc: config || { fallbackText: snapshot.npcIntelligence || '', characters: snapshot.characters || '' },
+    canon: snapshot.lockedCanon || '',
+    bible: snapshot.worldBible || '',
+    memoryRules: snapshot.npcMemoryRules || '',
+    relationshipRules: snapshot.npcRelationshipRules || '',
+    autonomyRules: snapshot.npcAutonomyRules || '',
+    scene: { phase: runtime.phase, title: runtime.sceneTitle, objective: runtime.objective, narrative: runtime.narrative },
+    player: { name: player.name, team: player.team, discoveredClues: [...(runtime.sharedClues || []), ...teamClues], relation: state.relation, memories: state.memories || [] }
+  }
+  const messages = [
+    { role: 'user', content: `DOSSIER DE JEU ET ÉTAT ACTUEL:\n${JSON.stringify(context)}\n\nHISTORIQUE RÉCENT:\n${JSON.stringify(recent)}\n\nLe joueur dit : ${message}` }
+  ]
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://labo.nyxia.top',
+      'X-Title': 'NyXia Game Live NPC'
+    },
+    body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, ...messages], temperature: 0.8, max_tokens: 700 })
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error?.message || `OpenRouter: HTTP ${res.status}`)
+  const parsed = gameLiveParseAiJson(data?.choices?.[0]?.message?.content || '')
+  const delta = parsed.relationDelta || {}
+  state.relation = state.relation || { trust: 50, affinity: 0, fear: 0 }
+  state.relation.trust = gameLiveClampRelation(state.relation.trust + Math.max(-10, Math.min(10, Number(delta.trust) || 0)))
+  state.relation.affinity = gameLiveClampRelation(state.relation.affinity + Math.max(-10, Math.min(10, Number(delta.affinity) || 0)))
+  state.relation.fear = gameLiveClampRelation(state.relation.fear + Math.max(-10, Math.min(10, Number(delta.fear) || 0)))
+  state.history = [...(state.history || []), { at: gameLiveNow(), player: message, npc: cleanText(parsed.reply || '', 5000) }].slice(-16)
+  if (cleanText(parsed.memory || '', 700)) state.memories = [...(state.memories || []), cleanText(parsed.memory, 700)].slice(-24)
+  state.lastAt = gameLiveNow()
+  session.npcState[key] = state
+  return { reply: cleanText(parsed.reply || '', 5000), relation: state.relation }
+}
+
+async function handleGamePublic(request, env) {
+  const url = new URL(request.url)
+  const path = url.pathname.replace('/api/game/live', '') || '/'
+  const body = request.method === 'POST' ? await request.json().catch(() => ({})) : {}
+  const code = gameLiveCode(body.code || url.searchParams.get('code') || '')
+  if (!code) return json({ error: 'Code de partie requis' }, 400)
+  const session = await gameLiveLoad(env, code)
+  if (!session) return json({ error: 'Partie introuvable ou expirée' }, 404)
+
+  if (request.method === 'POST' && path === '/join') {
+    if (session.status === 'ended') return json({ error: 'Cette partie est terminée' }, 409)
+    const name = cleanText(body.name, 80)
+    if (!name) return json({ error: 'Ton nom est requis' }, 400)
+    if ((session.players || []).length >= GAME_LIVE_MAX_PLAYERS) return json({ error: 'Partie complète' }, 409)
+    const priorToken = cleanText(body.playerToken || '', 180)
+    let player = priorToken ? gameLiveFindPlayer(session, priorToken) : null
+    if (!player) {
+      const teams = session.teams || []
+      const team = cleanText(body.team || teams[(session.players || []).length % Math.max(1, teams.length)]?.name || '', 80)
+      player = { id: crypto.randomUUID(), token: crypto.randomUUID().replaceAll('-', ''), name, team, joinedAt: gameLiveNow(), lastSeenAt: gameLiveNow() }
+      session.players = [...(session.players || []), player]
+      gameLiveLog(session, { type: 'join', playerId: player.id, playerName: player.name, team: player.team })
+    } else {
+      player.name = name
+      player.lastSeenAt = gameLiveNow()
+    }
+    await gameLiveSave(env, session)
+    return json({ ok: true, playerToken: player.token, state: gameLivePublicState(session, player) })
+  }
+
+  const token = gameLivePlayerToken(request, body)
+  const player = gameLiveFindPlayer(session, token)
+  if (!player) return json({ error: 'Accès joueur invalide. Rejoins la partie de nouveau.' }, 401)
+  player.lastSeenAt = gameLiveNow()
+
+  if (request.method === 'GET' && path === '/state') {
+    await gameLiveSave(env, session)
+    return json({ state: gameLivePublicState(session, player) })
+  }
+
+  if (request.method === 'POST' && path === '/action') {
+    const type = cleanText(body.type || 'decision', 30)
+    let entry = { id: crypto.randomUUID(), at: gameLiveNow(), type, playerId: player.id, playerName: player.name, team: player.team }
+    if (type === 'roll') {
+      if (session.runtime?.allowDice === false) return json({ error: 'Les dés sont désactivés pour cette scène' }, 409)
+      const sides = Math.max(2, Math.min(1000, Number(body.sides) || 20))
+      const mode = body.mode === 'physical' ? 'physical' : 'digital'
+      const result = mode === 'physical' ? Math.max(1, Math.min(sides, Number(body.result) || 1)) : await gameLiveSecureDie(sides)
+      entry = { ...entry, sides, mode, result }
+    } else {
+      entry.text = cleanText(body.text || '', 2400)
+      if (!entry.text) return json({ error: 'Message vide' }, 400)
+    }
+    gameLiveLog(session, entry)
+    await gameLiveSave(env, session)
+    return json({ ok: true, action: entry })
+  }
+
+  if (request.method === 'POST' && path === '/npc-chat') {
+    if (session.runtime?.allowNpc === false) return json({ error: 'Les PNJ IA sont désactivés pour cette scène' }, 409)
+    const npcName = cleanText(session.runtime?.activeNpc || body.npc || '', 160)
+    if (!npcName) return json({ error: 'Aucun PNJ n’est actuellement disponible' }, 409)
+    const message = cleanText(body.message || '', 1200)
+    if (!message) return json({ error: 'Écris une question au PNJ' }, 400)
+    player.lastNpcAt = Number(player.lastNpcAt) || 0
+    const now = Date.now()
+    if (now - player.lastNpcAt < 1200) return json({ error: 'Un instant entre deux messages au PNJ.' }, 429)
+    player.lastNpcAt = now
+    const answer = await gameLiveNpcReply(env, session, player, npcName, message)
+    gameLiveLog(session, { type: 'npc', playerId: player.id, playerName: player.name, team: player.team, npc: npcName, prompt: message, reply: answer.reply })
+    await gameLiveSave(env, session)
+    return json({ ok: true, npc: npcName, ...answer })
+  }
+
+  return json({ error: 'Route NyXia Game Live inconnue' }, 404)
+}
+
+
+async function gameLiveApplyHostUpdate(session, body = {}) {
+  if (body.status) {
+    const allowed = new Set(['lobby', 'live', 'paused', 'ended'])
+    if (allowed.has(body.status)) session.status = body.status
+  }
+  if (body.runtime && typeof body.runtime === 'object') {
+    const prior = session.runtime || {}
+    const clean = gameLiveCleanRuntime({ ...prior, ...body.runtime })
+    clean.sharedClues = prior.sharedClues || []
+    clean.teamClues = prior.teamClues || {}
+    session.runtime = clean
+  }
+  if (body.playerTeam && body.playerTeam.playerId) {
+    const p = (session.players || []).find(x => x.id === body.playerTeam.playerId)
+    if (p) p.team = cleanText(body.playerTeam.team || '', 80)
+  }
+  if (body.clue && body.clue.text) {
+    const text = cleanText(body.clue.text, 1600)
+    session.runtime = session.runtime || gameLiveCleanRuntime({})
+    if (body.clue.scope === 'team' && body.clue.team) {
+      session.runtime.teamClues = session.runtime.teamClues || {}
+      const team = cleanText(body.clue.team, 80)
+      session.runtime.teamClues[team] = [...(session.runtime.teamClues[team] || []), text].slice(-60)
+      gameLiveLog(session, { type: 'clue-team', team, text })
+    } else {
+      session.runtime.sharedClues = [...(session.runtime.sharedClues || []), text].slice(-60)
+      gameLiveLog(session, { type: 'clue-all', text })
+    }
+  }
+  if (body.clearClues) {
+    session.runtime.sharedClues = []
+    session.runtime.teamClues = {}
+    gameLiveLog(session, { type: 'clues-cleared' })
+  }
+  if (body.clearLog) session.log = []
+  gameLiveLog(session, { type: 'host-update', status: session.status, scene: session.runtime?.sceneTitle || '' })
+}
+
+async function handleGameCustomerHost(request, env) {
+  const url = new URL(request.url)
+  const path = url.pathname.replace('/api/game/host', '') || '/'
+  const parts = path.split('/').filter(Boolean)
+  const code = gameLiveCode(parts[0] || url.searchParams.get('code') || '')
+  if (!code) return json({ error: 'Code de partie requis' }, 400)
+  const session = await gameLiveLoad(env, code)
+  if (!session) return json({ error: 'Partie introuvable ou expirée' }, 404)
+  const body = request.method === 'PUT' || request.method === 'POST' ? await request.json().catch(() => ({})) : {}
+  const token = gameLiveHostToken(request, body)
+  if (!token || token !== session.hostToken) return json({ error: 'Accès animateur invalide' }, 401)
+
+  const joinUrl = `${url.origin}/game-live.html?code=${code}`
+  if (request.method === 'GET') return json({ session: gameLiveHostState(session), joinUrl })
+  if (request.method === 'PUT') {
+    await gameLiveApplyHostUpdate(session, body)
+    await gameLiveSave(env, session)
+    return json({ ok: true, session: gameLiveHostState(session), joinUrl })
+  }
+  if (request.method === 'DELETE') {
+    session.status = 'ended'
+    gameLiveLog(session, { type: 'session-ended' })
+    await gameLiveSave(env, session)
+    return json({ ok: true })
+  }
+  return json({ error: 'Route animateur NyXia Game inconnue' }, 404)
+}
+
+async function handleGameHost(request, env) {
+  const url = new URL(request.url)
+  const path = url.pathname.replace('/api/atelier/game/live', '') || '/'
+  const parts = path.split('/').filter(Boolean)
+  const code = gameLiveCode(parts[0] || '')
+
+  if (request.method === 'POST' && !code) {
+    const body = await request.json().catch(() => ({}))
+    const project = await getProject(env, cleanText(body.projectId, 120))
+    if (!project || project.kind !== 'nyxia-game') return json({ error: 'Projet NyXia Game introuvable' }, 404)
+    const d = project.data || {}
+    const newCode = await gameLiveUniqueCode(env)
+    const session = {
+      code: newCode,
+      id: crypto.randomUUID(),
+      hostToken: crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', ''),
+      projectId: project.id,
+      title: project.title,
+      gameType: d.gameType || 'Soirée immersive',
+      audience: d.audience || '16+',
+      status: 'lobby',
+      createdAt: gameLiveNow(), updatedAt: gameLiveNow(),
+      teams: gameLiveTeams(body.teams || d.liveTeams),
+      players: [], log: [], npcState: {},
+      runtime: gameLiveCleanRuntime({ phase: 'Accueil', allowNpc: true, allowDice: true, sharedClues: [], teamClues: {} }),
+      projectSnapshot: {
+        lockedCanon: d.lockedCanon || '', worldBible: d.worldBible || '', storyStructure: d.storyStructure || '', scenesQuests: d.scenesQuests || '',
+        characters: d.characters || '', npcIntelligence: d.npcIntelligence || '', npcRuntimeJson: d.npcRuntimeJson || '', npcMemoryRules: d.npcMemoryRules || '',
+        npcRelationshipRules: d.npcRelationshipRules || '', npcAutonomyRules: d.npcAutonomyRules || '', npcVoicePlan: d.npcVoicePlan || '', npcModel: d.npcModel || '',
+        mechanics: d.mechanics || '', combatRules: d.combatRules || '', livePlan: d.livePlan || ''
+      }
+    }
+    gameLiveLog(session, { type: 'session-created', text: 'Session créée' })
+    await gameLiveSave(env, session)
+    return json({ ok: true, session: gameLiveHostState(session), joinUrl: `${url.origin}/game-live.html?code=${newCode}`, hostUrl: `${url.origin}/game-host.html?code=${newCode}&host=${encodeURIComponent(session.hostToken)}` }, 201)
+  }
+
+  if (!code) return json({ error: 'Code de partie requis' }, 400)
+  const session = await gameLiveLoad(env, code)
+  if (!session) return json({ error: 'Session Live introuvable ou expirée' }, 404)
+
+  if (request.method === 'GET') return json({ session: gameLiveHostState(session), joinUrl: `${url.origin}/game-live.html?code=${code}`, hostUrl: `${url.origin}/game-host.html?code=${code}&host=${encodeURIComponent(session.hostToken)}` })
+
+  if (request.method === 'PUT') {
+    const body = await request.json().catch(() => ({}))
+    await gameLiveApplyHostUpdate(session, body)
+    await gameLiveSave(env, session)
+    return json({ ok: true, session: gameLiveHostState(session), joinUrl: `${url.origin}/game-live.html?code=${code}`, hostUrl: `${url.origin}/game-host.html?code=${code}&host=${encodeURIComponent(session.hostToken)}` })
+  }
+
+  if (request.method === 'DELETE') {
+    session.status = 'ended'
+    gameLiveLog(session, { type: 'session-ended' })
+    await gameLiveSave(env, session)
+    return json({ ok: true })
+  }
+
+  return json({ error: 'Route hôte NyXia Game Live inconnue' }, 404)
+}
+
 async function handleAtelier(request, env, ctx) {
   const url = new URL(request.url)
   const parts = url.pathname.split('/').filter(Boolean)
@@ -656,7 +1048,7 @@ async function handleAtelier(request, env, ctx) {
       kv: !!env.HUB_CONFIG,
       googleTts: googleTtsConfigured(env),
       cartography: !!env.BROWSER && !!env.MAPS,
-      version: 'atelier-equipe-2.2-azgaar-selfhosted'
+      version: 'atelier-equipe-3.1-game-live-client-host'
     })
   }
 
@@ -665,6 +1057,9 @@ async function handleAtelier(request, env, ctx) {
     const targetPath = url.pathname.replace('/api/atelier/cartography', '') || '/health'
     return handleCartography(request, env, targetPath)
   }
+
+  // NyXia Game Live — console animateur protégée par la session du Labo.
+  if (url.pathname.startsWith('/api/atelier/game/live')) return handleGameHost(request, env)
 
   // Projets Atelier — index léger + un objet KV par projet.
   if (parts[2] === 'projects') {
@@ -762,6 +1157,20 @@ export default {
         return await cartoServeEditorAsset(request, env, ctx)
       } catch (err) {
         return new Response(err?.message || String(err), { status: 500 })
+      }
+    }
+    if (url.pathname.startsWith('/api/game/host')) {
+      try {
+        return await handleGameCustomerHost(request, env)
+      } catch (err) {
+        return json({ error: err?.message || String(err) }, 500)
+      }
+    }
+    if (url.pathname.startsWith('/api/game/live')) {
+      try {
+        return await handleGamePublic(request, env)
+      } catch (err) {
+        return json({ error: err?.message || String(err) }, 500)
       }
     }
     if (url.pathname.startsWith('/api/atelier/')) {
