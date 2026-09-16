@@ -274,6 +274,73 @@ async function serveMedia(request,env,ctx){
   return new Response(object.body,{status:range?206:200,headers})
 }
 
+// Prix officiels indicatifs septembre 2026, 1 MP pour les modèles au MP.
+// Autorisation explicite par requête, jamais d'appel en lot, clés seulement côté Worker.
+const ECONOMY_IMAGE_IDS = new Set(['flux/schnell','flux/dev','stable-diffusion-v3-medium','dall-e-3'])
+async function economyImageGenerate(request,env,ctx){
+  if(!(await hasTeamAccess(request,env,ctx)))return json({error:'Accès équipe requis'},401)
+  const origin=request.headers.get('Origin')
+  if(origin&&origin!==new URL(request.url).origin)return json({error:'Origine interdite'},403)
+  if(!env.HUB_CONFIG)return json({error:'Stockage projet indisponible'},503)
+  if(!env.AIMLAPI_API_KEY)return json({error:'Secret AIMLAPI_API_KEY absent de ce Worker ; aucun coût engagé.'},503)
+  const body=await request.json().catch(()=>({}))
+  const {projectId,assetId}=body
+  if(body.confirmed!==true)return json({error:'Confirmation explicite obligatoire avant un appel payant'},400)
+  if(!idValid(projectId)||!idValid(assetId)||!ECONOMY_IMAGE_IDS.has(body.model))return json({error:'Projet, média ou modèle non autorisé'},400)
+  const project=await env.HUB_CONFIG.get('atelier:project:'+projectId,'json')
+  if(!project||project.kind!=='nyxia-game')return json({error:'Jeu introuvable'},404)
+  let assets=[]
+  try{assets=JSON.parse(project.data?.productionAssetsJson||'[]')}catch(_){}
+  const asset=Array.isArray(assets)?assets.find(a=>a?.id===assetId):null
+  if(!asset||!['image','badge','map'].includes(asset.kind))return json({error:'Image absente du cahier ou mauvais type'},404)
+  if(asset.url||asset.localMediaId||asset.generatedPreviewUrl)return json({error:'Cette carte possède déjà un média ou un résultat à valider ; retire-le avant de créer une autre image'},409)
+  const prompt=String(body.prompt||'').trim()
+  if(prompt.length<40||prompt.length>4000||!prompt.includes(asset.code||asset.id))return json({error:'Prompt du média absent, trop long ou sans code de scène. Aucun appel lancé.'},400)
+  if(!String(project.data?.imageBriefs||project.data?.worldBible||'').trim())return json({error:'Direction artistique absente : génération refusée'},400)
+  const payload={model:body.model,prompt}
+  if(body.model==='dall-e-3'){payload.n=1;payload.size='1024x1024';payload.quality='standard'}
+  else {payload.num_images=1;payload.image_size={width:1024,height:768}}
+  try{
+    const res=await fetch('https://api.aimlapi.com/v1/images/generations',{method:'POST',headers:{Authorization:'Bearer '+env.AIMLAPI_API_KEY,'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    const data=await res.json().catch(()=>({}))
+    if(!res.ok)return json({error:typeof data.error?.message==='string'?data.error.message:'AIMLAPI : HTTP '+res.status},502)
+    const images=(Array.isArray(data.data)?data.data:[]).map(x=>x?.url||(x?.b64_json?'data:image/png;base64,'+x.b64_json:null)).filter(Boolean).slice(0,1)
+    if(!images.length)return json({error:'AIMLAPI n’a pas retourné une image exploitable ; ne relance pas sans consulter le compte fournisseur.'},502)
+    return json({ok:true,images,model:body.model,count:1})
+  }catch(_){return json({error:'AIMLAPI indisponible. Vérifie les factures avant toute nouvelle tentative.'},502)}
+}
+
+// Cloudflare Workers AI : un appel image par validation, réservé à l'équipe.
+// Ne jamais renvoyer une URL publique du bucket ; la réponse est un aperçu JPEG base64.
+async function cloudflareImageGenerate(request,env,ctx){
+  if(!(await hasTeamAccess(request,env,ctx)))return json({error:'Accès équipe requis'},401)
+  const origin=request.headers.get('Origin')
+  if(origin&&origin!==new URL(request.url).origin)return json({error:'Origine interdite'},403)
+  if(!env.AI||typeof env.AI.run!=='function')return json({error:'Binding Workers AI absent : ajouter [ai] binding = "AI" dans wrangler.toml, puis redéployer.'},503)
+  if(!env.HUB_CONFIG)return json({error:'Stockage projet indisponible'},503)
+  const body=await request.json().catch(()=>({}))
+  if(body.confirmed!==true)return json({error:'Confirmation explicite exigée : une requête consomme des neurones (facturable au-delà du quota).'},400)
+  const {projectId,assetId}=body
+  if(body.model!=='@cf/black-forest-labs/flux-1-schnell'||!idValid(projectId)||!idValid(assetId))return json({error:'Modèle ou média non autorisé'},400)
+  const project=await env.HUB_CONFIG.get('atelier:project:'+projectId,'json')
+  if(!project||project.kind!=='nyxia-game')return json({error:'Projet introuvable'},404)
+  let assets=[]
+  try{assets=JSON.parse(project.data?.productionAssetsJson||'[]')}catch(_){}
+  const asset=Array.isArray(assets)?assets.find(a=>a?.id===assetId):null
+  if(!asset||!['image','badge','map'].includes(asset.kind))return json({error:'Carte image absente du cahier'},404)
+  if(asset.url||asset.localMediaId||asset.generatedPreviewUrl)return json({error:'Média existant : retire-le d’abord si tu veux créer une nouvelle image'},409)
+  const style=String(project.data?.imageBriefs||project.data?.worldBible||'').trim()
+  if(!style)return json({error:'Bible ou direction artistique absente : aucun appel IA'},400)
+  const prompt=String(body.prompt||'').trim()
+  if(prompt.length<30||prompt.length>2048||!prompt.includes(asset.code||asset.id))return json({error:'Prompt Cloudflare invalide, trop long ou sans identification du média'},400)
+  if(!prompt.includes(String(project.title||'').trim()))return json({error:'Le prompt ne correspond pas au titre du projet ouvert'},400)
+  try{
+    const result=await env.AI.run('@cf/black-forest-labs/flux-1-schnell',{prompt,steps:4})
+    if(typeof result?.image!=='string'||!/^[A-Za-z0-9+/=]+$/.test(result.image)||result.image.length<100)return json({error:'Workers AI n’a pas retourné une image JPEG exploitable. Vérifie la consommation avant de relancer.'},502)
+    return json({ok:true,images:['data:image/jpeg;base64,'+result.image],model:body.model,count:1,mimeType:'image/jpeg'})
+  }catch(err){return json({error:'Workers AI : '+String(err?.message||'échec')+'. Vérifie la consommation avant toute nouvelle tentative.'},502)}
+}
+
 export default {
   async fetch(request,env,ctx){
     const path=new URL(request.url).pathname
@@ -287,6 +354,8 @@ export default {
       const result=json({ok:!!env.MAPS,storage:env.MAPS?'R2 privé / nyxia-game/media/':'absent',privateGateway:true})
       return bearer.startsWith('Bearer ')?addCookie(result,cookies.team,bearer.slice(7),7200):result
     }
+    if(path==='/api/game/media/image/cloudflare' && request.method==='POST')return cloudflareImageGenerate(request,env,ctx)
+    if(path==='/api/game/media/image/generate' && request.method==='POST')return economyImageGenerate(request,env,ctx)
     if(path==='/api/game/media/upload' && request.method==='POST')return upload(request,env,ctx)
     if(path==='/api/game/media/import-free' && request.method==='POST')return importFree(request,env,ctx)
     const response=await existingWorker.fetch(request,env,ctx)
