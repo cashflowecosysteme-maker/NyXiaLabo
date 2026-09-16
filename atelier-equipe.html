@@ -179,7 +179,7 @@
   function chooseGame(id){chooseProject('nyxia-game',id,renderGame)}
 
   async function newProject(kind){
-    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',playerPrologue:'',playerCreationInstructions:'',playerArchetypes:'',playerFactions:'',playerStartingReputation:0,playerReputationRules:'',playerBadgeCatalog:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',sourceDocuments:'',importedSourceNames:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',guidedScenesJson:'',mediaUseFreeAudio:true,mediaUseFreeVideo:true,mediaPaidFallback:false,mediaAllowPaidImages:false,mediaPaidVideoLimit:0,mediaAskVideoApproval:true,deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
+    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',playerPrologue:'',playerCreationInstructions:'',playerArchetypes:'',playerFactions:'',playerStartingReputation:0,playerReputationRules:'',playerBadgeCatalog:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',sourceDocuments:'',importedSourceNames:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',guidedScenesJson:'',mediaUseFreeAudio:true,mediaUseFreeVideo:true,mediaPaidFallback:false,mediaAllowPaidImages:false,mediaPaidVideoLimit:0,mediaAskVideoApproval:true,mediaUseUserAssets:true,userMediaAssets:[],deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
     var title=prompt('Titre du projet :','Nouveau '+kindLabel(kind))||('Nouveau '+kindLabel(kind))
     try{var d=await api('/api/atelier/projects',{method:'POST',body:JSON.stringify({kind:kind,title:title,data:defaults[kind]||{}})}); currentProject=d.project; await reloadIndex(); showView(({ghostwriting:'ghost',audiobook:'audio','nyxia-game':'game',mystery:'mystery'})[kind]||'home'); toast('Projet créé') }catch(e){alert(e.message)}
   }
@@ -717,6 +717,117 @@
     q=q.replace(/^(audio|son|sons|ambiance|bruitage|video|vidéo|clip|scene|scène)\s*[:\-–—]?\s*/i,'')
     return q.slice(0,90)||'cinematic atmosphere'
   }
+
+  function mediaKindFromMime(type,name){
+    var t=String(type||'').toLowerCase(),n=String(name||'').toLowerCase()
+    if(t.startsWith('image/')||/\.(png|jpg|jpeg|webp|gif|svg)$/.test(n))return 'image'
+    if(t.startsWith('video/')||/\.(mp4|webm|mov|m4v)$/.test(n))return 'video'
+    if(t.startsWith('audio/')||/\.(mp3|wav|ogg|m4a|aac|flac)$/.test(n))return 'audio'
+    return 'other'
+  }
+  function readFileAsDataURL(file){
+    return new Promise(function(resolve,reject){
+      var fr=new FileReader()
+      fr.onload=function(){resolve(fr.result)}
+      fr.onerror=function(){reject(fr.error||new Error('Lecture impossible'))}
+      fr.readAsDataURL(file)
+    })
+  }
+  async function importProjectMediaFiles(files){
+    if(!currentProject||!files||!files.length)return
+    var d=currentProject.data||{}
+    d.userMediaAssets=d.userMediaAssets||[]
+    var imported=0,skipped=0
+    for(var i=0;i<files.length;i++){
+      var f=files[i],kind=mediaKindFromMime(f.type,f.name)
+      if(kind==='other'){skipped++;continue}
+      var sizeMb=(f.size||0)/1024/1024
+      if(sizeMb>25){
+        skipped++
+        continue
+      }
+      var url=await readFileAsDataURL(f)
+      d.userMediaAssets.push({
+        id:'usr_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),
+        name:f.name,
+        kind:kind,
+        mime:f.type||'',
+        size:f.size||0,
+        sizeLabel:(sizeMb<1?sizeMb.toFixed(2):sizeMb.toFixed(1))+' Mo',
+        tags:'',
+        source:'Utilisateur',
+        license:'Asset personnel / acheté',
+        url:url,
+        addedAt:new Date().toISOString()
+      })
+      imported++
+    }
+    markDirty()
+    await saveCurrent()
+    renderGame()
+    toast('Médias importés : '+imported+(skipped?(' · ignorés : '+skipped):''))
+  }
+  function removeProjectMediaAsset(id){
+    if(!currentProject)return
+    var d=currentProject.data||{}
+    d.userMediaAssets=(d.userMediaAssets||[]).filter(function(x){return x.id!==id})
+    markDirty()
+    saveCurrent().then(renderGame)
+  }
+  function editProjectMediaAssetTags(id){
+    if(!currentProject)return
+    var d=currentProject.data||{},item=(d.userMediaAssets||[]).find(function(x){return x.id===id})
+    if(!item)return
+    var next=prompt('Ajoute des mots-clés pour aider NyXia à reconnaître ce média (ex. orc forêt combat taverne reine des fées) :',item.tags||'')
+    if(next===null)return
+    item.tags=String(next||'').trim()
+    markDirty()
+    saveCurrent().then(renderGame)
+  }
+  function clearProjectMediaAssets(){
+    if(!currentProject)return
+    var d=currentProject.data||{}
+    if(!(d.userMediaAssets||[]).length)return
+    if(!confirm('Retirer tous les médias personnels importés pour ce projet ?'))return
+    d.userMediaAssets=[]
+    markDirty()
+    saveCurrent().then(renderGame)
+  }
+  function tokensForMatch(s){
+    return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(function(x){return x&&x.length>2})
+  }
+  function matchScore(a,b){
+    var A=tokensForMatch(a),B=tokensForMatch(b),setB={}
+    B.forEach(function(x){setB[x]=1})
+    var score=0
+    A.forEach(function(x){if(setB[x])score++})
+    return score
+  }
+  function findUserProvidedAsset(asset,d){
+    var list=(d.userMediaAssets||[])
+    if(!list.length)return null
+    var wanted=asset.kind==='badge'||asset.kind==='map'?'image':asset.kind
+    var pool=list.filter(function(x){return x.kind===wanted})
+    if(!pool.length)return null
+    var needle=[asset.title||'',asset.notes||'',asset.prompt||''].join(' ')
+    var best=null,bestScore=0
+    pool.forEach(function(item){
+      var score=matchScore(needle,[item.name||'',item.tags||''].join(' '))
+      if(score>bestScore){best=item;bestScore=score}
+    })
+    if(best && bestScore>0)return best
+    return null
+  }
+  function renderProjectMediaLibrary(d){
+    var list=d.userMediaAssets||[]
+    if(!list.length)return '<div class="tiny">Aucun média personnel importé pour ce projet.</div>'
+    return '<div class="asset-grid">'+list.map(function(x){
+      var icon=x.kind==='image'?'🖼️':x.kind==='video'?'🎬':'🎵'
+      return '<div class="asset-card"><div><div class="tiny">'+icon+' '+esc(x.kind.toUpperCase())+' · '+esc(x.sizeLabel||'')+'</div><div style="font-weight:800;margin-top:6px">'+esc(x.name||'média')+'</div>'+(x.tags?'<div class="tiny" style="margin-top:6px">Tags : '+esc(x.tags)+'</div>':'<div class="tiny" style="margin-top:6px">Ajoute des tags pour aider NyXia à le reconnaître.</div>')+'</div><div class="tools-line" style="margin-top:10px"><button class="btn" onclick="editProjectMediaAssetTags(\''+esc(x.id)+'\')">🏷️ Tags</button><button class="btn" onclick="removeProjectMediaAsset(\''+esc(x.id)+'\')">🗑 Retirer</button></div></div>'
+    }).join('')+'</div>'
+  }
+
+
   async function findFreeAudioAsset(asset){
     var q=mediaBankQuery(asset)
     var data=await api('/api/freesound-search?q='+encodeURIComponent(q))
@@ -868,8 +979,10 @@
     var useFreeVideo=d.mediaUseFreeVideo!==false
     var paidFallback=d.mediaPaidFallback===true
     var allowPaidImages=d.mediaAllowPaidImages===true
+    var useUserAssets=d.mediaUseUserAssets!==false
     var videoPaidLimit=Math.max(0,parseInt(d.mediaPaidVideoLimit||0,10)||0)
     var askVideoApproval=d.mediaAskVideoApproval!==false
+    var userDone=0
     var videoPaidUsed=0
     var videoPaidDecisionTaken=!askVideoApproval
     var videoPaidApprovedSession=!askVideoApproval
@@ -881,6 +994,7 @@
     d.mediaUseFreeVideo=useFreeVideo
     d.mediaPaidFallback=paidFallback
     d.mediaAllowPaidImages=allowPaidImages
+    d.mediaUseUserAssets=useUserAssets
     d.mediaPaidVideoLimit=videoPaidLimit
     d.mediaAskVideoApproval=askVideoApproval
 
@@ -892,6 +1006,7 @@
 
     var summary=queue.reduce(function(o,a){o[a.kind]=(o[a.kind]||0)+1;return o},{})
     var strategy=[]
+    if(useUserAssets)strategy.push('🎒 Tes médias importés : utilisés d’abord si NyXia trouve un bon match')
     if(useFreeAudio)strategy.push('🎵 Sons : Freesound GRATUIT d’abord')
     if(useFreeVideo)strategy.push('🎬 Vidéos : Pexels GRATUIT d’abord')
     if(allowPaidImages)strategy.push('🎨 Images payantes autorisées')
@@ -913,6 +1028,7 @@
     var log=[],done=0,errors=0,freeDone=0,paidDone=0,freeMiss=0
     function note(s){log.push(s);mediaProgress(log.join('\n'))}
     note('Production média NyXia démarrée — '+queue.length+' élément(s).')
+    if(useUserAssets)note('🎒 NyXia va d’abord essayer ta bibliothèque de médias importés.')
     if(useFreeAudio)note('🆓 Freesound sera consulté avant toute génération audio payante.')
     if(useFreeVideo)note('🆓 Pexels sera consulté avant toute génération vidéo payante.')
     if(!allowPaidImages)note('🛑 Images payantes désactivées : aucune image GPT ne sera lancée sans ton accord.')
@@ -927,6 +1043,30 @@
         a.status='production'
         d.productionAssetsJson=JSON.stringify(assets,null,2)
         var result=null,url=''
+
+        if(useUserAssets){
+          var own=findUserProvidedAsset(a,d)
+          if(own){
+            a.url=own.url
+            a.status='produit'
+            a.generatedAt=new Date().toISOString()
+            a.source='Bibliothèque utilisateur'
+            a.credit=own.name||''
+            a.license=own.license||'Asset personnel / acheté'
+            a.free=true
+            a.userProvided=true
+            a.userMediaId=own.id
+            done++;userDone++
+            note('   🎒 Média trouvé dans ta bibliothèque : '+(own.name||'asset personnel'))
+            d.productionAssetsJson=JSON.stringify(assets,null,2)
+            d.mediaProductionLog=log.join('\n')
+            markDirty()
+            await saveCurrent()
+            continue
+          }else{
+            note('   🔎 Aucun média perso correspondant trouvé, on passe à la suite…')
+          }
+        }
 
         if(a.kind==='audio'&&useFreeAudio){
           try{
@@ -1043,20 +1183,28 @@
     }
 
     note('')
-    note('RÉSUMÉ : '+done+' produits · '+freeDone+' gratuits · '+paidDone+' IA payants · '+freeMiss+' recherches gratuites sans résultat · '+errors+' erreur(s) · '+videoPaidUsed+' vidéo(s) payante(s) utilisée(s).')
+    note('RÉSUMÉ : '+done+' produits · '+userDone+' depuis ta bibliothèque · '+freeDone+' gratuits · '+paidDone+' IA payants · '+freeMiss+' recherches gratuites sans résultat · '+errors+' erreur(s) · '+videoPaidUsed+' vidéo(s) payante(s) utilisée(s).')
     d.mediaProductionCompletedAt=new Date().toISOString()
     d.productionAssetsJson=JSON.stringify(assets,null,2)
     d.mediaProductionLog=log.join('\n')
     markDirty();await saveCurrent()
     if(btn){btn.disabled=false;btn.textContent='✨ PRODUIRE TOUS LES MÉDIAS DU JEU'}
     renderGame()
-    toast('Médias : '+done+' · gratuits : '+freeDone+' · payants : '+paidDone+' · sécurité budget active')
+    toast('Médias : '+done+' · bibliothèque : '+userDone+' · gratuits : '+freeDone+' · payants : '+paidDone)
   }
 
   function gameMedia(d){
-    var freeAudio=d.mediaUseFreeAudio!==false,freeVideo=d.mediaUseFreeVideo!==false,paidFallback=d.mediaPaidFallback===true,allowPaidImages=d.mediaAllowPaidImages===true,videoPaidLimit=Math.max(0,parseInt(d.mediaPaidVideoLimit||0,10)||0),askVideoApproval=d.mediaAskVideoApproval!==false
+    var freeAudio=d.mediaUseFreeAudio!==false,freeVideo=d.mediaUseFreeVideo!==false,paidFallback=d.mediaPaidFallback===true,allowPaidImages=d.mediaAllowPaidImages===true,videoPaidLimit=Math.max(0,parseInt(d.mediaPaidVideoLimit||0,10)||0),askVideoApproval=d.mediaAskVideoApproval!==false,useUserAssets=d.mediaUseUserAssets!==false
     return '<h4>🎬 Production média du jeu</h4>'+
       '<div class="game-note"><b>Mode économie NyXia :</b> les banques gratuites sont utilisées avant les générateurs payants. Les studios séparés restent seulement pour les retouches manuelles.</div>'+
+      '<div class="panel" style="padding:16px;margin:12px 0 16px;border-color:rgba(123,92,255,.34)">'+
+        '<h4 style="margin:0 0 8px">🎒 Tes médias déjà créés</h4>'+
+        '<div class="tiny" style="margin-bottom:12px">Tu peux importer <b>tes propres images, vidéos et sons</b> pour ce projet : créations SeaArt, vidéos parlées, audios achetés (ex. Envato) ou tout autre matériel déjà prêt. NyXia essaiera de les utiliser <b>avant</b> les banques gratuites et avant l’IA payante.</div>'+
+        '<div class="tools-line" style="margin-bottom:10px"><label style="display:flex;gap:8px;align-items:center;padding:10px;border:1px solid rgba(123,92,255,.24);border-radius:12px"><input type="checkbox" '+(useUserAssets?'checked':'')+' onchange="setData(\'mediaUseUserAssets\',this.checked)"><span><b>Utiliser mes médias d’abord</b></span></label><button class="btn primary" onclick="document.getElementById(\'project-media-upload\').click()">📥 Ajouter mes médias</button><button class="btn" onclick="clearProjectMediaAssets()">🗑 Vider la bibliothèque du projet</button></div>'+
+        '<input id="project-media-upload" type="file" multiple accept="image/*,video/*,audio/*" style="display:none" onchange="importProjectMediaFiles(this.files); this.value=\'\'">'+
+        '<div class="game-note" style="margin:10px 0"><b>Conseil :</b> donne des noms de fichiers parlants ou ajoute des <b>tags</b> comme “orc”, “taverne”, “forêt”, “combat”, “âme sœur”, “horreur”, etc. pour aider NyXia à faire le bon match.</div>'+
+        renderProjectMediaLibrary(d)+
+      '</div>'+
       '<div class="panel" style="padding:16px;margin:12px 0 16px;border-color:rgba(53,214,154,.28)">'+
         '<h4 style="margin:0 0 8px">🆓 Gratuit d’abord — puis IA seulement si nécessaire</h4>'+
         '<div class="tiny" style="margin-bottom:12px">NyXia peut chercher les sons dans <b>Freesound</b> et les vidéos dans <b>Pexels</b> directement depuis ce jeu. Les crédits/licences sont conservés dans le registre.</div>'+
