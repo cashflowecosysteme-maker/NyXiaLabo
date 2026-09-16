@@ -730,6 +730,49 @@ async function gameSaveProduct(env, product) {
   await gameSaveProductIndex(env, next)
 }
 
+
+function gameLinesFromText(value, maxItems = 30, maxLen = 120) {
+  return String(value || '')
+    .split(/\r?\n/)
+    .map(x => cleanText(x.replace(/^[•*–—-]\s*/, ''), maxLen))
+    .filter(Boolean)
+    .slice(0, maxItems)
+}
+
+function gamePlayerBadgeCatalog(value) {
+  return gameLinesFromText(value, 40, 500).map((line, index) => {
+    const parts = line.split('|').map(x => cleanText(x, 260))
+    let icon = '🏅', name = '', description = ''
+    if (parts.length >= 3) {
+      icon = parts[0] || '🏅'
+      name = parts[1] || `Badge ${index + 1}`
+      description = parts.slice(2).join(' | ')
+    } else if (parts.length === 2) {
+      name = parts[0] || `Badge ${index + 1}`
+      description = parts[1] || ''
+    } else {
+      name = parts[0] || `Badge ${index + 1}`
+    }
+    const id = ('badge-' + (index + 1) + '-' + name)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 90)
+    return { id: id || `badge-${index + 1}`, icon: cleanText(icon, 20) || '🏅', name: cleanText(name, 120), description: cleanText(description, 360) }
+  }).filter(x => x.name)
+}
+
+function gamePlayerConfigFromData(d = {}) {
+  return {
+    prologue: cleanText(d.playerPrologue || d.idea || '', 7000),
+    creationInstructions: cleanText(d.playerCreationInstructions || '', 3000),
+    archetypes: gameLinesFromText(d.playerArchetypes || '', 30, 120),
+    factions: gameLinesFromText(d.playerFactions || '', 30, 120),
+    startingReputation: Math.max(-100, Math.min(100, Number(d.playerStartingReputation) || 0)),
+    reputationRules: cleanText(d.playerReputationRules || '', 5000),
+    badgeCatalog: gamePlayerBadgeCatalog(d.playerBadgeCatalog || ''),
+    allowPortrait: true
+  }
+}
+
 function gameRuntimeSnapshotFromData(d = {}) {
   return {
     lockedCanon: d.lockedCanon || '',
@@ -737,6 +780,13 @@ function gameRuntimeSnapshotFromData(d = {}) {
     storyStructure: d.storyStructure || '',
     scenesQuests: d.scenesQuests || '',
     characters: d.characters || '',
+    playerPrologue: d.playerPrologue || '',
+    playerCreationInstructions: d.playerCreationInstructions || '',
+    playerArchetypes: d.playerArchetypes || '',
+    playerFactions: d.playerFactions || '',
+    playerStartingReputation: Number(d.playerStartingReputation) || 0,
+    playerReputationRules: d.playerReputationRules || '',
+    playerBadgeCatalog: d.playerBadgeCatalog || '',
     npcIntelligence: d.npcIntelligence || '',
     npcRuntimeJson: d.npcRuntimeJson || '',
     npcMemoryRules: d.npcMemoryRules || '',
@@ -846,6 +896,8 @@ function gameHostPackageFromData(d = {}) {
     lockedCanon: d.lockedCanon || '',
     worldBible: d.worldBible || '',
     characters: d.characters || '',
+    playerConfig: gamePlayerConfigFromData(d),
+    playerMaterials: d.playerMaterials || '',
     mechanics: d.mechanics || '',
     combatRules: d.combatRules || '',
     progression: d.progression || ''
@@ -878,6 +930,7 @@ async function gamePublishProject(env, project, body = {}) {
     active: body.active !== false,
     defaultTeams: gameLiveTeams(body.teams || d.liveTeams),
     guidedScenes,
+    playerConfig: gamePlayerConfigFromData(d),
     runtimeSnapshot: gameRuntimeSnapshotFromData(d),
     hostPackage: gameHostPackageFromData(d),
     starterRuntime: guidedScenes.length ? gameRuntimeFromGuidedScene(guidedScenes[0], 0) : gameLiveCleanRuntime({
@@ -1028,6 +1081,7 @@ async function gameCreateSessionFromProduct(env, product, owner = {}, overrides 
     npcState: {},
     runtime: gameLiveCleanRuntime({ ...(product.starterRuntime || {}), sharedClues: [], teamClues: {} }),
     guidedScenes: structuredClone(product.guidedScenes || product.hostPackage?.guidedScenes || []),
+    playerConfig: structuredClone(product.playerConfig || product.hostPackage?.playerConfig || {}),
     projectSnapshot: structuredClone(product.runtimeSnapshot || {}),
     hostPackage: structuredClone(product.hostPackage || {})
   }
@@ -1143,8 +1197,31 @@ async function gameLiveUniqueCode(env) {
 function gameLiveFindPlayer(session, token) {
   return (session.players || []).find(p => p.token === token) || null
 }
-function gameLivePublicPlayer(p) {
-  return { id: p.id, name: p.name, team: p.team, joinedAt: p.joinedAt, lastSeenAt: p.lastSeenAt }
+function gameLivePublicPlayer(p, self = false) {
+  const c = p?.character && typeof p.character === 'object' ? p.character : null
+  const character = c ? {
+    name: cleanText(c.name || '', 120),
+    archetype: cleanText(c.archetype || '', 120),
+    faction: cleanText(c.faction || '', 120),
+    publicBio: cleanText(c.publicBio || '', 1200),
+    portraitDataUrl: cleanText(c.portraitDataUrl || '', 240000)
+  } : null
+  if (self && character) {
+    character.strength = cleanText(c.strength || '', 700)
+    character.weakness = cleanText(c.weakness || '', 700)
+    character.motivation = cleanText(c.motivation || '', 900)
+    character.secret = cleanText(c.secret || '', 1200)
+  }
+  return {
+    id: p.id,
+    name: p.name,
+    team: p.team,
+    joinedAt: p.joinedAt,
+    lastSeenAt: p.lastSeenAt,
+    character,
+    badges: Array.isArray(p.badges) ? p.badges.slice(-60) : [],
+    reputation: p.reputation && typeof p.reputation === 'object' ? p.reputation : {}
+  }
 }
 function gameLivePublicState(session, player) {
   const runtime = session.runtime || {}
@@ -1156,9 +1233,10 @@ function gameLivePublicState(session, player) {
     audience: session.audience,
     status: session.status,
     updatedAt: session.updatedAt,
-    player: gameLivePublicPlayer(player),
-    players: (session.players || []).map(gameLivePublicPlayer),
+    player: gameLivePublicPlayer(player, true),
+    players: (session.players || []).map(p => gameLivePublicPlayer(p, false)),
     teams: session.teams || [],
+    playerConfig: session.playerConfig || {},
     runtime: {
       guidedSceneIndex: Number.isInteger(runtime.guidedSceneIndex) ? runtime.guidedSceneIndex : 0,
       guidedSceneId: runtime.guidedSceneId || '',
@@ -1235,6 +1313,13 @@ function gameLiveNpcConfig(snapshot, npcName) {
   } catch (_) { return null }
 }
 function gameLiveClampRelation(value) { return Math.max(0, Math.min(100, Math.round(Number(value) || 0))) }
+function gameLiveCleanPortrait(value) {
+  const s = String(value || '').trim()
+  if (!s) return ''
+  if (!/^data:image\/(?:png|jpe?g|webp);base64,/i.test(s)) return ''
+  if (s.length > 240000) return ''
+  return s
+}
 function gameLiveParseAiJson(text) {
   const cleaned = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
   try { return JSON.parse(cleaned) } catch (_) { return { reply: cleaned, memory: '', relationDelta: {} } }
@@ -1259,7 +1344,24 @@ async function gameLiveNpcReply(env, session, player, npcName, message) {
     relationshipRules: snapshot.npcRelationshipRules || '',
     autonomyRules: snapshot.npcAutonomyRules || '',
     scene: { phase: runtime.phase, title: runtime.sceneTitle, objective: runtime.objective, narrative: runtime.narrative },
-    player: { name: player.name, team: player.team, discoveredClues: [...(runtime.sharedClues || []), ...teamClues], relation: state.relation, memories: state.memories || [] }
+    player: {
+      name: player.name,
+      team: player.team,
+      character: player.character ? {
+        name: player.character.name || '',
+        archetype: player.character.archetype || '',
+        faction: player.character.faction || '',
+        strength: player.character.strength || '',
+        weakness: player.character.weakness || '',
+        motivation: player.character.motivation || '',
+        publicBio: player.character.publicBio || ''
+      } : null,
+      badges: Array.isArray(player.badges) ? player.badges.map(b => ({ name: b.name, icon: b.icon })) : [],
+      reputation: player.reputation || {},
+      discoveredClues: [...(runtime.sharedClues || []), ...teamClues],
+      relation: state.relation,
+      memories: state.memories || []
+    }
   }
   const messages = [
     { role: 'user', content: `DOSSIER DE JEU ET ÉTAT ACTUEL:\n${JSON.stringify(context)}\n\nHISTORIQUE RÉCENT:\n${JSON.stringify(recent)}\n\nLe joueur dit : ${message}` }
@@ -1308,7 +1410,17 @@ async function handleGamePublic(request, env) {
     if (!player) {
       const teams = session.teams || []
       const team = cleanText(body.team || teams[(session.players || []).length % Math.max(1, teams.length)]?.name || '', 80)
-      player = { id: crypto.randomUUID(), token: crypto.randomUUID().replaceAll('-', ''), name, team, joinedAt: gameLiveNow(), lastSeenAt: gameLiveNow() }
+      player = {
+        id: crypto.randomUUID(),
+        token: crypto.randomUUID().replaceAll('-', ''),
+        name,
+        team,
+        character: null,
+        badges: [],
+        reputation: {},
+        joinedAt: gameLiveNow(),
+        lastSeenAt: gameLiveNow()
+      }
       session.players = [...(session.players || []), player]
       gameLiveLog(session, { type: 'join', playerId: player.id, playerName: player.name, team: player.team })
     } else {
@@ -1323,6 +1435,39 @@ async function handleGamePublic(request, env) {
   const player = gameLiveFindPlayer(session, token)
   if (!player) return json({ error: 'Accès joueur invalide. Rejoins la partie de nouveau.' }, 401)
   player.lastSeenAt = gameLiveNow()
+
+  if (request.method === 'POST' && path === '/character') {
+    const cfg = session.playerConfig || {}
+    const allowedArchetypes = Array.isArray(cfg.archetypes) ? cfg.archetypes : []
+    const allowedFactions = Array.isArray(cfg.factions) ? cfg.factions : []
+    let archetype = cleanText(body.archetype || '', 120)
+    let faction = cleanText(body.faction || '', 120)
+    if (allowedArchetypes.length && archetype && !allowedArchetypes.includes(archetype)) return json({ error: 'Choisis un archétype proposé pour ce jeu.' }, 400)
+    if (allowedFactions.length && faction && !allowedFactions.includes(faction)) return json({ error: 'Choisis une faction proposée pour ce jeu.' }, 400)
+    const characterName = cleanText(body.characterName || '', 120)
+    if (!characterName) return json({ error: 'Donne un nom à ton personnage.' }, 400)
+    player.character = {
+      name: characterName,
+      archetype,
+      faction,
+      strength: cleanText(body.strength || '', 700),
+      weakness: cleanText(body.weakness || '', 700),
+      motivation: cleanText(body.motivation || '', 900),
+      publicBio: cleanText(body.publicBio || '', 1200),
+      secret: cleanText(body.secret || '', 1200),
+      portraitDataUrl: gameLiveCleanPortrait(body.portraitDataUrl || ''),
+      createdAt: player.character?.createdAt || gameLiveNow(),
+      updatedAt: gameLiveNow()
+    }
+    player.badges = Array.isArray(player.badges) ? player.badges : []
+    if (!player.reputation || typeof player.reputation !== 'object') player.reputation = {}
+    if (faction && !(faction in player.reputation)) {
+      player.reputation[faction] = Math.max(-100, Math.min(100, Number(cfg.startingReputation) || 0))
+    }
+    gameLiveLog(session, { type: 'character-created', playerId: player.id, playerName: player.name, characterName, faction, archetype })
+    await gameLiveSave(env, session)
+    return json({ ok: true, state: gameLivePublicState(session, player) })
+  }
 
   if (request.method === 'GET' && path === '/state') {
     await gameLiveSave(env, session)
@@ -1382,6 +1527,40 @@ async function gameLiveApplyHostUpdate(session, body = {}) {
   if (body.playerTeam && body.playerTeam.playerId) {
     const p = (session.players || []).find(x => x.id === body.playerTeam.playerId)
     if (p) p.team = cleanText(body.playerTeam.team || '', 80)
+  }
+  if (body.badgeAward && body.badgeAward.playerId) {
+    const p = (session.players || []).find(x => x.id === body.badgeAward.playerId)
+    if (p) {
+      const catalog = Array.isArray(session.playerConfig?.badgeCatalog) ? session.playerConfig.badgeCatalog : []
+      const requestedId = cleanText(body.badgeAward.badgeId || '', 100)
+      const requestedName = cleanText(body.badgeAward.name || '', 120)
+      const catalogBadge = catalog.find(b => b.id === requestedId || b.name === requestedName)
+      const badge = {
+        id: cleanText(catalogBadge?.id || requestedId || ('custom-' + crypto.randomUUID()), 100),
+        icon: cleanText(catalogBadge?.icon || body.badgeAward.icon || '🏅', 20) || '🏅',
+        name: cleanText(catalogBadge?.name || requestedName || 'Badge NyXia', 120),
+        description: cleanText(catalogBadge?.description || body.badgeAward.description || '', 360),
+        awardedAt: gameLiveNow()
+      }
+      p.badges = Array.isArray(p.badges) ? p.badges : []
+      const exists = p.badges.some(b => b.id === badge.id && b.name === badge.name)
+      if (!exists) {
+        p.badges = [...p.badges, badge].slice(-60)
+        gameLiveLog(session, { type: 'badge', playerId: p.id, playerName: p.name, badge: badge.name, icon: badge.icon })
+      }
+    }
+  }
+  if (body.reputationChange && body.reputationChange.playerId) {
+    const p = (session.players || []).find(x => x.id === body.reputationChange.playerId)
+    if (p) {
+      const faction = cleanText(body.reputationChange.faction || p.character?.faction || 'Générale', 120) || 'Générale'
+      const delta = Math.max(-100, Math.min(100, Number(body.reputationChange.delta) || 0))
+      p.reputation = p.reputation && typeof p.reputation === 'object' ? p.reputation : {}
+      const before = Number(p.reputation[faction]) || 0
+      const after = Math.max(-100, Math.min(100, before + delta))
+      p.reputation[faction] = after
+      gameLiveLog(session, { type: 'reputation', playerId: p.id, playerName: p.name, faction, delta, value: after })
+    }
   }
   if (body.clue && body.clue.text) {
     const text = cleanText(body.clue.text, 1600)
@@ -1452,6 +1631,7 @@ async function handleGameHost(request, env) {
       audience: d.audience || '16+',
       defaultTeams: gameLiveTeams(body.teams || d.liveTeams),
       guidedScenes: gameGuidedScenesFromData(d),
+      playerConfig: gamePlayerConfigFromData(d),
       runtimeSnapshot: gameRuntimeSnapshotFromData(d),
       hostPackage: gameHostPackageFromData(d),
       starterRuntime: gameGuidedScenesFromData(d).length ? gameRuntimeFromGuidedScene(gameGuidedScenesFromData(d)[0], 0) : gameLiveCleanRuntime({ phase: 'Accueil', allowNpc: true, allowDice: true, sharedClues: [], teamClues: {} })
@@ -1496,7 +1676,7 @@ async function handleAtelier(request, env, ctx) {
       kv: !!env.HUB_CONFIG,
       googleTts: googleTtsConfigured(env),
       cartography: !!env.BROWSER && !!env.MAPS,
-      version: 'atelier-equipe-4.0-game-library-entitlements'
+      version: 'atelier-equipe-4.1-player-characters-badges-reputation'
     })
   }
 
