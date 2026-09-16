@@ -123,6 +123,7 @@
       if(!auth.valid){ location.href='/login.html'; return }
       var data=await Promise.all([api('/api/atelier/health'),api('/api/atelier/projects'),api('/api/tools')])
       var health=data[0]; allProjects=data[1].projects||[]; tools=data[2].tools||[]
+      await ensureEconomyVideoTool()
       aiTools=tools.filter(function(t){ return t.providerId && t.model && (!t.kind || t.kind==='chat') })
       var savedAi='';try{savedAi=sessionStorage.getItem('nyxialabo_default_ai_tool')||''}catch(e){}
       var savedTool=aiTools.find(function(t){return t.id===savedAi})
@@ -420,6 +421,72 @@
       sourceDocuments:d.sourceDocuments||''
     }
   }
+
+  function setPlayerSetupState(type,msg,detail){
+    if(!currentProject)return
+    var d=currentProject.data||{}
+    d.playerSetupState={
+      type:type||'info',
+      message:msg||'',
+      detail:detail||'',
+      at:new Date().toISOString()
+    }
+    markDirty()
+    playerSetupStatus(type,msg,detail,d.playerSetupState.at)
+  }
+  function playerSetupStatus(type,msg,detail,at){
+    var box=document.getElementById('player-setup-status')
+    if(!box)return
+    var icon=type==='working'?'⏳':type==='ok'?'✅':type==='error'?'⚠️':'ℹ️'
+    var title=type==='working'?'NYXIA TRAVAILLE':type==='ok'?'TERMINÉ':type==='error'?'ERREUR':'ÉTAT'
+    var time=''
+    if(at){
+      try{time=new Date(at).toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})}catch(e){}
+    }
+    box.style.display='block'
+    box.style.borderColor=type==='ok'?'rgba(53,214,154,.45)':type==='error'?'rgba(255,98,124,.45)':'rgba(232,184,103,.40)'
+    box.style.background=type==='ok'?'rgba(53,214,154,.08)':type==='error'?'rgba(255,98,124,.08)':'rgba(232,184,103,.07)'
+    box.innerHTML=
+      '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center">'+
+        '<b style="font-size:13px">'+icon+' '+title+'</b>'+
+        (time?'<span class="tiny">'+esc(time)+'</span>':'')+
+      '</div>'+
+      '<div style="font-weight:800;margin-top:7px">'+esc(msg||'')+'</div>'+
+      (detail?'<div class="tiny" style="margin-top:5px;line-height:1.45">'+esc(detail)+'</div>':'')+
+      (type==='working'?'<div class="tiny" style="margin-top:8px;color:#f4d28a"><b>Attends la confirmation ✅ TERMINÉ avant de cliquer à nouveau.</b></div>':'')
+  }
+  function renderStoredPlayerSetupState(d){
+    var s=d&&d.playerSetupState
+    if(!s)return '<div id="player-setup-status" class="game-note" style="display:block;margin-bottom:14px"><b>ℹ️ ÉTAT</b><div class="tiny" style="margin-top:5px">Aucune génération lancée pour le moment.</div></div>'
+    var type=s.type||'info'
+    var icon=type==='working'?'⏳':type==='ok'?'✅':type==='error'?'⚠️':'ℹ️'
+    var title=type==='working'?'NYXIA TRAVAILLE':type==='ok'?'TERMINÉ':type==='error'?'ERREUR':'ÉTAT'
+    var time=''
+    try{time=new Date(s.at||'').toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})}catch(e){}
+    var border=type==='ok'?'rgba(53,214,154,.45)':type==='error'?'rgba(255,98,124,.45)':'rgba(232,184,103,.40)'
+    var bg=type==='ok'?'rgba(53,214,154,.08)':type==='error'?'rgba(255,98,124,.08)':'rgba(232,184,103,.07)'
+    return '<div id="player-setup-status" class="game-note" style="display:block;margin-bottom:14px;border-color:'+border+';background:'+bg+'">'+
+      '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><b style="font-size:13px">'+icon+' '+title+'</b>'+(time?'<span class="tiny">'+esc(time)+'</span>':'')+'</div>'+
+      '<div style="font-weight:800;margin-top:7px">'+esc(s.message||'')+'</div>'+
+      (s.detail?'<div class="tiny" style="margin-top:5px;line-height:1.45">'+esc(s.detail)+'</div>':'')+
+      (type==='working'?'<div class="tiny" style="margin-top:8px;color:#f4d28a"><b>Attends la confirmation ✅ TERMINÉ avant de cliquer à nouveau.</b></div>':'')+
+      '</div>'
+  }
+  function playerSetupBusy(on,activeId){
+    ['player-setup-all-btn','player-prologue-btn'].forEach(function(id){
+      var b=document.getElementById(id)
+      if(b)b.disabled=!!on
+    })
+    var active=document.getElementById(activeId)
+    if(active){
+      if(on){
+        active.dataset.originalText=active.textContent
+        active.textContent='⏳ NyXia travaille…'
+      }else if(active.dataset.originalText){
+        active.textContent=active.dataset.originalText
+      }
+    }
+  }
   async function generatePlayerPrologueOnly(){
     if(!currentProject)return
     var d=currentProject.data||{},tool=currentAiTool()
@@ -427,12 +494,29 @@
     if(String(d.playerPrologue||'').trim()&&!confirm('Le prologue contient déjà du texte. Le remplacer par une nouvelle version créée par NyXia ?'))return
     var ctx=JSON.stringify(playerVisibleContext(),null,2)
     var prompt='À partir de TOUT le dossier ci-dessous, rédige le PROLOGUE / CONTEXTE D’ENTRÉE destiné aux joueurs avant la création de leur personnage. Le texte doit être immersif, clair et directement jouable. Longueur cible : 250 à 450 mots. Il doit expliquer ce que le monde sait publiquement, ce qui vient de se produire avant l’arrivée des joueurs, pourquoi leurs personnages sont concernés et quelle tension les appelle dans l’histoire. IMPORTANT : ne révèle AUCUNE solution, fin, vérité cachée, secret de PNJ, coupable, twist, information réservée au MJ ni connaissance que les personnages ne devraient pas avoir au départ. Tu peux utiliser ces informations pour comprendre la cohérence du jeu, mais tu dois filtrer strictement ce qui est visible aux joueurs. Ne parle pas de "dossier", "scénario", "acte" ou "mécanique". Écris directement le texte final, sans titre technique ni commentaire.\n\nDOSSIER COMPLET:\n'+ctx
+    playerSetupBusy(true,'player-prologue-btn')
+    setPlayerSetupState('working','NyXia prépare le prologue…','Lecture de la Bible, de l’histoire, des personnages et des factions. Ne ferme pas cette page.')
+    try{await saveCurrent()}catch(_saveStart){}
     try{
-      toast('✨ NyXia rédige le prologue joueur…')
-      d.playerPrologue=await runAIText(gamePromptBase(),prompt,tool.id)
-      markDirty();await saveCurrent();renderGame();toast('✅ Prologue joueur créé')
-    }catch(e){alert('Prologue impossible : '+e.message)}
+      var out=await runAIText(gamePromptBase(),prompt,tool.id)
+      setPlayerSetupState('working','Texte reçu. NyXia l’enregistre…','Le prologue va apparaître automatiquement dans le champ juste en dessous.')
+      d.playerPrologue=out
+      markDirty()
+      await saveCurrent()
+      renderGame()
+      setTimeout(function(){
+        setPlayerSetupState('ok','Prologue terminé ✓','Le prologue est enregistré dans ton projet. Tu peux maintenant le lire ou le modifier.')
+      },60)
+      toast('✅ Prologue joueur créé')
+    }catch(e){
+      setPlayerSetupState('error','La création du prologue a échoué.',e.message||String(e))
+      try{await saveCurrent()}catch(_saveErr){}
+      alert('Prologue impossible : '+e.message)
+    }finally{
+      playerSetupBusy(false,'player-prologue-btn')
+    }
   }
+
   async function generateCompletePlayerSetup(){
     if(!currentProject)return
     var d=currentProject.data||{},tool=currentAiTool()
@@ -440,9 +524,13 @@
     if(playerSetupHasContent(d)&&!confirm('Une partie de l’entrée joueur contient déjà du contenu. NyXia va remplacer les champs Joueurs par une version complète et cohérente. Continuer ?'))return
     var ctx=JSON.stringify(playerVisibleContext(),null,2)
     var prompt='Prépare toute l’ENTRÉE JOUEUR de ce NyXia Game à partir de TOUT le dossier ci-dessous. Réponds UNIQUEMENT avec un JSON valide, sans markdown, de forme exacte : {"prologue":"...","creationInstructions":"...","archetypes":"...","factions":"...","startingReputation":0,"reputationRules":"...","badgeCatalog":"..."}. RÈGLES : 1) prologue = 250 à 450 mots, immersif, public, sans spoiler; 2) creationInstructions = instructions simples pour créer son PJ, incluant nom, rôle, motivation, force, faiblesse, secret personnel, lien au monde et portrait facultatif; 3) archetypes = un rôle jouable par ligne, adaptés à CE jeu; 4) factions = une faction jouable par ligne, uniquement celles qui peuvent réellement accueillir un PJ; 5) startingReputation = nombre entier entre -100 et 100; 6) reputationRules = règles claires de montée/descente de réputation et conséquences; 7) badgeCatalog = une ligne par badge au format emoji | Nom | description. Tu as accès aux secrets, fins et vérités cachées uniquement pour préserver la cohérence : NE LES RÉVÈLE JAMAIS dans le contenu visible au joueur. Ne transforme jamais un PNJ en personnage joueur sauf si le dossier dit explicitement que ce rôle est jouable.\n\nDOSSIER COMPLET:\n'+ctx
+    playerSetupBusy(true,'player-setup-all-btn')
+    setPlayerSetupState('working','NyXia travaille sur toute l’entrée joueur…','Étape 1/3 · Analyse du jeu complet et séparation des informations publiques et secrètes. Ne ferme pas cette page.')
+    try{await saveCurrent()}catch(_saveStart){}
     try{
-      toast('✨ NyXia prépare toute l’entrée joueur…')
-      var out=await runAIText(gamePromptBase(),prompt,tool.id),obj=parseJsonLoose(out)
+      var out=await runAIText(gamePromptBase(),prompt,tool.id)
+      setPlayerSetupState('working','NyXia a terminé la rédaction.','Étape 2/3 · Vérification du prologue, des rôles, factions, réputation et badges.')
+      var obj=parseJsonLoose(out)
       if(!obj||typeof obj!=='object')throw new Error('Réponse structurée invalide.')
       d.playerPrologue=String(obj.prologue||'').trim()
       d.playerCreationInstructions=String(obj.creationInstructions||'').trim()
@@ -452,14 +540,28 @@
       d.playerStartingReputation=Number.isFinite(rep)?Math.max(-100,Math.min(100,Math.round(rep))):0
       d.playerReputationRules=String(obj.reputationRules||'').trim()
       d.playerBadgeCatalog=String(obj.badgeCatalog||'').trim()
-      markDirty();await saveCurrent();renderGame();toast('✅ Entrée joueur complète créée')
-    }catch(e){alert('Création de l’entrée joueur impossible : '+e.message)}
+      setPlayerSetupState('working','Contenu validé. Enregistrement…','Étape 3/3 · Sauvegarde dans ton projet.')
+      markDirty()
+      await saveCurrent()
+      renderGame()
+      setTimeout(function(){
+        setPlayerSetupState('ok','Entrée joueur terminée ✓','Prologue, instructions, archétypes, factions, réputation et badges sont enregistrés. Tu peux maintenant les relire juste en dessous.')
+      },60)
+      toast('✅ Entrée joueur complète créée')
+    }catch(e){
+      setPlayerSetupState('error','La préparation de l’entrée joueur a échoué.',e.message||String(e))
+      try{await saveCurrent()}catch(_saveErr){}
+      alert('Création de l’entrée joueur impossible : '+e.message)
+    }finally{
+      playerSetupBusy(false,'player-setup-all-btn')
+    }
   }
 
   function gamePlayers(d){
+    setTimeout(function(){if(d.playerSetupState&&d.playerSetupState.type==='working')playerSetupBusy(true,'')},0)
     return '<h4>🎭 Personnages joueurs — entrée dans l’histoire</h4>'+
       '<div class="game-note"><b>NyXia peut préparer cette section pour toi.</b> Elle utilise la Bible, l’histoire, les scènes, les personnages, les factions et même les secrets/fins pour comprendre la cohérence — mais elle filtre automatiquement tout ce que le joueur ne doit pas savoir.</div>'+
-      '<div class="tools-line" style="margin:12px 0 16px"><button class="btn gold" style="font-size:14px;padding:12px 16px" onclick="generateCompletePlayerSetup()">✨ NyXia prépare toute l’entrée joueur</button><button class="btn primary" onclick="generatePlayerPrologueOnly()">✍️ Générer seulement le prologue</button></div>'+
+      '<div class="tools-line" style="margin:12px 0 10px"><button id="player-setup-all-btn" class="btn gold" style="font-size:14px;padding:12px 16px" onclick="generateCompletePlayerSetup()">✨ NyXia prépare toute l’entrée joueur</button><button id="player-prologue-btn" class="btn primary" onclick="generatePlayerPrologueOnly()">✍️ Générer seulement le prologue</button></div>'+renderStoredPlayerSetupState(d)+
       '<div class="game-note"><b>Le joueur réel n’est jamais un PNJ.</b> Il entre dans le monde avec son propre <b>personnage joueur (PJ)</b>. Cette section prépare ce qu’il verra avant la partie : contexte, création de son personnage, faction, réputation et badges.</div>'+
       gameArea('Prologue / contexte d’entrée — généré à partir du jeu, sans spoiler','playerPrologue',d.playerPrologue,12)+
       gameArea('Instructions de création visibles par le joueur — limites, ton, éléments à respecter','playerCreationInstructions',d.playerCreationInstructions,7)+
@@ -583,16 +685,101 @@
     return '<div class="game-note"><b>Assets actuellement attachés au jeu :</b> '+list.length+(chips?'<div style="margin-top:8px">'+chips+'</div>':'<div class="tiny" style="margin-top:6px">Aucun asset enregistré pour le moment.</div>')+'</div>'
   }
 
+  async function ensureEconomyVideoTool(){
+    if(tools.some(function(t){return String(t.model||'')==='luma/ray-flash-2'}))return
+    try{
+      var created=await api('/api/tools',{method:'POST',body:JSON.stringify({
+        name:'Luma Ray Flash 2 — Économique',
+        icon:'💸',
+        category:'video',
+        kind:'video',
+        providerId:'aimlapi',
+        model:'luma/ray-flash-2'
+      })})
+      if(created&&created.tool)tools.push(created.tool)
+    }catch(e){
+      console.warn('Impossible d’ajouter Ray Flash 2 automatiquement',e)
+    }
+  }
+  function videoEconomyScore(t){
+    var m=String(t.model||'').toLowerCase()
+    if(m==='luma/ray-flash-2')return 0
+    if(/runway\/gen3a_turbo|runway\/gen4_turbo/.test(m))return 2
+    if(m==='luma/ray-2')return 3
+    if(/kling.*2\.6/.test(m))return 4
+    if(/pixverse/.test(m))return 5
+    if(/veo/.test(m))return 8
+    if(/ltxv/.test(m))return 9
+    return 6
+  }
+  function mediaBankQuery(asset){
+    var q=String(asset&&asset.title||asset&&asset.notes||'').replace(/[|_*#`[\]{}()]/g,' ').replace(/\s+/g,' ').trim()
+    q=q.replace(/^(audio|son|sons|ambiance|bruitage|video|vidéo|clip|scene|scène)\s*[:\-–—]?\s*/i,'')
+    return q.slice(0,90)||'cinematic atmosphere'
+  }
+  async function findFreeAudioAsset(asset){
+    var q=mediaBankQuery(asset)
+    var data=await api('/api/freesound-search?q='+encodeURIComponent(q))
+    var list=(data.results||[]).filter(function(x){
+      var lic=String(x.license||'').toLowerCase()
+      return x.preview && !/by-nc|noncommercial|non-commercial/.test(lic)
+    })
+    if(!list.length)return null
+    var r=list[0]
+    return {
+      url:r.preview,
+      source:'Freesound',
+      sourceId:r.id,
+      sourceUrl:'https://freesound.org/s/'+r.id+'/',
+      credit:r.username||'',
+      license:r.license||'Licence Freesound',
+      free:true,
+      searchQuery:q
+    }
+  }
+  async function findFreeVideoAsset(asset){
+    var q=mediaBankQuery(asset)
+    var data=await api('/api/pexels-video-search?q='+encodeURIComponent(q))
+    var list=(data.videos||[]).filter(function(x){return x.full||x.preview})
+    if(!list.length)return null
+    var preferred=list.find(function(x){return Number(x.duration||0)>=4&&Number(x.duration||0)<=30})||list[0]
+    return {
+      url:preferred.full||preferred.preview,
+      preview:preferred.preview||preferred.full,
+      source:'Pexels',
+      sourceId:preferred.id,
+      sourceUrl:preferred.url||'',
+      credit:preferred.photographer||'',
+      license:'Pexels License',
+      free:true,
+      searchQuery:q
+    }
+  }
+
   function mediaToolList(kind){
-    if(kind==='image')return tools.filter(function(t){return t.kind==='image'||t.kind==='image-async'})
-    if(kind==='audio')return tools.filter(function(t){return t.kind==='audio'||t.category==='audio'})
-    if(kind==='video')return tools.filter(function(t){return t.kind==='video'||t.category==='video'||String(t.kind||'').indexOf('video')>=0})
-    return []
+    var list=[]
+    if(kind==='image')list=tools.filter(function(t){return t.kind==='image'||t.kind==='image-async'})
+    if(kind==='audio')list=tools.filter(function(t){return t.kind==='audio'||t.category==='audio'})
+    if(kind==='video')list=tools.filter(function(t){return t.kind==='video'||t.category==='video'||String(t.kind||'').indexOf('video')>=0})
+    if(kind==='image'){
+      list=list.slice().sort(function(a,b){
+        var ag=/gpt-image-2$/i.test(String(a.model||''))?0:1
+        var bg=/gpt-image-2$/i.test(String(b.model||''))?0:1
+        return ag-bg
+      })
+    }
+    if(kind==='video')list=list.slice().sort(function(a,b){return videoEconomyScore(a)-videoEconomyScore(b)})
+    return list
   }
   function mediaToolSelect(kind,savedId,label){
     var list=mediaToolList(kind),id=savedId||''
     if(!id&&list.length)id=list[0].id
-    var opts=list.map(function(t){return '<option value="'+esc(t.id)+'"'+(t.id===id?' selected':'')+'>'+esc((t.icon||'⚙️')+' '+t.name)+'</option>'}).join('')
+    var opts=list.map(function(t){
+      var extra=''
+      if(kind==='video'&&String(t.model||'')==='luma/ray-flash-2')extra=' · 💰 économique'
+      if(kind==='image'&&/gpt-image-2$/i.test(String(t.model||'')))extra=' · recommandé'
+      return '<option value="'+esc(t.id)+'"'+(t.id===id?' selected':'')+'>'+esc((t.icon||'⚙️')+' '+t.name+extra)+'</option>'
+    }).join('')
     if(!opts)opts='<option value="">Aucun moteur détecté</option>'
     return '<div class="field"><label>'+label+'</label><select id="game-media-'+kind+'-tool" onchange="setData(\'media'+kind.charAt(0).toUpperCase()+kind.slice(1)+'ToolId\',this.value)">'+opts+'</select></div>'
   }
@@ -606,7 +793,10 @@
       else media='<img src="'+esc(a.url)+'" alt="" style="width:100%;height:150px;object-fit:cover;border-radius:10px">'
       return '<div style="border:1px solid rgba(167,139,250,.16);border-radius:12px;padding:9px;background:rgba(255,255,255,.025)">'+media+
         '<div style="font-weight:800;margin-top:7px">'+esc(a.title||a.kind)+'</div>'+
-        '<div class="tiny">'+esc(a.kind||'')+' · '+esc(a.status||'')+'</div></div>'
+        '<div class="tiny">'+esc(a.kind||'')+' · '+esc(a.status||'')+(a.source?' · '+esc(a.source):'')+(a.free?' · 🆓':'')+'</div>'+
+        (a.credit?'<div class="tiny">Crédit : '+esc(a.credit)+(a.license?' · '+esc(a.license):'')+'</div>':'')+
+        (a.sourceUrl?'<div class="tiny"><a href="'+esc(a.sourceUrl)+'" target="_blank">Voir la source</a></div>':'')+
+        '</div>'
     }).join('')
     return '<div class="game-note"><b>🎞️ Médias produits :</b> '+done.length+' fichier(s) attaché(s) au jeu.</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin:10px 0 14px">'+cards+'</div>'
   }
@@ -674,37 +864,125 @@
     var imageTool=tools.find(function(t){return t.id===imageId})
     var audioTool=tools.find(function(t){return t.id===audioId})
     var videoTool=tools.find(function(t){return t.id===videoId})
-    d.mediaImageToolId=imageId;d.mediaAudioToolId=audioId;d.mediaVideoToolId=videoId
+    var useFreeAudio=d.mediaUseFreeAudio!==false
+    var useFreeVideo=d.mediaUseFreeVideo!==false
+    var paidFallback=d.mediaPaidFallback!==false
+
+    d.mediaImageToolId=imageId
+    d.mediaAudioToolId=audioId
+    d.mediaVideoToolId=videoId
+    d.mediaUseFreeAudio=useFreeAudio
+    d.mediaUseFreeVideo=useFreeVideo
+    d.mediaPaidFallback=paidFallback
+
     var queue=assets.filter(function(a){return ['image','badge','map','audio','video'].indexOf(a.kind)>=0&&a.status!=='produit'})
     if(!queue.length){alert('Tous les médias du registre sont déjà produits.');return}
+
     var needImage=queue.some(function(a){return ['image','badge','map'].indexOf(a.kind)>=0})
-    var needAudio=queue.some(function(a){return a.kind==='audio'})
-    var needVideo=queue.some(function(a){return a.kind==='video'})
     if(needImage&&!imageTool){alert('Aucun moteur image n’est sélectionné/détecté.');return}
-    if(needAudio&&!audioTool){alert('Aucun moteur audio n’est sélectionné/détecté.');return}
-    if(needVideo&&!videoTool){alert('Aucun moteur vidéo n’est sélectionné/détecté.');return}
+
     var summary=queue.reduce(function(o,a){o[a.kind]=(o[a.kind]||0)+1;return o},{})
-    if(!confirm('NyXia va maintenant produire automatiquement '+queue.length+' média(s) sans quitter cette page. Continuer ?\n\n'+Object.keys(summary).map(function(k){return k+' : '+summary[k]}).join('\n')))return
+    var strategy=[]
+    if(useFreeAudio)strategy.push('🎵 Sons : Freesound GRATUIT d’abord')
+    if(useFreeVideo)strategy.push('🎬 Vidéos : Pexels GRATUIT d’abord')
+    if(paidFallback)strategy.push('💰 Si aucun gratuit ne convient : IA payante sélectionnée')
+    else strategy.push('🛑 Aucun média payant de remplacement ne sera lancé pour audio/vidéo')
+
+    if(!confirm(
+      'NyXia va produire '+queue.length+' média(s) sans quitter cette page.\n\n'+
+      strategy.join('\n')+'\n\n'+
+      Object.keys(summary).map(function(k){return k+' : '+summary[k]}).join('\n')+
+      '\n\nContinuer ?'
+    ))return
+
     var btn=document.getElementById('produce-all-media-btn')
-    if(btn){btn.disabled=true;btn.textContent='⏳ Production des médias en cours…'}
-    var log=[],done=0,errors=0
+    if(btn){btn.disabled=true;btn.textContent='⏳ NyXia produit les médias…'}
+    var log=[],done=0,errors=0,freeDone=0,paidDone=0,freeMiss=0
     function note(s){log.push(s);mediaProgress(log.join('\n'))}
     note('Production média NyXia démarrée — '+queue.length+' élément(s).')
+    if(useFreeAudio)note('🆓 Freesound sera consulté avant toute génération audio payante.')
+    if(useFreeVideo)note('🆓 Pexels sera consulté avant toute génération vidéo payante.')
+    if(videoTool)note('💸 Vidéo payante de secours : '+(videoTool.name||videoTool.model)+'.')
+
     for(var i=0;i<queue.length;i++){
       var a=queue[i]
       try{
         note('['+(i+1)+'/'+queue.length+'] '+a.kind+' · '+(a.title||'asset')+'…')
         a.status='production'
         d.productionAssetsJson=JSON.stringify(assets,null,2)
-        var url=''
-        if(a.kind==='audio')url=await generateGameAudioAsset(a,audioTool,d)
-        else if(a.kind==='video')url=await generateGameVideoAsset(a,videoTool,d)
-        else url=await generateGameImageAsset(a,imageTool,d)
-        a.url=url;a.status='produit';a.generatedAt=new Date().toISOString()
-        a.toolId=(a.kind==='audio'?audioTool.id:(a.kind==='video'?videoTool.id:imageTool.id))
-        delete a.error
-        done++
-        note('✅ '+(a.title||a.kind))
+        var result=null,url=''
+
+        if(a.kind==='audio'&&useFreeAudio){
+          try{
+            note('   🔎 Recherche gratuite Freesound…')
+            result=await findFreeAudioAsset(a)
+          }catch(bankErr){
+            note('   ⚠ Freesound indisponible : '+bankErr.message)
+          }
+          if(result){
+            Object.assign(a,result)
+            url=result.url
+            freeDone++
+            note('   🆓 Son trouvé sur Freesound · 0 $ de génération.')
+          }else{
+            freeMiss++
+            note('   Aucun son gratuit trouvé pour cet asset.')
+          }
+        }
+
+        if(a.kind==='video'&&useFreeVideo){
+          try{
+            note('   🔎 Recherche vidéo gratuite Pexels…')
+            result=await findFreeVideoAsset(a)
+          }catch(bankErr2){
+            note('   ⚠ Pexels indisponible : '+bankErr2.message)
+          }
+          if(result){
+            Object.assign(a,result)
+            url=result.url
+            freeDone++
+            note('   🆓 Vidéo trouvée sur Pexels · 0 $ de génération.')
+          }else{
+            freeMiss++
+            note('   Aucune vidéo gratuite trouvée pour cet asset.')
+          }
+        }
+
+        if(!url){
+          if(a.kind==='audio'){
+            if(!paidFallback){
+              a.status='gratuit-introuvable'
+              note('   ⏸ Laissé en attente : aucune dépense automatique.')
+            }else{
+              if(!audioTool)throw new Error('Aucun moteur audio payant sélectionné pour le secours.')
+              note('   💰 Passage à '+(audioTool.name||audioTool.model)+'…')
+              url=await generateGameAudioAsset(a,audioTool,d)
+              a.toolId=audioTool.id;a.source=audioTool.name||audioTool.model;a.free=false;paidDone++
+            }
+          }else if(a.kind==='video'){
+            if(!paidFallback){
+              a.status='gratuit-introuvable'
+              note('   ⏸ Laissé en attente : aucune dépense automatique.')
+            }else{
+              if(!videoTool)throw new Error('Aucun moteur vidéo payant sélectionné pour le secours.')
+              note('   💰 Passage au modèle économique '+(videoTool.name||videoTool.model)+'…')
+              url=await generateGameVideoAsset(a,videoTool,d)
+              a.toolId=videoTool.id;a.source=videoTool.name||videoTool.model;a.free=false;paidDone++
+            }
+          }else{
+            url=await generateGameImageAsset(a,imageTool,d)
+            a.toolId=imageTool.id;a.source=imageTool.name||imageTool.model;a.free=false;paidDone++
+          }
+        }
+
+        if(url){
+          a.url=url
+          a.status='produit'
+          a.generatedAt=new Date().toISOString()
+          delete a.error
+          done++
+          note('✅ '+(a.title||a.kind)+(a.free?' · gratuit':''))
+        }
       }catch(e){
         a.status='erreur';a.error=e.message||String(e);errors++
         note('⚠ '+(a.title||a.kind)+' — '+a.error)
@@ -714,28 +992,42 @@
       markDirty()
       await saveCurrent()
     }
+
+    note('')
+    note('RÉSUMÉ : '+done+' produits · '+freeDone+' gratuits · '+paidDone+' IA payants · '+freeMiss+' recherches gratuites sans résultat · '+errors+' erreur(s).')
     d.mediaProductionCompletedAt=new Date().toISOString()
     d.productionAssetsJson=JSON.stringify(assets,null,2)
     d.mediaProductionLog=log.join('\n')
     markDirty();await saveCurrent()
     if(btn){btn.disabled=false;btn.textContent='✨ PRODUIRE TOUS LES MÉDIAS DU JEU'}
     renderGame()
-    toast('Médias produits : '+done+' · erreurs : '+errors)
+    toast('Médias : '+done+' · gratuits : '+freeDone+' · payants : '+paidDone)
   }
 
   function gameMedia(d){
+    var freeAudio=d.mediaUseFreeAudio!==false,freeVideo=d.mediaUseFreeVideo!==false,paidFallback=d.mediaPaidFallback!==false
     return '<h4>🎬 Production média du jeu</h4>'+
-      '<div class="game-note"><b>Parcours normal :</b> tu restes ici. Les studios séparés ne sont pas nécessaires pour produire ton jeu. Ils servent seulement si tu veux retoucher manuellement un élément après coup.</div>'+
+      '<div class="game-note"><b>Mode économie NyXia :</b> les banques gratuites sont utilisées avant les générateurs payants. Les studios séparés restent seulement pour les retouches manuelles.</div>'+
+      '<div class="panel" style="padding:16px;margin:12px 0 16px;border-color:rgba(53,214,154,.28)">'+
+        '<h4 style="margin:0 0 8px">🆓 Gratuit d’abord — puis IA seulement si nécessaire</h4>'+
+        '<div class="tiny" style="margin-bottom:12px">NyXia peut chercher les sons dans <b>Freesound</b> et les vidéos dans <b>Pexels</b> directement depuis ce jeu. Les crédits/licences sont conservés dans le registre.</div>'+
+        '<div class="row three">'+
+          '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(53,214,154,.18);border-radius:12px"><input type="checkbox" '+(freeAudio?'checked':'')+' onchange="setData(\'mediaUseFreeAudio\',this.checked)"><span><b>🎵 Freesound d’abord</b><div class="tiny">Sons / bruitages / ambiances gratuits</div></span></label>'+
+          '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(53,214,154,.18);border-radius:12px"><input type="checkbox" '+(freeVideo?'checked':'')+' onchange="setData(\'mediaUseFreeVideo\',this.checked)"><span><b>🎬 Pexels vidéo d’abord</b><div class="tiny">Banque vidéo gratuite avant toute génération</div></span></label>'+
+          '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(232,184,103,.18);border-radius:12px"><input type="checkbox" '+(paidFallback?'checked':'')+' onchange="setData(\'mediaPaidFallback\',this.checked)"><span><b>💰 IA si rien de gratuit</b><div class="tiny">Décoche pour interdire toute dépense audio/vidéo automatique</div></span></label>'+
+        '</div>'+
+      '</div>'+
       '<div class="panel" style="padding:16px;margin:12px 0 16px;border-color:rgba(232,184,103,.32)">'+
         '<h4 style="margin:0 0 8px">✨ Produire réellement les médias</h4>'+
-        '<div class="tiny" style="margin-bottom:12px">NyXia prend le registre des assets et lance directement les moteurs image, audio et vidéo déjà configurés dans ton Labo. <b>Tu ne quittes pas cette page.</b></div>'+
+        '<div class="tiny" style="margin-bottom:12px">Pour les images, <b>GPT Image 2</b> est prioritaire. Pour la vidéo payante, NyXia met <b>Luma Ray Flash 2 — Économique</b> en premier. Les banques gratuites restent essayées avant.</div>'+
         '<div class="row three">'+
-          mediaToolSelect('image',d.mediaImageToolId,'🎨 Moteur image')+
-          mediaToolSelect('audio',d.mediaAudioToolId,'🎵 Moteur audio')+
-          mediaToolSelect('video',d.mediaVideoToolId,'🎬 Moteur vidéo')+
+          mediaToolSelect('image',d.mediaImageToolId,'🎨 Image — GPT Image 2 en priorité')+
+          mediaToolSelect('audio',d.mediaAudioToolId,'🎵 Audio IA — seulement en secours')+
+          mediaToolSelect('video',d.mediaVideoToolId,'🎬 Vidéo IA — moins chère en priorité')+
         '</div>'+
+        '<div class="game-note" style="margin-top:10px"><b>💸 Vidéo économique :</b> Ray Flash 2 est placé en premier lorsqu’il est disponible. Tu peux toujours choisir un autre modèle dans la liste.</div>'+
         '<div class="tools-line" style="margin-top:12px"><button id="produce-all-media-btn" class="btn gold" style="font-size:15px;padding:14px 20px" onclick="produceAllGameMedia()">✨ PRODUIRE TOUS LES MÉDIAS DU JEU</button></div>'+
-        '<div id="game-media-production-progress" class="result" style="margin-top:12px;max-height:220px;overflow:auto">'+esc(d.mediaProductionLog||'Prêt. Clique sur le bouton ci-dessus quand le registre des assets est prêt.')+'</div>'+
+        '<div id="game-media-production-progress" class="result" style="margin-top:12px;max-height:240px;overflow:auto">'+esc(d.mediaProductionLog||'Prêt. NyXia utilisera les banques gratuites cochées avant les générateurs payants.')+'</div>'+
       '</div>'+
       '<div class="panel" style="padding:16px;margin:12px 0 16px"><h4 style="margin:0 0 8px">🧠 Préparer / compléter les plans de production</h4>'+
         '<div class="tiny" style="margin-bottom:10px">Cette étape prépare les briefs et documents. Elle utilise le modèle IA sélectionné dans la Table de travail. <b>Ce n’est pas la génération des fichiers médias.</b></div>'+
