@@ -463,37 +463,192 @@
     var chips=Object.keys(counts).sort().map(function(k){return '<span class="pill">'+k+' : '+counts[k]+'</span>'}).join(' ')
     return '<div class="game-note"><b>Assets actuellement attachés au jeu :</b> '+list.length+(chips?'<div style="margin-top:8px">'+chips+'</div>':'<div class="tiny" style="margin-top:6px">Aucun asset enregistré pour le moment.</div>')+'</div>'
   }
+
+  function mediaToolList(kind){
+    if(kind==='image')return tools.filter(function(t){return t.kind==='image'||t.kind==='image-async'})
+    if(kind==='audio')return tools.filter(function(t){return t.kind==='audio'||t.category==='audio'})
+    if(kind==='video')return tools.filter(function(t){return t.kind==='video'||t.category==='video'||String(t.kind||'').indexOf('video')>=0})
+    return []
+  }
+  function mediaToolSelect(kind,savedId,label){
+    var list=mediaToolList(kind),id=savedId||''
+    if(!id&&list.length)id=list[0].id
+    var opts=list.map(function(t){return '<option value="'+esc(t.id)+'"'+(t.id===id?' selected':'')+'>'+esc((t.icon||'⚙️')+' '+t.name)+'</option>'}).join('')
+    if(!opts)opts='<option value="">Aucun moteur détecté</option>'
+    return '<div class="field"><label>'+label+'</label><select id="game-media-'+kind+'-tool" onchange="setData(\'media'+kind.charAt(0).toUpperCase()+kind.slice(1)+'ToolId\',this.value)">'+opts+'</select></div>'
+  }
+  function producedAssetsHtml(d){
+    var list=parseProductionAssets(d.productionAssetsJson),done=list.filter(function(a){return a.status==='produit'&&a.url})
+    if(!done.length)return '<div class="game-note"><b>🎞️ Médias produits :</b> aucun fichier généré pour le moment.</div>'
+    var cards=done.slice(-24).map(function(a){
+      var media=''
+      if(a.kind==='audio')media='<audio controls src="'+esc(a.url)+'" style="width:100%"></audio>'
+      else if(a.kind==='video')media='<video controls src="'+esc(a.url)+'" style="width:100%;max-height:180px;border-radius:10px"></video>'
+      else media='<img src="'+esc(a.url)+'" alt="" style="width:100%;height:150px;object-fit:cover;border-radius:10px">'
+      return '<div style="border:1px solid rgba(167,139,250,.16);border-radius:12px;padding:9px;background:rgba(255,255,255,.025)">'+media+
+        '<div style="font-weight:800;margin-top:7px">'+esc(a.title||a.kind)+'</div>'+
+        '<div class="tiny">'+esc(a.kind||'')+' · '+esc(a.status||'')+'</div></div>'
+    }).join('')
+    return '<div class="game-note"><b>🎞️ Médias produits :</b> '+done.length+' fichier(s) attaché(s) au jeu.</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin:10px 0 14px">'+cards+'</div>'
+  }
+  function mediaProgress(msg){
+    var el=document.getElementById('game-media-production-progress')
+    if(el){el.textContent=msg;el.scrollTop=el.scrollHeight}
+  }
+  function mediaWait(ms){return new Promise(function(resolve){setTimeout(resolve,ms)})}
+  async function pollGameMedia(url,kind,maxAttempts,delay){
+    for(var i=0;i<maxAttempts;i++){
+      var d=await api(url)
+      if(kind==='image'&&d.status==='completed'&&d.output_url)return d.output_url
+      if(kind==='audio'&&d.status==='completed'&&d.audio_url)return d.audio_url
+      if(kind==='video'&&d.status==='completed'&&d.video_url)return d.video_url
+      if(d.status==='failed'||d.status==='error'||d.error)throw new Error(typeof d.error==='string'?d.error:JSON.stringify(d.error||'Échec de génération'))
+      await mediaWait(delay)
+    }
+    throw new Error('Temps d’attente dépassé pour '+kind)
+  }
+  function mediaAssetPrompt(asset,d){
+    var title=asset.title||asset.notes||'Asset NyXia Game',base='Jeu : '+(currentProject.title||'NyXia Game')+'\nGenre : '+(d.genre||'')+'\nTon : '+(d.tone||'')+'\nAsset : '+title+'\n'
+    if(asset.kind==='audio')return base+'\nPlan audio :\n'+String(d.audioPlan||'').slice(0,2600)
+    if(asset.kind==='video')return base+'\nStoryboard vidéo :\n'+String(d.videoPlan||'').slice(0,2600)
+    if(asset.kind==='map')return base+'\nPlan cartographique :\n'+String(d.mapPlan||'').slice(0,2600)
+    if(asset.kind==='badge')return base+'\nCréer un badge de jeu lisible, iconique, sans surcharge. Direction artistique :\n'+String(d.imageBriefs||'').slice(0,2200)
+    return base+'\nDirection artistique / briefs visuels :\n'+String(d.imageBriefs||'').slice(0,2600)
+  }
+  async function generateGameImageAsset(asset,tool,d){
+    var prompt=mediaAssetPrompt(asset,d),ratio=tool.aspect_ratio||'16:9'
+    if(tool.kind==='image-async'){
+      var start=await api('/api/alexya/generate',{method:'POST',body:JSON.stringify({toolId:tool.id,prompt:prompt,aspect_ratio:ratio})})
+      if(start.output_url)return start.output_url
+      if(!start.id)throw new Error('Le moteur image n’a retourné aucun identifiant.')
+      return await pollGameMedia('/api/alexya/status?id='+encodeURIComponent(start.id),'image',45,4000)
+    }
+    var out=await api('/api/generate-image',{method:'POST',body:JSON.stringify({toolId:tool.id,prompt:prompt,aspect_ratio:ratio})})
+    var imgs=out.images||[]
+    if(!imgs.length)throw new Error('Le moteur image n’a retourné aucune image.')
+    return imgs[0]
+  }
+  async function generateGameAudioAsset(asset,tool,d){
+    var start=await api('/api/generate-audio',{method:'POST',body:JSON.stringify({toolId:tool.id,prompt:mediaAssetPrompt(asset,d)})})
+    if(start.audio_url)return start.audio_url
+    if(!start.id)throw new Error('Le moteur audio n’a retourné aucun identifiant.')
+    return await pollGameMedia('/api/generate-audio/status?id='+encodeURIComponent(start.id),'audio',45,5000)
+  }
+  async function generateGameVideoAsset(asset,tool,d){
+    var start=await api('/api/generate-video',{method:'POST',body:JSON.stringify({toolId:tool.id,prompt:mediaAssetPrompt(asset,d)})})
+    if(start.video_url)return start.video_url
+    if(!start.id)throw new Error('Le moteur vidéo n’a retourné aucun identifiant.')
+    return await pollGameMedia('/api/generate-video/status?id='+encodeURIComponent(start.id),'video',65,5000)
+  }
+  async function produceAllGameMedia(){
+    if(!currentProject)return
+    var d=currentProject.data||{}
+    var assets=parseProductionAssets(d.productionAssetsJson)
+    if(!assets.length){
+      assets=buildDefaultProductionAssets(d)
+      d.productionAssetsJson=JSON.stringify(assets,null,2)
+      markDirty()
+    }
+    var imageId=(document.getElementById('game-media-image-tool')||{}).value||d.mediaImageToolId||''
+    var audioId=(document.getElementById('game-media-audio-tool')||{}).value||d.mediaAudioToolId||''
+    var videoId=(document.getElementById('game-media-video-tool')||{}).value||d.mediaVideoToolId||''
+    var imageTool=tools.find(function(t){return t.id===imageId})
+    var audioTool=tools.find(function(t){return t.id===audioId})
+    var videoTool=tools.find(function(t){return t.id===videoId})
+    d.mediaImageToolId=imageId;d.mediaAudioToolId=audioId;d.mediaVideoToolId=videoId
+    var queue=assets.filter(function(a){return ['image','badge','map','audio','video'].indexOf(a.kind)>=0&&a.status!=='produit'})
+    if(!queue.length){alert('Tous les médias du registre sont déjà produits.');return}
+    var needImage=queue.some(function(a){return ['image','badge','map'].indexOf(a.kind)>=0})
+    var needAudio=queue.some(function(a){return a.kind==='audio'})
+    var needVideo=queue.some(function(a){return a.kind==='video'})
+    if(needImage&&!imageTool){alert('Aucun moteur image n’est sélectionné/détecté.');return}
+    if(needAudio&&!audioTool){alert('Aucun moteur audio n’est sélectionné/détecté.');return}
+    if(needVideo&&!videoTool){alert('Aucun moteur vidéo n’est sélectionné/détecté.');return}
+    var summary=queue.reduce(function(o,a){o[a.kind]=(o[a.kind]||0)+1;return o},{})
+    if(!confirm('NyXia va maintenant produire automatiquement '+queue.length+' média(s) sans quitter cette page. Continuer ?\n\n'+Object.keys(summary).map(function(k){return k+' : '+summary[k]}).join('\n')))return
+    var btn=document.getElementById('produce-all-media-btn')
+    if(btn){btn.disabled=true;btn.textContent='⏳ Production des médias en cours…'}
+    var log=[],done=0,errors=0
+    function note(s){log.push(s);mediaProgress(log.join('\n'))}
+    note('Production média NyXia démarrée — '+queue.length+' élément(s).')
+    for(var i=0;i<queue.length;i++){
+      var a=queue[i]
+      try{
+        note('['+(i+1)+'/'+queue.length+'] '+a.kind+' · '+(a.title||'asset')+'…')
+        a.status='production'
+        d.productionAssetsJson=JSON.stringify(assets,null,2)
+        var url=''
+        if(a.kind==='audio')url=await generateGameAudioAsset(a,audioTool,d)
+        else if(a.kind==='video')url=await generateGameVideoAsset(a,videoTool,d)
+        else url=await generateGameImageAsset(a,imageTool,d)
+        a.url=url;a.status='produit';a.generatedAt=new Date().toISOString()
+        a.toolId=(a.kind==='audio'?audioTool.id:(a.kind==='video'?videoTool.id:imageTool.id))
+        delete a.error
+        done++
+        note('✅ '+(a.title||a.kind))
+      }catch(e){
+        a.status='erreur';a.error=e.message||String(e);errors++
+        note('⚠ '+(a.title||a.kind)+' — '+a.error)
+      }
+      d.productionAssetsJson=JSON.stringify(assets,null,2)
+      d.mediaProductionLog=log.join('\n')
+      markDirty()
+      await saveCurrent()
+    }
+    d.mediaProductionCompletedAt=new Date().toISOString()
+    d.productionAssetsJson=JSON.stringify(assets,null,2)
+    d.mediaProductionLog=log.join('\n')
+    markDirty();await saveCurrent()
+    if(btn){btn.disabled=false;btn.textContent='✨ PRODUIRE TOUS LES MÉDIAS DU JEU'}
+    renderGame()
+    toast('Médias produits : '+done+' · erreurs : '+errors)
+  }
+
   function gameMedia(d){
-    return '<h4>🎬 Plan de production média</h4>'+
-      '<div class="game-note"><b>Mode normal attendu :</b> tu remplis ton jeu ici, puis NyXia produit le pack média depuis cette même interface. Les studios visuel/vidéo/cartographie restent disponibles comme <b>retouche avancée</b>, pas comme parcours principal.</div>'+
-      '<div class="panel" style="padding:16px;margin:12px 0 16px"><h4 style="margin:0 0 8px">🚀 Production automatique du jeu</h4><div class="tiny" style="margin-bottom:10px">Coche ce que NyXia doit prendre en charge automatiquement pour ce jeu. Le bouton <b>Produire le jeu complet</b> utilise <b>le modèle IA que tu as sélectionné</b> et le verrouille pour toute la production, prépare le registre des assets et le rattache au package.</div>'+
-      '<div class="row two">'+
-        '<div>'+prodTick('prodAutoPlayerDocs','🖨️ Matériel joueurs',d,'Brief joueurs, fiches, secrets, aides, documents individuels ou communs')+'</div>'+
-        '<div>'+prodTick('prodAutoHostDocs','🎲 Dossier animateur / MJ',d,'Vérité complète, conducteur, déclencheurs, solutions et checklist')+'</div>'+
+    return '<h4>🎬 Production média du jeu</h4>'+
+      '<div class="game-note"><b>Parcours normal :</b> tu restes ici. Les studios séparés ne sont pas nécessaires pour produire ton jeu. Ils servent seulement si tu veux retoucher manuellement un élément après coup.</div>'+
+      '<div class="panel" style="padding:16px;margin:12px 0 16px;border-color:rgba(232,184,103,.32)">'+
+        '<h4 style="margin:0 0 8px">✨ Produire réellement les médias</h4>'+
+        '<div class="tiny" style="margin-bottom:12px">NyXia prend le registre des assets et lance directement les moteurs image, audio et vidéo déjà configurés dans ton Labo. <b>Tu ne quittes pas cette page.</b></div>'+
+        '<div class="row three">'+
+          mediaToolSelect('image',d.mediaImageToolId,'🎨 Moteur image')+
+          mediaToolSelect('audio',d.mediaAudioToolId,'🎵 Moteur audio')+
+          mediaToolSelect('video',d.mediaVideoToolId,'🎬 Moteur vidéo')+
+        '</div>'+
+        '<div class="tools-line" style="margin-top:12px"><button id="produce-all-media-btn" class="btn gold" style="font-size:15px;padding:14px 20px" onclick="produceAllGameMedia()">✨ PRODUIRE TOUS LES MÉDIAS DU JEU</button></div>'+
+        '<div id="game-media-production-progress" class="result" style="margin-top:12px;max-height:220px;overflow:auto">'+esc(d.mediaProductionLog||'Prêt. Clique sur le bouton ci-dessus quand le registre des assets est prêt.')+'</div>'+
       '</div>'+
-      '<div class="row three">'+
-        '<div>'+prodTick('prodAutoImages','🎨 Images & portraits',d,'Couverture, portraits, décors, objets, indices, illustrations')+'</div>'+
-        '<div>'+prodTick('prodAutoAudio','🎵 Audio',d,'Voix, musiques, ambiances, bruitages, messages')+'</div>'+
-        '<div>'+prodTick('prodAutoVideo','🎬 Vidéo',d,'Intro, clips, révélations, transitions, messages')+'</div>'+
-      '</div>'+
-      '<div class="row three">'+
-        '<div>'+prodTick('prodAutoMaps','🗺️ Cartes & battlemaps',d,'Carte Azgaar, lieux, donjons, versions imprimables')+'</div>'+
-        '<div>'+prodTick('prodAutoBadges','🏅 Badges',d,'Catalogue de badges et récompenses visibles côté joueur')+'</div>'+
-        '<div>'+prodTick('prodAutoTokens','🪙 Tokens / portraits de pions',d,'Visuels de personnages jouables, PNJ, ennemis et marqueurs')+'</div>'+
-      '</div>'+
-      '<div class="tools-line" style="margin-top:12px"><button class="btn gold" onclick="produceGameComplete()">🚀 Produire le jeu complet</button><button class="btn" onclick="rebuildProductionAssets()">📁 Générer / mettre à jour le registre des assets</button><button class="btn" onclick="resetProductionPlan()">🧹 Réinitialiser la production</button></div>'+
-      (String(d.productionLog||'').trim()?'<div class="result" style="margin-top:12px;max-height:190px;overflow:auto">'+esc(d.productionLog)+'</div>':'')+
+      '<div class="panel" style="padding:16px;margin:12px 0 16px"><h4 style="margin:0 0 8px">🧠 Préparer / compléter les plans de production</h4>'+
+        '<div class="tiny" style="margin-bottom:10px">Cette étape prépare les briefs et documents. Elle utilise le modèle IA sélectionné dans la Table de travail. <b>Ce n’est pas la génération des fichiers médias.</b></div>'+
+        '<div class="row two">'+
+          '<div>'+prodTick('prodAutoPlayerDocs','🖨️ Matériel joueurs',d,'Brief joueurs, fiches, secrets, aides, documents individuels ou communs')+'</div>'+
+          '<div>'+prodTick('prodAutoHostDocs','🎲 Dossier animateur / MJ',d,'Vérité complète, conducteur, déclencheurs, solutions et checklist')+'</div>'+
+        '</div>'+
+        '<div class="row three">'+
+          '<div>'+prodTick('prodAutoImages','🎨 Images & portraits',d,'Couverture, portraits, décors, objets, indices, illustrations')+'</div>'+
+          '<div>'+prodTick('prodAutoAudio','🎵 Audio',d,'Voix, musiques, ambiances, bruitages, messages')+'</div>'+
+          '<div>'+prodTick('prodAutoVideo','🎬 Vidéo',d,'Intro, clips, révélations, transitions, messages')+'</div>'+
+        '</div>'+
+        '<div class="row three">'+
+          '<div>'+prodTick('prodAutoMaps','🗺️ Cartes & battlemaps',d,'Carte, lieux, donjons, versions imprimables')+'</div>'+
+          '<div>'+prodTick('prodAutoBadges','🏅 Badges',d,'Catalogue de badges et récompenses visibles côté joueur')+'</div>'+
+          '<div>'+prodTick('prodAutoTokens','🪙 Tokens / portraits de pions',d,'Visuels de personnages jouables, PNJ, ennemis et marqueurs')+'</div>'+
+        '</div>'+
+        '<div class="tools-line" style="margin-top:12px"><button class="btn primary" onclick="produceGameComplete()">🧠 Préparer les plans de production</button><button class="btn" onclick="rebuildProductionAssets()">📁 Générer / mettre à jour le registre des assets</button></div>'+
       '</div>'+
       gameArea('🎨 Images / portraits / tokens / cartes / objets — briefs de génération','imageBriefs',d.imageBriefs,10)+
       gameArea('🎵 Musiques / ambiances / bruitages / voix','audioPlan',d.audioPlan,9)+
       gameArea('🎬 Clips / intro / révélations / transitions — storyboard','videoPlan',d.videoPlan,10)+
       gameArea('🗺️ Cartes monde / battlemaps / lieux à produire','mapPlan',d.mapPlan,8)+
       summarizeProductionAssets(d)+
-      '<div class="game-note" style="margin-top:12px"><b>📁 Étape registre :</b> quand tes briefs images, audio, vidéo, cartes, badges et documents sont remplis, clique ici. <b>Aucun modèle IA n’est requis pour cette étape.</b> NyXia construit le JSON automatiquement à partir de ton projet.</div>'+
+      '<div class="game-note" style="margin-top:12px"><b>📁 Registre :</b> tu ne l’écris jamais à la main. Clique sur le bouton suivant pour le créer ou le mettre à jour à partir des plans ci-dessus.</div>'+
       '<div class="tools-line" style="margin:10px 0 12px"><button class="btn gold" onclick="rebuildProductionAssets()">📁 Générer / mettre à jour le registre des assets</button></div>'+
       gameArea('📁 Registre des assets du jeu (JSON auto-généré — ne rien écrire à la main)','productionAssetsJson',d.productionAssetsJson,10)+
-      '<div class="tools-line"><button class="btn primary" onclick="gameAI(\'images\')">🎨 Briefs visuels</button><button class="btn" onclick="gameAI(\'audio\')">🎵 Plan audio</button><button class="btn" onclick="gameAI(\'videos\')">🎬 Storyboard clips</button><button class="btn" onclick="gameAI(\'mapassets\')">🗺️ Plan cartes</button></div>'+
-      '<div class="tools-line" style="margin-top:8px"><button class="btn" onclick="showView(\'visual\')">🎨 Studio visuel — retouche avancée</button><button class="btn" onclick="showView(\'video\')">🎬 Studio vidéo — retouche avancée</button><button class="btn gold" onclick="showView(\'maps\')">🗺️ Cartographie Azgaar — retouche avancée</button></div>'
+      producedAssetsHtml(d)+
+      '<details style="margin-top:14px"><summary class="btn" style="display:inline-block;cursor:pointer">🛠️ Retouche avancée — optionnelle</summary>'+
+        '<div class="game-note" style="margin-top:10px">Ces boutons sont uniquement pour refaire manuellement un média précis. <b>Ils ne font pas partie du parcours normal.</b></div>'+
+        '<div class="tools-line"><button class="btn" onclick="showView(\'visual\')">🎨 Studio visuel</button><button class="btn" onclick="showView(\'video\')">🎬 Studio vidéo</button><button class="btn" onclick="showView(\'maps\')">🗺️ Cartographie Azgaar</button></div>'+
+      '</details>'
   }
   function gameLive(d){
     var code=d.liveSessionCode||''
@@ -738,7 +893,7 @@
     function isOn(key){return d[key]!==false}
     try{
       stamp('Modèle verrouillé pour toute la production : '+(lockedTool.name||lockedTool.model))
-      stamp('Démarrage de la production automatique…')
+      stamp('Démarrage de la préparation des plans…')
       if(isOn('prodAutoPlayerDocs')){
         stamp('Production du matériel joueurs…')
         d.playerMaterials=await runAIText(sys,'Rédige et structure le matériel destiné aux joueurs : briefing, règles courtes, fiches, cartes, informations secrètes, indices et aides de jeu. Indique clairement quels documents sont individuels ou communs.\n\nDOSSIER:\n'+ctx,lockedToolId)
@@ -770,8 +925,8 @@
       var assets=buildDefaultProductionAssets(d)
       d.productionAssetsJson=JSON.stringify(assets,null,2)
       stamp('Registre des assets prêt ('+assets.length+' éléments).')
-      stamp('Production automatique terminée. Les studios séparés deviennent maintenant optionnels pour la retouche avancée.')
-      markDirty();await saveCurrent();renderGame();toast('Production automatique terminée ✓')
+      stamp('Plans de production préparés. Tu peux maintenant cliquer sur « ✨ PRODUIRE TOUS LES MÉDIAS DU JEU ».')
+      markDirty();await saveCurrent();renderGame();toast('Plans de production préparés ✓')
     }catch(e){
       stamp('Échec : '+e.message)
       renderGame()
@@ -796,7 +951,25 @@
       zip.file('07-materiel.md',mdSection('Joueurs',d.playerMaterials)+'\n'+mdSection('Animateur / MJ',d.hostMaterials))
       zip.file('08-medias.md',mdSection('Images',d.imageBriefs)+'\n'+mdSection('Audio',d.audioPlan)+'\n'+mdSection('Vidéo',d.videoPlan)+'\n'+mdSection('Cartes',d.mapPlan))
       zip.file('08b-production-assets.json',String(d.productionAssetsJson||'[]'))
-      zip.file('08c-production-log.md',mdSection('Journal de production',d.productionLog))
+      zip.file('08c-production-log.md',mdSection('Journal de production',d.productionLog)+'\n'+mdSection('Journal médias réels',d.mediaProductionLog))
+      var produced=parseProductionAssets(d.productionAssetsJson).filter(function(a){return a.status==='produit'&&a.url})
+      if(produced.length){
+        var af=zip.folder('assets')
+        af.file('index.json',JSON.stringify(produced,null,2))
+        for(var ai=0;ai<produced.length;ai++){
+          var aa=produced[ai]
+          try{
+            var ar=await fetch(aa.url)
+            if(ar.ok){
+              var ab=await ar.blob()
+              var ext=aa.kind==='audio'?'mp3':(aa.kind==='video'?'mp4':'png')
+              var ct=String(ab.type||'')
+              if(/jpeg/i.test(ct))ext='jpg';else if(/webp/i.test(ct))ext='webp';else if(/png/i.test(ct))ext='png';else if(/mpeg/i.test(ct)&&aa.kind==='audio')ext='mp3';else if(/wav/i.test(ct))ext='wav';else if(/mp4/i.test(ct))ext='mp4'
+              af.file(String(ai+1).padStart(3,'0')+'-'+safeName(aa.title||aa.kind)+'.'+ext,ab)
+            }
+          }catch(assetErr){console.warn('Asset non embarqué, URL conservée dans index.json',aa.url,assetErr)}
+        }
+      }
       zip.file('09-live.md',mdSection('Plan Live',d.livePlan));zip.file('10-controle.md',mdSection('NyXia Contrôle',d.controlReport));zip.file('11-publication.md',mdSection('Publication',d.packageNotes))
       if(d.cartography&&d.cartography.files){var folder=zip.folder('cartographie');for(var k of ['map','json','svg','png']){var f=d.cartography.files[k];if(!f)continue;try{var r=await fetch('/api/atelier/cartography'+f.path,{headers:h()});if(r.ok)folder.file(f.name||('carte.'+k),await r.blob())}catch(e){console.warn('Carte '+k+' non jointe',e)}}}
       var blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=safeName(currentProject.title)+'.nyxgame';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},2500);toast('Package NyXia Game créé ✓')
