@@ -353,7 +353,102 @@
       '<div class="game-note"><b>Confidentialité :</b> le secret du PJ est visible par le joueur et l’animateur. Il n’est jamais transmis automatiquement aux PNJ IA. Les PNJ ne reçoivent que l’identité publique, la faction, la réputation, les badges et les éléments publics du personnage.</div>'+
       '<div class="tools-line"><button class="btn gold" onclick="setGameTab(\'live\')">🎥 Tester côté joueur</button><button class="btn" onclick="setGameTab(\'materials\')">🖨️ Préparer les fiches joueurs</button></div>'
   }
-  function gameNpcAI(d){return '<h4>🧠 Intelligence des PNJ</h4><div class="game-note"><b>Principe NyXia :</b> le moteur du jeu décide ce qui est vrai. Le PNJ interprète son personnage à l’intérieur de cette réalité. Il peut mentir, hésiter, aimer, détester ou changer d’avis — mais il ne peut jamais inventer un nouveau canon ni connaître une information qu’il n’a pas reçue.</div>'+gameArea('Fiches Intelligence PNJ — savoir, croyances, ignorance, secrets, objectifs, seuils de révélation','npcIntelligence',d.npcIntelligence,18)+gameArea('Mémoire — ce qui mérite d’être retenu, résumé, oublié ou gardé privé','npcMemoryRules',d.npcMemoryRules,10)+gameArea('Relations — confiance, attirance, peur, dette, loyauté, hostilité et règles d’évolution','npcRelationshipRules',d.npcRelationshipRules,10)+gameArea('Autonomie — déclencheurs, actions permises, limites et décisions réservées au moteur / MJ','npcAutonomyRules',d.npcAutonomyRules,10)+gameArea('Voix & interprétation — ton, vocabulaire, rythme, accent/style, voix TTS prévue','npcVoicePlan',d.npcVoicePlan,8)+'<div class="row"><div class="field"><label>PNJ à tester</label><input value="'+esc(d.npcTestName||'')+'" placeholder="Ex. Morgane" oninput="setData(\'npcTestName\',this.value)"></div><div class="field"><label>Modèle runtime (optionnel)</label><input value="'+esc(d.npcModel||'')+'" placeholder="Vide = modèle NyXia par défaut" oninput="setData(\'npcModel\',this.value)"></div></div><div class="divider"></div><div class="game-kicker">Runtime du futur NyXia Game</div><div class="game-note">Ce JSON est la version lisible par le moteur pendant une vraie partie. Tu ne l’écris pas à la main : NyXia le génère à partir des fiches ci-dessus.</div>'+gameArea('PNJ structurés pour le moteur (JSON)','npcRuntimeJson',d.npcRuntimeJson,12)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'npcbrains\')">🧠 Construire les cerveaux PNJ</button><button class="btn" onclick="gameAI(\'npcmemory\')">Mémoire & relations</button><button class="btn" onclick="gameAI(\'npcautonomy\')">Autonomie & déclencheurs</button><button class="btn" onclick="gameAI(\'npcvoice\')">Voix & interprétation</button><button class="btn gold" onclick="gameAI(\'npcruntime\')">⚙️ Structurer pour le moteur</button><button class="btn gold" onclick="gameAI(\'npctest\')">🧪 Tester ce PNJ</button><button class="btn" onclick="gameAI(\'npcaudit\')">🔒 Audit anti-fuite / canon</button></div>'}
+  function npcRuntimeState(d){
+    var raw=String(d.npcRuntimeJson||'').trim(),valid=false,count=0
+    if(raw){
+      try{
+        var obj=parseJsonLoose(raw)
+        valid=!!(obj&&Array.isArray(obj.npcs))
+        count=valid?obj.npcs.length:0
+      }catch(e){valid=false}
+    }
+    return {raw:raw,valid:valid,count:count}
+  }
+
+  function npcGuideStatus(d){
+    var s=npcRuntimeState(d),who=String(d.npcTestName||'').trim()
+    if(!s.raw){
+      return '<div class="game-note"><b>👉 Ce que tu fais maintenant :</b> clique sur <b>1. Générer le JSON automatiquement</b>. Tu n’as rien à écrire à la main.</div>'
+    }
+    if(!s.valid){
+      return '<div class="game-note" style="border-color:rgba(255,113,136,.35);color:#ffb4c1"><b>⚠ Le JSON n’est pas valide.</b> Ne le corrige pas toi-même. Clique sur <b>1. Régénérer le JSON automatiquement</b>.</div>'
+    }
+    if(!who){
+      return '<div class="game-note" style="border-color:rgba(53,214,154,.30);color:#b9f6df"><b>✅ JSON prêt · '+s.count+' PNJ structuré(s).</b><br>Écris maintenant le nom du PNJ que tu veux essayer dans <b>PNJ à tester</b>, puis clique sur <b>2. Tester ce PNJ</b>.</div>'
+    }
+    return '<div class="game-note" style="border-color:rgba(53,214,154,.30);color:#b9f6df"><b>✅ JSON prêt · '+s.count+' PNJ structuré(s).</b><br>Prochaine étape : clique sur <b>2. Tester '+esc(who)+'</b>. Quand le test te convient, termine avec <b>3. Auditer canon / anti-fuite</b>.</div>'
+  }
+
+  async function npcBuildRuntime(){
+    if(!currentProject)return
+    var d=currentProject.data||{},sel=document.getElementById('ai-model'),toolId=sel?sel.value:''
+    if(!toolId){alert('Choisis d’abord ton modèle IA.');return}
+    var ctx=JSON.stringify(gameContext(),null,2),sys=gamePromptBase()
+    var prompt='Transforme les PNJ en DONNÉES RUNTIME. Réponds UNIQUEMENT avec un JSON valide, sans markdown, de forme {"npcs":[...]}. Chaque PNJ doit avoir : id, name, role, personality, dialogueStyle, goals[], knowledge[], beliefs[], ignorance[], forbiddenKnowledge[], secrets[{id,text,revealIf}], relationships{}, emotionalTriggers[], autonomy{may[],requiresEngineApproval[],forbidden[]}. Ne mets dans knowledge QUE les faits que ce PNJ connaît vraiment. Un secret du dossier global ne doit jamais apparaître chez un PNJ qui ne le sait pas.\n\nDOSSIER:\n'+ctx
+    try{
+      toast('⚙️ NyXia structure les PNJ…')
+      var out=await runAIText(sys,prompt,toolId),obj=parseJsonLoose(out)
+      if(!obj||!Array.isArray(obj.npcs))throw new Error('La réponse ne contient pas le tableau « npcs ».')
+      d.npcRuntimeJson=JSON.stringify(obj,null,2)
+      d.npcRuntimeBuiltAt=new Date().toISOString()
+      markDirty()
+      await saveCurrent()
+      renderGame()
+      toast('✅ JSON moteur créé automatiquement')
+    }catch(e){
+      alert('Structuration impossible : '+e.message)
+    }
+  }
+
+  function npcTestFromGuide(){
+    if(!currentProject)return
+    var d=currentProject.data||{},s=npcRuntimeState(d)
+    if(!s.valid){
+      alert('Le JSON moteur n’est pas prêt. Clique d’abord sur « 1. Générer le JSON automatiquement ».')
+      return
+    }
+    if(!String(d.npcTestName||'').trim()){
+      alert('Écris le nom du PNJ à tester, par exemple Morgane.')
+      return
+    }
+    gameAI('npctest')
+  }
+
+  function npcAuditFromGuide(){
+    if(!currentProject)return
+    var d=currentProject.data||{},s=npcRuntimeState(d)
+    if(!s.valid){
+      alert('Le JSON moteur n’est pas prêt. Clique d’abord sur « 1. Générer le JSON automatiquement ».')
+      return
+    }
+    gameAI('npcaudit')
+  }
+
+  function gameNpcAI(d){
+    var s=npcRuntimeState(d)
+    return '<h4>🧠 Intelligence des PNJ</h4>'+
+      '<div class="game-note"><b>Principe NyXia :</b> le moteur du jeu décide ce qui est vrai. Le PNJ interprète son personnage à l’intérieur de cette réalité. Il peut mentir, hésiter, aimer, détester ou changer d’avis — mais il ne peut jamais inventer un nouveau canon ni connaître une information qu’il n’a pas reçue.</div>'+
+      gameArea('Fiches Intelligence PNJ — savoir, croyances, ignorance, secrets, objectifs, seuils de révélation','npcIntelligence',d.npcIntelligence,18)+
+      gameArea('Mémoire — ce qui mérite d’être retenu, résumé, oublié ou gardé privé','npcMemoryRules',d.npcMemoryRules,10)+
+      gameArea('Relations — confiance, attirance, peur, dette, loyauté, hostilité et règles d’évolution','npcRelationshipRules',d.npcRelationshipRules,10)+
+      gameArea('Autonomie — déclencheurs, actions permises, limites et décisions réservées au moteur / MJ','npcAutonomyRules',d.npcAutonomyRules,10)+
+      gameArea('Voix & interprétation — ton, vocabulaire, rythme, accent/style, voix TTS prévue','npcVoicePlan',d.npcVoicePlan,8)+
+      '<div class="tools-line" style="margin-bottom:18px"><button class="btn primary" onclick="gameAI(\'npcbrains\')">🧠 Enrichir les cerveaux PNJ</button><button class="btn" onclick="gameAI(\'npcmemory\')">Mémoire & relations</button><button class="btn" onclick="gameAI(\'npcautonomy\')">Autonomie & déclencheurs</button><button class="btn" onclick="gameAI(\'npcvoice\')">Voix & interprétation</button></div>'+
+      '<div class="divider"></div>'+
+      '<div class="game-kicker">FINALISER LES PNJ — 3 ÉTAPES</div>'+
+      '<div class="game-note"><b>Tu ne touches jamais au JSON.</b> C’est une donnée technique créée par NyXia. Le parcours normal est simplement : <b>1. Générer → 2. Tester → 3. Auditer.</b></div>'+
+      npcGuideStatus(d)+
+      '<div class="row"><div class="field"><label>PNJ à tester</label><input value="'+esc(d.npcTestName||'')+'" placeholder="Ex. Morgane" oninput="setData(\'npcTestName\',this.value)"></div><div class="field"><label>Modèle runtime (optionnel)</label><input value="'+esc(d.npcModel||'')+'" placeholder="Vide = modèle NyXia par défaut" oninput="setData(\'npcModel\',this.value)"></div></div>'+
+      '<div class="tools-line" style="margin:12px 0 16px">'+
+        '<button class="btn gold" onclick="npcBuildRuntime()">1. ⚙️ '+(s.raw?'Régénérer':'Générer')+' le JSON automatiquement</button>'+
+        '<button class="btn gold" onclick="npcTestFromGuide()">2. 🧪 Tester ce PNJ</button>'+
+        '<button class="btn" onclick="npcAuditFromGuide()">3. 🔒 Auditer canon / anti-fuite</button>'+
+      '</div>'+
+      '<details style="margin-top:12px"><summary class="btn" style="display:inline-block;cursor:pointer">⚙️ Données techniques du moteur — '+(s.valid?'✅ JSON prêt':'à générer')+'</summary>'+
+        '<div class="game-note" style="margin-top:10px"><b>Zone technique.</b> Tu peux l’ouvrir pour vérification, mais tu n’as rien à écrire ni à corriger ici.</div>'+
+        gameArea('PNJ structurés pour le moteur (JSON)','npcRuntimeJson',d.npcRuntimeJson,12)+
+      '</details>'
+  }
   function gameRules(d){return '<h4>⚔️ Mécaniques de jeu</h4>'+gameArea('Boucle de jeu / règles principales','mechanics',d.mechanics,12)+gameArea('Combat / conflits / dés / résolution','combatRules',d.combatRules,10)+gameArea('Progression / réputation / inventaire / ressources','progression',d.progression,9)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'rules\')">⚔️ Concevoir les règles</button><button class="btn" onclick="gameAI(\'combat\')">Concevoir les combats</button><button class="btn" onclick="gameAI(\'balance\')">Tester l’équilibre</button></div>'}
   function gameMaterials(d){return '<h4>🖨️ Matériel réellement nécessaire</h4><div class="game-note">Ici NyXia pense comme une directrice de production : pas seulement « raconter l’histoire », mais lister et rédiger ce qu’il faut pour pouvoir animer la soirée ou jouer.</div>'+gameArea('Matériel joueurs — fiches, cartes, indices, QR, aides de jeu, imprimables','playerMaterials',d.playerMaterials,13)+gameArea('Matériel animateur / MJ — conducteur, solutions, timing, secrets, feuilles de contrôle','hostMaterials',d.hostMaterials,13)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'materials\')">🖨️ Faire la liste complète du matériel</button><button class="btn" onclick="gameAI(\'playerdocs\')">Rédiger les documents joueurs</button><button class="btn" onclick="gameAI(\'hostdocs\')">Rédiger le dossier animateur</button></div>'}
   function prodTick(key,label,d,help){
@@ -371,7 +466,7 @@
   function gameMedia(d){
     return '<h4>🎬 Plan de production média</h4>'+
       '<div class="game-note"><b>Mode normal attendu :</b> tu remplis ton jeu ici, puis NyXia produit le pack média depuis cette même interface. Les studios visuel/vidéo/cartographie restent disponibles comme <b>retouche avancée</b>, pas comme parcours principal.</div>'+
-      '<div class="panel" style="padding:16px;margin:12px 0 16px"><h4 style="margin:0 0 8px">🚀 Production automatique du jeu</h4><div class="tiny" style="margin-bottom:10px">Coche ce que NyXia doit prendre en charge automatiquement pour ce jeu. Le bouton <b>Produire le jeu complet</b> lance la génération des contenus de production, prépare le registre des assets et le rattache au package.</div>'+
+      '<div class="panel" style="padding:16px;margin:12px 0 16px"><h4 style="margin:0 0 8px">🚀 Production automatique du jeu</h4><div class="tiny" style="margin-bottom:10px">Coche ce que NyXia doit prendre en charge automatiquement pour ce jeu. Le bouton <b>Produire le jeu complet</b> utilise <b>le modèle IA que tu as sélectionné</b> et le verrouille pour toute la production, prépare le registre des assets et le rattache au package.</div>'+
       '<div class="row two">'+
         '<div>'+prodTick('prodAutoPlayerDocs','🖨️ Matériel joueurs',d,'Brief joueurs, fiches, secrets, aides, documents individuels ou communs')+'</div>'+
         '<div>'+prodTick('prodAutoHostDocs','🎲 Dossier animateur / MJ',d,'Vérité complète, conducteur, déclencheurs, solutions et checklist')+'</div>'+
@@ -386,7 +481,7 @@
         '<div>'+prodTick('prodAutoBadges','🏅 Badges',d,'Catalogue de badges et récompenses visibles côté joueur')+'</div>'+
         '<div>'+prodTick('prodAutoTokens','🪙 Tokens / portraits de pions',d,'Visuels de personnages jouables, PNJ, ennemis et marqueurs')+'</div>'+
       '</div>'+
-      '<div class="tools-line" style="margin-top:12px"><button class="btn gold" onclick="produceGameComplete()">🚀 Produire le jeu complet</button><button class="btn" onclick="rebuildProductionAssets()">🧩 Reconstruire le registre des assets</button><button class="btn" onclick="resetProductionPlan()">🧹 Réinitialiser la production</button></div>'+
+      '<div class="tools-line" style="margin-top:12px"><button class="btn gold" onclick="produceGameComplete()">🚀 Produire le jeu complet</button><button class="btn" onclick="rebuildProductionAssets()">📁 Générer / mettre à jour le registre des assets</button><button class="btn" onclick="resetProductionPlan()">🧹 Réinitialiser la production</button></div>'+
       (String(d.productionLog||'').trim()?'<div class="result" style="margin-top:12px;max-height:190px;overflow:auto">'+esc(d.productionLog)+'</div>':'')+
       '</div>'+
       gameArea('🎨 Images / portraits / tokens / cartes / objets — briefs de génération','imageBriefs',d.imageBriefs,10)+
@@ -394,7 +489,9 @@
       gameArea('🎬 Clips / intro / révélations / transitions — storyboard','videoPlan',d.videoPlan,10)+
       gameArea('🗺️ Cartes monde / battlemaps / lieux à produire','mapPlan',d.mapPlan,8)+
       summarizeProductionAssets(d)+
-      gameArea('📁 Registre des assets du jeu (JSON auto-généré)','productionAssetsJson',d.productionAssetsJson,10)+
+      '<div class="game-note" style="margin-top:12px"><b>📁 Étape registre :</b> quand tes briefs images, audio, vidéo, cartes, badges et documents sont remplis, clique ici. <b>Aucun modèle IA n’est requis pour cette étape.</b> NyXia construit le JSON automatiquement à partir de ton projet.</div>'+
+      '<div class="tools-line" style="margin:10px 0 12px"><button class="btn gold" onclick="rebuildProductionAssets()">📁 Générer / mettre à jour le registre des assets</button></div>'+
+      gameArea('📁 Registre des assets du jeu (JSON auto-généré — ne rien écrire à la main)','productionAssetsJson',d.productionAssetsJson,10)+
       '<div class="tools-line"><button class="btn primary" onclick="gameAI(\'images\')">🎨 Briefs visuels</button><button class="btn" onclick="gameAI(\'audio\')">🎵 Plan audio</button><button class="btn" onclick="gameAI(\'videos\')">🎬 Storyboard clips</button><button class="btn" onclick="gameAI(\'mapassets\')">🗺️ Plan cartes</button></div>'+
       '<div class="tools-line" style="margin-top:8px"><button class="btn" onclick="showView(\'visual\')">🎨 Studio visuel — retouche avancée</button><button class="btn" onclick="showView(\'video\')">🎬 Studio vidéo — retouche avancée</button><button class="btn gold" onclick="showView(\'maps\')">🗺️ Cartographie Azgaar — retouche avancée</button></div>'
   }
@@ -559,9 +656,11 @@
   }
   function mdSection(title,text){return '# '+title+'\n\n'+String(text||'').trim()+'\n'}
 
-  async function runAIText(system,prompt){
-    var sel=document.getElementById('ai-model'),tool=aiTools.find(function(t){return t.id===(sel?sel.value:lastAI.toolId)})||aiTools[0];
-    if(!tool)throw new Error('Aucun modèle de chat disponible.');
+  async function runAIText(system,prompt,lockedToolId){
+    var sel=document.getElementById('ai-model');
+    var wanted=lockedToolId||(sel?sel.value:lastAI.toolId);
+    var tool=aiTools.find(function(t){return t.id===wanted});
+    if(!tool)throw new Error('Le modèle sélectionné n’est plus disponible. Resélectionne ton modèle puis relance.');
     var d=await api('/api/chat',{method:'POST',body:JSON.stringify({providerId:tool.providerId,model:tool.model,system_prompt:(tool.system_prompt?tool.system_prompt+'\n\n':'')+system,max_tokens:Math.max(Number(tool.max_tokens)||2500,5000),temperature:(tool.temperature == null ? 0.7 : tool.temperature),messages:[{role:'user',content:prompt}]})});
     return d.text||''
   }
@@ -615,7 +714,7 @@
     var d=currentProject.data||{},assets=buildDefaultProductionAssets(d)
     d.productionAssetsJson=JSON.stringify(assets,null,2)
     d.productionLog=(String(d.productionLog||'').trim()?String(d.productionLog).trim()+'\n':'')+'['+(new Date()).toLocaleString('fr-CA')+'] Registre des assets reconstruit ('+assets.length+' éléments).'
-    markDirty();renderGame();toast('Registre des assets reconstruit ✓')
+    markDirty();renderGame();toast('📁 Registre des assets généré / mis à jour ✓')
   }
   function resetProductionPlan(){
     if(!currentProject)return
@@ -626,46 +725,57 @@
   async function produceGameComplete(){
     if(!currentProject)return
     var d=currentProject.data||{},ctx=JSON.stringify(gameContext(),null,2),sys=gamePromptBase(),log=[]
-    function stamp(msg){log.push('['+(new Date()).toLocaleTimeString('fr-CA')+'] '+msg);d.productionLog=log.join('\n');markDirty();renderGame()}
+    var sel=document.getElementById('ai-model'),lockedToolId=sel?sel.value:''
+    var lockedTool=aiTools.find(function(t){return t.id===lockedToolId})
+    if(!lockedTool){alert('Choisis d’abord le modèle IA que tu veux utiliser pour toute la production.');return}
+    function stamp(msg){
+      log.push('['+(new Date()).toLocaleTimeString('fr-CA')+'] '+msg)
+      d.productionLog=log.join('\n');markDirty()
+      var boxes=document.querySelectorAll('.result')
+      var prodBox=Array.from(boxes).find(function(x){return x.textContent&&x.textContent.indexOf('Démarrage de la production')>=0})
+      if(prodBox)prodBox.textContent=d.productionLog
+    }
     function isOn(key){return d[key]!==false}
     try{
+      stamp('Modèle verrouillé pour toute la production : '+(lockedTool.name||lockedTool.model))
       stamp('Démarrage de la production automatique…')
       if(isOn('prodAutoPlayerDocs')){
         stamp('Production du matériel joueurs…')
-        d.playerMaterials=await runAIText(sys,'Rédige et structure le matériel destiné aux joueurs : briefing, règles courtes, fiches, cartes, informations secrètes, indices et aides de jeu. Indique clairement quels documents sont individuels ou communs.\n\nDOSSIER:\n'+ctx)
+        d.playerMaterials=await runAIText(sys,'Rédige et structure le matériel destiné aux joueurs : briefing, règles courtes, fiches, cartes, informations secrètes, indices et aides de jeu. Indique clairement quels documents sont individuels ou communs.\n\nDOSSIER:\n'+ctx,lockedToolId)
       }
       if(isOn('prodAutoHostDocs')){
         stamp('Production du dossier animateur / MJ…')
-        d.hostMaterials=await runAIText(sys,'Crée le dossier animateur/MJ : vérité complète, déroulement, déclencheurs, réponses aux imprévus, solutions, timing, décisions critiques et checklist avant ouverture.\n\nDOSSIER:\n'+ctx)
+        d.hostMaterials=await runAIText(sys,'Crée le dossier animateur/MJ : vérité complète, déroulement, déclencheurs, réponses aux imprévus, solutions, timing, décisions critiques et checklist avant ouverture.\n\nDOSSIER:\n'+ctx,lockedToolId)
       }
       if(isOn('prodAutoImages') || isOn('prodAutoTokens')){
         stamp('Production des briefs visuels…')
-        d.imageBriefs=await runAIText(sys,'Crée les briefs VISUELS nécessaires pour que le jeu soit graphiquement prêt. Inclue couverture, portraits PJ, portraits PNJ, créatures, tokens, objets, indices, décors, écrans d’ambiance, cartes de badges et toutes images utiles. Pour chaque asset : utilité, scène/contexte, composition, style, format, ratio et priorité.\n\nDOSSIER:\n'+ctx)
+        d.imageBriefs=await runAIText(sys,'Crée les briefs VISUELS nécessaires pour que le jeu soit graphiquement prêt. Inclue couverture, portraits PJ, portraits PNJ, créatures, tokens, objets, indices, décors, écrans d’ambiance, cartes de badges et toutes images utiles. Pour chaque asset : utilité, scène/contexte, composition, style, format, ratio et priorité.\n\nDOSSIER:\n'+ctx,lockedToolId)
       }
       if(isOn('prodAutoAudio')){
         stamp('Production du plan audio…')
-        d.audioPlan=await runAIText(sys,'Crée le plan AUDIO nécessaire pour que le jeu soit jouable avec ambiance : musiques, ambiances, bruitages, voix de PNJ, narration et messages secrets. Pour chaque asset : moment d’utilisation, émotion, durée, boucle oui/non, voix/style et priorité.\n\nDOSSIER:\n'+ctx)
+        d.audioPlan=await runAIText(sys,'Crée le plan AUDIO nécessaire pour que le jeu soit jouable avec ambiance : musiques, ambiances, bruitages, voix de PNJ, narration et messages secrets. Pour chaque asset : moment d’utilisation, émotion, durée, boucle oui/non, voix/style et priorité.\n\nDOSSIER:\n'+ctx,lockedToolId)
       }
       if(isOn('prodAutoVideo')){
         stamp('Production du storyboard vidéo…')
-        d.videoPlan=await runAIText(sys,'Crée le storyboard des CLIPS nécessaires : intro, révélations, transitions, scènes cinématiques ou messages de personnages. Pour chaque clip : fonction dans le jeu, durée, plans, action, dialogue/voix, son, format et priorité.\n\nDOSSIER:\n'+ctx)
+        d.videoPlan=await runAIText(sys,'Crée le storyboard des CLIPS nécessaires : intro, révélations, transitions, scènes cinématiques ou messages de personnages. Pour chaque clip : fonction dans le jeu, durée, plans, action, dialogue/voix, son, format et priorité.\n\nDOSSIER:\n'+ctx,lockedToolId)
       }
       if(isOn('prodAutoMaps')){
         stamp('Production du plan cartographique…')
-        d.mapPlan=await runAIText(sys,'Crée le plan CARTOGRAPHIQUE : carte monde Azgaar, régions, villes, battlemaps, donjons, bâtiments, lieux secrets et versions imprimables. Pour chaque carte : échelle, usage, éléments obligatoires, informations cachées et format.\n\nDOSSIER:\n'+ctx)
+        d.mapPlan=await runAIText(sys,'Crée le plan CARTOGRAPHIQUE : carte monde Azgaar, régions, villes, battlemaps, donjons, bâtiments, lieux secrets et versions imprimables. Pour chaque carte : échelle, usage, éléments obligatoires, informations cachées et format.\n\nDOSSIER:\n'+ctx,lockedToolId)
       }
       if(isOn('prodAutoBadges')){
         stamp('Production du catalogue de badges…')
-        d.playerBadgeCatalog=await runAIText(sys,'Crée un catalogue de badges pour les joueurs. Pour chaque badge : emoji ou pictogramme suggéré, nom, condition d’obtention, effet narratif ou symbolique, et à quel type de comportement ou réussite il correspond. Réponds sous forme de lignes faciles à relire.\n\nDOSSIER:\n'+ctx)
+        d.playerBadgeCatalog=await runAIText(sys,'Crée un catalogue de badges pour les joueurs. Pour chaque badge : emoji ou pictogramme suggéré, nom, condition d’obtention, effet narratif ou symbolique, et à quel type de comportement ou réussite il correspond. Réponds sous forme de lignes faciles à relire.\n\nDOSSIER:\n'+ctx,lockedToolId)
       }
       var assets=buildDefaultProductionAssets(d)
       d.productionAssetsJson=JSON.stringify(assets,null,2)
       stamp('Registre des assets prêt ('+assets.length+' éléments).')
       stamp('Production automatique terminée. Les studios séparés deviennent maintenant optionnels pour la retouche avancée.')
-      markDirty();renderGame();toast('Production automatique terminée ✓')
+      markDirty();await saveCurrent();renderGame();toast('Production automatique terminée ✓')
     }catch(e){
       stamp('Échec : '+e.message)
-      alert('Production automatique interrompue : '+e.message)
+      renderGame()
+      alert('Production automatique interrompue avec le modèle '+(lockedTool.name||lockedTool.model)+' : '+e.message)
     }
   }
 
