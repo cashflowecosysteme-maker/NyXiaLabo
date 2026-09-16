@@ -179,7 +179,7 @@
   function chooseGame(id){chooseProject('nyxia-game',id,renderGame)}
 
   async function newProject(kind){
-    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',playerPrologue:'',playerCreationInstructions:'',playerArchetypes:'',playerFactions:'',playerStartingReputation:0,playerReputationRules:'',playerBadgeCatalog:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',sourceDocuments:'',importedSourceNames:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',guidedScenesJson:'',deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
+    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',playerPrologue:'',playerCreationInstructions:'',playerArchetypes:'',playerFactions:'',playerStartingReputation:0,playerReputationRules:'',playerBadgeCatalog:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',sourceDocuments:'',importedSourceNames:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',guidedScenesJson:'',mediaUseFreeAudio:true,mediaUseFreeVideo:true,mediaPaidFallback:false,mediaAllowPaidImages:false,deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
     var title=prompt('Titre du projet :','Nouveau '+kindLabel(kind))||('Nouveau '+kindLabel(kind))
     try{var d=await api('/api/atelier/projects',{method:'POST',body:JSON.stringify({kind:kind,title:title,data:defaults[kind]||{}})}); currentProject=d.project; await reloadIndex(); showView(({ghostwriting:'ghost',audiobook:'audio','nyxia-game':'game',mystery:'mystery'})[kind]||'home'); toast('Projet créé') }catch(e){alert(e.message)}
   }
@@ -866,7 +866,8 @@
     var videoTool=tools.find(function(t){return t.id===videoId})
     var useFreeAudio=d.mediaUseFreeAudio!==false
     var useFreeVideo=d.mediaUseFreeVideo!==false
-    var paidFallback=d.mediaPaidFallback!==false
+    var paidFallback=d.mediaPaidFallback===true
+    var allowPaidImages=d.mediaAllowPaidImages===true
 
     d.mediaImageToolId=imageId
     d.mediaAudioToolId=audioId
@@ -874,18 +875,21 @@
     d.mediaUseFreeAudio=useFreeAudio
     d.mediaUseFreeVideo=useFreeVideo
     d.mediaPaidFallback=paidFallback
+    d.mediaAllowPaidImages=allowPaidImages
 
     var queue=assets.filter(function(a){return ['image','badge','map','audio','video'].indexOf(a.kind)>=0&&a.status!=='produit'})
     if(!queue.length){alert('Tous les médias du registre sont déjà produits.');return}
 
     var needImage=queue.some(function(a){return ['image','badge','map'].indexOf(a.kind)>=0})
-    if(needImage&&!imageTool){alert('Aucun moteur image n’est sélectionné/détecté.');return}
+    if(needImage&&allowPaidImages&&!imageTool){alert('Aucun moteur image n’est sélectionné/détecté.');return}
 
     var summary=queue.reduce(function(o,a){o[a.kind]=(o[a.kind]||0)+1;return o},{})
     var strategy=[]
     if(useFreeAudio)strategy.push('🎵 Sons : Freesound GRATUIT d’abord')
     if(useFreeVideo)strategy.push('🎬 Vidéos : Pexels GRATUIT d’abord')
-    if(paidFallback)strategy.push('💰 Si aucun gratuit ne convient : IA payante sélectionnée')
+    if(allowPaidImages)strategy.push('🎨 Images payantes autorisées')
+    else strategy.push('🛑 Images payantes désactivées par sécurité')
+    if(paidFallback)strategy.push('💰 Si aucun gratuit ne convient : IA payante sélectionnée pour audio/vidéo')
     else strategy.push('🛑 Aucun média payant de remplacement ne sera lancé pour audio/vidéo')
 
     if(!confirm(
@@ -902,7 +906,8 @@
     note('Production média NyXia démarrée — '+queue.length+' élément(s).')
     if(useFreeAudio)note('🆓 Freesound sera consulté avant toute génération audio payante.')
     if(useFreeVideo)note('🆓 Pexels sera consulté avant toute génération vidéo payante.')
-    if(videoTool)note('💸 Vidéo payante de secours : '+(videoTool.name||videoTool.model)+'.')
+    if(!allowPaidImages)note('🛑 Images payantes désactivées : aucune image GPT ne sera lancée sans ton accord.')
+    if(paidFallback && videoTool)note('💸 Vidéo payante de secours : '+(videoTool.name||videoTool.model)+'.')
 
     for(var i=0;i<queue.length;i++){
       var a=queue[i]
@@ -970,8 +975,13 @@
               a.toolId=videoTool.id;a.source=videoTool.name||videoTool.model;a.free=false;paidDone++
             }
           }else{
-            url=await generateGameImageAsset(a,imageTool,d)
-            a.toolId=imageTool.id;a.source=imageTool.name||imageTool.model;a.free=false;paidDone++
+            if(!allowPaidImages){
+              a.status='attente-autorisation'
+              note('   ⏸ Image laissée en attente : coche « Autoriser les images payantes » si tu veux lancer GPT Image 2.')
+            }else{
+              url=await generateGameImageAsset(a,imageTool,d)
+              a.toolId=imageTool.id;a.source=imageTool.name||imageTool.model;a.free=false;paidDone++
+            }
           }
         }
 
@@ -1001,11 +1011,11 @@
     markDirty();await saveCurrent()
     if(btn){btn.disabled=false;btn.textContent='✨ PRODUIRE TOUS LES MÉDIAS DU JEU'}
     renderGame()
-    toast('Médias : '+done+' · gratuits : '+freeDone+' · payants : '+paidDone)
+    toast('Médias : '+done+' · gratuits : '+freeDone+' · payants : '+paidDone+' · sécurité budget active')
   }
 
   function gameMedia(d){
-    var freeAudio=d.mediaUseFreeAudio!==false,freeVideo=d.mediaUseFreeVideo!==false,paidFallback=d.mediaPaidFallback!==false
+    var freeAudio=d.mediaUseFreeAudio!==false,freeVideo=d.mediaUseFreeVideo!==false,paidFallback=d.mediaPaidFallback===true,allowPaidImages=d.mediaAllowPaidImages===true
     return '<h4>🎬 Production média du jeu</h4>'+
       '<div class="game-note"><b>Mode économie NyXia :</b> les banques gratuites sont utilisées avant les générateurs payants. Les studios séparés restent seulement pour les retouches manuelles.</div>'+
       '<div class="panel" style="padding:16px;margin:12px 0 16px;border-color:rgba(53,214,154,.28)">'+
@@ -1014,12 +1024,16 @@
         '<div class="row three">'+
           '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(53,214,154,.18);border-radius:12px"><input type="checkbox" '+(freeAudio?'checked':'')+' onchange="setData(\'mediaUseFreeAudio\',this.checked)"><span><b>🎵 Freesound d’abord</b><div class="tiny">Sons / bruitages / ambiances gratuits</div></span></label>'+
           '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(53,214,154,.18);border-radius:12px"><input type="checkbox" '+(freeVideo?'checked':'')+' onchange="setData(\'mediaUseFreeVideo\',this.checked)"><span><b>🎬 Pexels vidéo d’abord</b><div class="tiny">Banque vidéo gratuite avant toute génération</div></span></label>'+
-          '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(232,184,103,.18);border-radius:12px"><input type="checkbox" '+(paidFallback?'checked':'')+' onchange="setData(\'mediaPaidFallback\',this.checked)"><span><b>💰 IA si rien de gratuit</b><div class="tiny">Décoche pour interdire toute dépense audio/vidéo automatique</div></span></label>'+
+          '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(232,184,103,.18);border-radius:12px"><input type="checkbox" '+(allowPaidImages?'checked':'')+' onchange="setData(\'mediaAllowPaidImages\',this.checked)"><span><b>🎨 Autoriser les images payantes</b><div class="tiny">Par défaut : NON. À cocher seulement si tu veux lancer GPT Image 2</div></span></label>'+
+        '</div>'+
+        '<div class="row one" style="margin-top:10px">'+
+          '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(232,184,103,.18);border-radius:12px"><input type="checkbox" '+(paidFallback?'checked':'')+' onchange="setData(\'mediaPaidFallback\',this.checked)"><span><b>💰 Autoriser l’IA payante en secours pour audio/vidéo</b><div class="tiny">Par défaut : NON. Si décoché, NyXia s’arrête aux banques gratuites et laisse le reste en attente.</div></span></label>'+
+        '</div>'+
         '</div>'+
       '</div>'+
       '<div class="panel" style="padding:16px;margin:12px 0 16px;border-color:rgba(232,184,103,.32)">'+
         '<h4 style="margin:0 0 8px">✨ Produire réellement les médias</h4>'+
-        '<div class="tiny" style="margin-bottom:12px">Pour les images, <b>GPT Image 2</b> est prioritaire. Pour la vidéo payante, NyXia met <b>Luma Ray Flash 2 — Économique</b> en premier. Les banques gratuites restent essayées avant.</div>'+
+        '<div class="tiny" style="margin-bottom:12px">Pour les images, <b>GPT Image 2</b> est prioritaire mais <b>aucune image payante ne sera lancée tant que tu n’as pas coché l’autorisation</b>. Pour la vidéo payante, NyXia met <b>Luma Ray Flash 2 — Économique</b> en premier. Les banques gratuites restent essayées avant.</div>'+
         '<div class="row three">'+
           mediaToolSelect('image',d.mediaImageToolId,'🎨 Image — GPT Image 2 en priorité')+
           mediaToolSelect('audio',d.mediaAudioToolId,'🎵 Audio IA — seulement en secours')+
@@ -1048,9 +1062,13 @@
         '<div class="tools-line" style="margin-top:12px"><button class="btn primary" onclick="produceGameComplete()">🧠 Préparer les plans de production</button><button class="btn" onclick="rebuildProductionAssets()">📁 Générer / mettre à jour le registre des assets</button></div>'+
       '</div>'+
       gameArea('🎨 Images / portraits / tokens / cartes / objets — briefs de génération','imageBriefs',d.imageBriefs,10)+
+      '<div class="tools-line" style="margin:-4px 0 14px"><button class="btn primary" onclick="gameAI(\'images\')">🎨 Générer les briefs visuels</button></div>'+
       gameArea('🎵 Musiques / ambiances / bruitages / voix','audioPlan',d.audioPlan,9)+
+      '<div class="tools-line" style="margin:-4px 0 14px"><button class="btn primary" onclick="gameAI(\'audio\')">🎵 Générer le plan audio</button></div>'+
       gameArea('🎬 Clips / intro / révélations / transitions — storyboard','videoPlan',d.videoPlan,10)+
+      '<div class="tools-line" style="margin:-4px 0 14px"><button class="btn primary" onclick="gameAI(\'videos\')">🎬 Générer le storyboard vidéo</button></div>'+
       gameArea('🗺️ Cartes monde / battlemaps / lieux à produire','mapPlan',d.mapPlan,8)+
+      '<div class="tools-line" style="margin:-4px 0 14px"><button class="btn primary" onclick="gameAI(\'maps\')">🗺️ Générer le plan cartographique</button></div>'+
       summarizeProductionAssets(d)+
       '<div class="game-note" style="margin-top:12px"><b>📁 Registre :</b> tu ne l’écris jamais à la main. Clique sur le bouton suivant pour le créer ou le mettre à jour à partir des plans ci-dessus.</div>'+
       '<div class="tools-line" style="margin:10px 0 12px"><button class="btn gold" onclick="rebuildProductionAssets()">📁 Générer / mettre à jour le registre des assets</button></div>'+
