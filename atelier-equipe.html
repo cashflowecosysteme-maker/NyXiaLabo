@@ -860,19 +860,9 @@
     var u=new SpeechSynthesisUtterance(part);
     u.lang='fr-FR';u.rate=.95;
     var voices=window.speechSynthesis.getVoices()||[];
-    // Priorité absolue au français de France. On évite qu'un fr-CA soit choisi
-    // simplement parce qu'il apparaît avant dans la liste du navigateur.
-    var fr=voices.find(function(v){return /^fr[-_]FR$/i.test(v.lang||'')})||
-           voices.find(function(v){return /^fr[-_]FR\b/i.test(v.lang||'')})||
-           voices.find(function(v){
-             return /^fr\b/i.test(v.lang||'') && /france|français \(france\)|francais \(france\)/i.test((v.name||'')+' '+(v.lang||''))
-           })||
-           voices.find(function(v){return /^fr\b/i.test(v.lang||'') && !/^fr[-_]CA$/i.test(v.lang||'')});
-    if(fr){u.voice=fr;u.lang='fr-FR'}
-    else{
-      u.lang='fr-FR';
-      toast('Aucune voix Français (France) installée : le navigateur utilisera sa voix fr-FR par défaut.')
-    }
+    var fr=voices.find(function(v){return /^fr(-|_)/i.test(v.lang||'')})||
+           voices.find(function(v){return /french|français|francais/i.test(v.name||'')});
+    if(fr)u.voice=fr;
     u.onend=function(){setTimeout(speakNextAIChunk,80)};
     u.onerror=function(e){
       aiSpeechStopped=true;
