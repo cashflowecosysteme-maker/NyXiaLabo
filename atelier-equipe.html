@@ -1083,6 +1083,10 @@
           working++
           results=results.concat((photos.photos||[]).map(function(r){return {url:r.full,preview:r.thumb||r.full,source:'Pexels',sourceUrl:r.url||'',credit:r.photographer||'',license:'Pexels License',kind:'image',label:q}}))
         }catch(e){errors.push('Pexels : '+e.message)}
+        try{
+          var pix=await api('/api/game/media/pixabay-search?kind=image&q='+encodeURIComponent(q));working++
+          results=results.concat((pix.photos||[]).map(function(r){return {url:r.full,preview:r.thumb||r.full,source:'Pixabay',sourceUrl:r.url||'',credit:r.photographer||'',license:'Pixabay Content License',kind:'image',label:q}}))
+        }catch(e){errors.push('Pixabay : '+e.message)}
         // Un 403 Unsplash est une panne de configuration du service, pas une faute
         // de l'illustration : n'envoyer qu'une tentative par session.
         if(!gameUnsplashUnavailable){
@@ -1101,9 +1105,18 @@
       }else if(kind==='video'){
         var videos=await api('/api/pexels-video-search?q='+encodeURIComponent(q));working++
         results=(videos.videos||[]).filter(function(r){return r.full||r.preview}).map(function(r){return {url:r.full||r.preview,preview:r.preview||r.full,source:'Pexels',sourceUrl:r.url||'',credit:r.photographer||'',license:'Pexels License',kind:'video',label:q}})
+        try{var pv=await api('/api/game/media/pixabay-search?kind=video&q='+encodeURIComponent(q));working++
+          results=results.concat((pv.videos||[]).map(function(r){return {url:r.full,preview:r.preview||r.full,source:'Pixabay',sourceUrl:r.url||'',credit:r.photographer||'',license:'Pixabay Content License',kind:'video',label:q}}))
+        }catch(e){errors.push('Pixabay : '+e.message)}
       }
     }catch(e){errors.push(e.message)}
-    results=results.filter(function(x){try{var u=new URL(x.url);return u.protocol==='https:'&&!rejected.has(x.url)}catch(_){return false}}).slice(0,4)
+    // Show Pixabay even when Pexels already returned several results: two per source,
+    // maximum six proposals in total, each requiring the user's approval.
+    var groups={},order=[]
+    results.filter(function(x){try{var u=new URL(x.url);return u.protocol==='https:'&&!rejected.has(x.url)}catch(_){return false}}).forEach(function(x){if(!groups[x.source]){groups[x.source]=[];order.push(x.source)}groups[x.source].push(x)})
+    var balanced=[]
+    for(var position=0;position<2;position++){order.forEach(function(source){if(balanced.length<6&&groups[source][position])balanced.push(groups[source][position])})}
+    results=balanced
     gameFreeSuggestions[key]=results
     if(errors.length)gameFreeSearchErrors[key]=errors.join(' | ')
     else delete gameFreeSearchErrors[key]
@@ -1700,7 +1713,7 @@
   // Cahier média : une fiche issue des quatre onglets validés, par scène. Aucun rendu payant.
   var mediaNotebookBusy=false,mediaNotebookStop=false
   function mediaNotebookSource(d){
-    return JSON.stringify({concept:d.idea||'',intent:d.creatorIntent||'',canon:d.lockedCanon||'',bible:d.worldBible||'',structure:d.storyStructure||'',history:d.scenesQuests||'',guide:String(d.scenesQuests||'').trim()?'':d.guidedScenesJson||'',characters:d.characters||'',art:d.imageBriefs||''})
+    return JSON.stringify({concept:d.idea||'',intent:d.creatorIntent||'',canon:d.lockedCanon||'',bible:d.worldBible||'',structure:d.storyStructure||'',history:d.scenesQuests||'',guide:String(d.scenesQuests||'').trim()?'':d.guidedScenesJson||'',characters:d.characters||'',art:d.imageBriefs||'',importedCahier:d.mediaImportedNotebookText||''})
   }
   function mediaNotebookFingerprint(str){
     var hash=2166136261
@@ -1732,6 +1745,13 @@
     try{var guide=parseJsonLoose(d.guidedScenesJson||'{}'),scenes=Array.isArray(guide)?guide:guide.scenes
       if(Array.isArray(scenes)&&scenes.length)return scenes.map(function(x,i){return {id:String(x.id||'scene-'+String(i+1).padStart(3,'0')),title:String(x.title||x.phase||'Scène '+(i+1)),text:JSON.stringify(x)}})
     }catch(_){}
+    // Reuse explicit scene divisions in pre-existing documents, not only the textarea.
+    for(var fallback of [d.mediaImportedNotebookText,d.storyStructure,d.sourceDocuments]){
+      var text=String(fallback||'').trim();if(!text)continue
+      var lines=text.split(/\r?\n/),starts=[]
+      lines.forEach(function(line,i){if(/^\s*(?:#{1,5}\s*)?(?:\*\*)?\s*(?:sc[eè]ne|s[eé]quence)\s*(?:n\s*[°o.]?\s*)?\d+\b/i.test(line))starts.push(i)})
+      if(starts.length)return starts.map(function(start,i){return {id:'scene-'+String(i+1).padStart(3,'0'),title:lines[start].replace(/^[#*\s]+|\*+$/g,'').trim(),text:lines.slice(start,starts[i+1]===undefined?lines.length:starts[i+1]).join('\n').trim()}})
+    }
     return []
   }
   function mediaNotebookRead(d){
@@ -1776,9 +1796,12 @@
   async function compileMediaNotebook(){
     if(!currentProject||mediaNotebookBusy)return
     var projectId=currentProject.id,d=currentProject.data||{},source=mediaNotebookSource(d),fingerprint=mediaNotebookFingerprint(source),scenes=mediaNotebookScenes(d),style=mediaNotebookStyle(d)
-    if(!String(d.idea||'').trim()||!String(d.worldBible||'').trim()||!String(d.characters||'').trim()||!(String(d.scenesQuests||'').trim()||String(d.guidedScenesJson||'').trim()))return alert('Complète le Concept, la Bible, les Personnages et les scènes de l’Histoire avant de compiler. Aucun champ ne sera modifié.')
+    // No redundant four-field gate: imported documents and the existing conductor may hold the story.
+    var imported=String(d.mediaImportedNotebookText||'').trim()
+    var existingCahier=mediaNotebookRead(d)
+    if(existingCahier?.scenes?.length&&existingCahier.fingerprint===fingerprint&&existingCahier.nextIndex>=existingCahier.total){mediaNotebookProgress('Cahier déjà disponible : '+existingCahier.scenes.length+' fiches. Aucune requête lancée.');return}
+    if(!scenes.length){var prior=mediaNotebookRead(d);if(prior?.scenes?.length){mediaNotebookProgress('Cahier importé déjà disponible : '+prior.scenes.length+' fiche(s).');return}return alert('Aucune scène identifiable dans ce projet. Importe ton cahier existant, ou indique des titres « Scène 1 », « Scène 2 » dans Histoire. Aucun contenu effacé.')}
     if(!style)return alert('Aucune charte visuelle identifiée dans la Bible ou les directives Images existantes. Précise la palette, l’époque et le style avant de compiler : NyXia ne doit pas les inventer.')
-    if(!scenes.length)return alert('Aucune scène délimitée trouvée dans Histoire. Ajoute des titres « Scène 1 », « Scène 2 »… ou utilise ton conducteur existant. Aucune scène inventée.')
     if(scenes.length>250)return alert('Plus de 250 scènes détectées : vérifier le découpage. Aucun appel lancé.')
     var book=mediaNotebookRead(d),changed=book&&book.fingerprint!==fingerprint
     if(changed&&!confirm('La Bible, les personnages, l’histoire ou le brief artistique ont changé depuis ce cahier. Recommencer son analyse ? Les médias déjà choisis resteront dans leur registre et ne seront pas effacés.'))return
@@ -1797,7 +1820,7 @@
         if(mediaNotebookFingerprint(mediaNotebookSource(d))!==fingerprint)throw Error('Les sources ont changé pendant la compilation. Arrêt pour éviter de mélanger les versions.')
         var index=book.nextIndex,scene=scenes[index]
         if(scene.text.length>22000)throw Error(scene.title+' dépasse 22 000 caractères : subdivise cette scène avant de poursuivre, sans perdre les fiches précédentes.')
-        var context={title:currentProject.title,idea:d.idea,creatorIntent:d.creatorIntent,lockedCanon:d.lockedCanon,worldBible:d.worldBible,visualCharter:style,characters:d.characters,storyStructure:d.storyStructure,scene:{id:scene.id,title:scene.title,content:scene.text}}
+        var context={title:currentProject.title,idea:d.idea||d.creatorIntent||'',creatorIntent:d.creatorIntent,lockedCanon:d.lockedCanon,worldBible:d.worldBible,visualCharter:style,characters:d.characters||gameImportSplit(d.sourceDocuments||'').characters||'',storyStructure:d.storyStructure,importedMediaCahier:imported,scene:{id:scene.id,title:scene.title,content:scene.text}}
         if(JSON.stringify(context).length>95000)throw Error('Bible / fiches Personnages trop volumineuses pour un contrôle sûr : réduis leur longueur avant de poursuivre. Aucun texte modifié.')
         mediaNotebookProgress('Cahier Média : scène '+(index+1)+' / '+scenes.length+' — '+scene.title+' · analyse texte seulement…')
         var sys='Tu es le Directeur Artistique et Régisseur Média de CETTE œuvre uniquement. Convertis UNE scène en fiche technique JSON. Le Canon, la Bible, la charte visuelle et les fiches Personnages sont impératifs. Recopie exactement l’apparence de tout personnage présent ; n’invente ni visage ni vêtement ni accessoire, ni présence non explicitement établie. Si une information manque, ajoute-la à warnings et laisse le champ concerné vide. Pour chaque champ, base-toi uniquement sur la scène et le dossier fournis. N’ajoute pas de média inutile. Un bruit de pluie ne nécessite pas de création payante. Une vidéo est facultative et videoNeeded ne vaut true que si la scène exige réellement un mouvement distinct. Les résultats des banques sont uniquement des PROPOSITIONS, jamais des images validées. Une image de personne fictive ou d’objet unique ne sera jamais automatiquement acceptée à partir d’une banque de stock. N’utilise aucun univers extérieur au projet. Retourne UNIQUEMENT un objet JSON, sans markdown ni commentaire.'
@@ -1808,7 +1831,7 @@
         var output
         try{output=parseJsonLoose(answer.text||'')}catch(_){throw Error('JSON inexploitable pour '+scene.title+'. Les scènes précédentes restent sauvegardées ; celle-ci peut être relancée.')}
         var card=mediaNotebookCleanScene(output,scene,index)
-        var castSource=String(d.characters||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+        var castSource=String(d.characters||gameImportSplit(d.sourceDocuments||'').characters||imported||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
         card.characters.forEach(function(ch){
           var name=String(ch.name||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
           var look=String(ch.appearance||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
@@ -1832,12 +1855,71 @@
     var url=URL.createObjectURL(new Blob([JSON.stringify(book,null,2)],{type:'application/json'})),a=document.createElement('a')
     a.href=url;a.download='cahier-media-'+safeName(currentProject.title)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},2500)
   }
+  function mediaNotebookImportTable(text){
+    var rows=String(text||'').split(/\r?\n/).filter(function(line){return /^\s*\|.*\|\s*$/.test(line)})
+      .map(function(line){return line.trim().replace(/^\||\|$/g,'').split(/(?<!\\)\|/).map(function(cell){return cell.replace(/\\\|/g,'|').replace(/<br\s*\/?\s*>/gi,'\n').replace(/[`*]/g,'').trim()})})
+    var header=rows.findIndex(function(row){return row.length>=5&&/sc[eè]ne/i.test(row[0])&&/personnage/i.test(row[1])})
+    if(header<0)return []
+    var imported=[]
+    rows.slice(header+1).forEach(function(row){
+      if(row.length<5||row.every(function(cell){return /^[-:\s]*$/.test(cell)}))return
+      var index=imported.length+1,number=(row[0].match(/\d+/)||[])[0]||String(index),desc=row[1]||'',q=row[3]||'',imageQuery=(q.match(/`([^`]+)`/)||[])[1]||q.split(/[\n,;]/)[0]||'',soundQuery=q.split(/[\n,;]/).slice(1).join(' ').trim()
+      var movement=row[5]||'',prompt=row[4]||'',place=row[2]||''
+      imported.push({id:'scene-'+String(number).padStart(3,'0'),title:'Scène '+number,number:index,characters:desc?[{name:desc.split(/[,(]/)[0].trim(),appearance:desc}]:[],place:place,action:'',freeImageQuery:imageQuery.slice(0,160),freeSoundQuery:soundQuery.slice(0,160),freeVideoQuery:'',imageBrief:place,audioBrief:soundQuery,videoBrief:movement,imagePrompt:prompt,videoMovement:movement,imageNeeded:!!prompt,audioNeeded:!!soundQuery,videoNeeded:!!movement,warnings:['Fiche importée : vérifier les descriptions et les droits avant approbation.'],reviewed:false})
+    })
+    return imported
+  }
+  async function importMediaNotebook(files){
+    if(!currentProject||!files?.length)return
+    var file=files[0],projectId=currentProject.id,ext=(file.name.split('.').pop()||'').toLowerCase()
+    if(!['json','md','markdown','txt','docx','rtf'].includes(ext))return alert('Cahier accepté : JSON, TXT, MD, DOCX ou RTF. Aucun changement effectué.')
+    if(file.size>2*1024*1024)return alert('Cahier supérieur à 2 Mo : aucun fichier importé. Divise le document sans modifier les fiches existantes.')
+    try{
+      var text=await gameReadImportFile(file)
+      if(!currentProject||currentProject.id!==projectId)return alert('Le projet ouvert a changé. Aucun import réalisé.')
+      if(!text.trim())return alert('Document vide : aucun changement.')
+      var d=currentProject.data||{},parsed=null,scenes=[]
+      if(ext==='json'){
+        try{parsed=JSON.parse(text)}catch(_){return alert('JSON invalide : aucun changement.')}
+        var original=parsed?.projectId
+        if(original&&original!==projectId)return alert('Ce cahier appartient à un AUTRE projet ('+original+'). Import refusé pour ne pas mélanger deux histoires.')
+        var arr=Array.isArray(parsed)?parsed:parsed?.scenes
+        if(!Array.isArray(arr)||!arr.length)return alert('JSON sans tableau « scenes ». Importe un cahier exporté par le Studio ou un document TXT/MD/DOCX avec des scènes.')
+        if(arr.length>250)return alert('Plus de 250 scènes : import annulé pour contrôle.')
+        scenes=arr.map(function(x,i){
+          if(!x||typeof x!=='object')throw Error('Fiche '+(i+1)+' invalide')
+          var src={id:'scene-'+String(i+1).padStart(3,'0'),title:String(x.title||'Scène '+(i+1))}
+          var card=mediaNotebookCleanScene(Object.assign({},x,{imageNeeded:x.imageNeeded===true||!!x.imagePrompt,audioNeeded:x.audioNeeded===true||!!(x.audioBrief||x.freeSoundQuery),videoNeeded:x.videoNeeded===true||!!x.videoMovement}),src,i)
+          card.warnings.push('Importée de '+file.name+' : contrôle éditorial requis.');return card
+        })
+      }else{
+        scenes=mediaNotebookImportTable(text)
+      }
+      var previous=mediaNotebookRead(d)
+      if(!confirm('Importer « '+file.name+' » dans CE projet ? '+(scenes.length?scenes.length+' fiche(s) reconnue(s) seront enregistrées et prérempliront les cartes.':'Le document sera conservé comme référence pour compiler les scènes une par une.')+' Les médias déjà associés et les autres onglets seront préservés.'+(previous?' Le cahier existant sera remplacé (mais pas ses médias).':'')))return
+      if(scenes.length){
+        // Replacing an imported reference is explicitly confirmed above; do not mix old briefs.
+        d.mediaImportedNotebookText='';d.mediaImportedNotebookFileName=''
+        var book={version:1,projectId:projectId,fingerprint:mediaNotebookFingerprint(mediaNotebookSource(d)),total:scenes.length,nextIndex:scenes.length,scenes:scenes,warnings:[],importedFileName:file.name,createdAt:new Date().toISOString()}
+        for(var card of scenes){var outcome=mediaNotebookMergeAssets(d,card);book.warnings.push.apply(book.warnings,outcome.conflicts)}
+        d.mediaSceneNotebookJson=JSON.stringify(book,null,2)
+      }else{
+        if(text.length>50000)return alert('Ce cahier dépasse 50 000 caractères et ne contient pas de tableau de scènes reconnu. Aucun contenu effacé : importe une version structurée par scènes.')
+        d.mediaImportedNotebookText=text
+        d.mediaImportedNotebookFileName=file.name
+        // A previously compiled cahier is preserved until the user deliberately recompiles.
+      }
+      if(!currentProject||currentProject.id!==projectId)return alert('Projet changé : aucun enregistrement.')
+      await persistMediaProject();renderGame()
+      mediaNotebookProgress(scenes.length?'Cahier importé : '+scenes.length+' scène(s), cartes média préremplies. Contrôle les propositions avant tout usage.':'Cahier « '+file.name+' » importé comme référence. Clique « Compiler le Cahier Média » pour extraire ses scènes, sans modifier ton histoire.')
+    }catch(e){alert('Import du Cahier Média non terminé : '+e.message+' ; aucune génération lancée.')}
+  }
   function mediaNotebookHtml(d){
     var book=mediaNotebookRead(d),done=book?.nextIndex||0,total=book?.total||0,changed=!!book&&book.fingerprint!==mediaNotebookFingerprint(mediaNotebookSource(d))
     var body=book?.scenes?.map(function(s){return '<tr><td style="min-width:70px">'+String(s.number).padStart(2,'0')+'<div class="tiny">'+esc(s.title)+'</div></td><td>'+esc(s.characters.map(function(c){return c.name+' : '+(c.appearance||'⚠️ description absente')}).join(' ; ')||'Aucun personnage identifié')+'</td><td>'+esc(s.place)+'<br>'+esc(s.action)+'</td><td>🖼️ '+esc(s.freeImageQuery)+'<br>🎵 '+esc(s.freeSoundQuery)+(s.freeVideoQuery?'<br>🎬 '+esc(s.freeVideoQuery):'')+'</td><td>'+esc(s.imagePrompt||'Aucune image requise')+'</td><td>'+esc(s.videoMovement||'Aucune vidéo requise')+(s.warnings.length?'<div class="game-note">⚠️ '+esc(s.warnings.join(' · '))+'</div>':'')+'</td></tr>'}).join('')||''
-    return '<div class="panel" style="margin:12px 0 16px;border-color:rgba(167,139,250,.5)"><h4>🎬 Cahier Média automatique — scène par scène</h4><p class="muted">NyXia lit uniquement Concept, Bible, Histoire et Personnages de ce projet. Les briefs artistiques existants restent obligatoires. Elle crée des FICHES et préremplit les cartes ci-dessous ; aucun média n’est généré ou choisi automatiquement.</p>'+
-      '<div class="tools-line" style="margin-top:12px"><button class="btn primary" onclick="compileMediaNotebook()">'+(book&&!changed&&done<total?'▶ Continuer : 5 scènes suivantes':'✨ Compiler le Cahier Média')+'</button><button class="btn" onclick="stopMediaNotebook()">■ Arrêter</button>'+(book?'<button class="btn gold" onclick="exportMediaNotebook()">⬇ Exporter le cahier JSON</button>':'')+'</div>'+
-      '<div id="media-notebook-progress" role="status" aria-live="polite" class="game-note" style="margin-top:12px">'+(changed?'⚠️ Sources modifiées : relancer la compilation pour mettre à jour les fiches.':book?done+' / '+total+' scènes compilées ; chaque fiche reste à vérifier.':'En attente : une requête TEXTE par scène, maximum 5 par clic, après confirmation. Aucune génération image / vidéo / audio.')+'</div>'+
+    return '<div class="panel" style="margin:12px 0 16px;border-color:rgba(167,139,250,.5)"><h4>🎬 Cahier Média automatique — scène par scène</h4><p class="muted">NyXia lit Concept, Bible, Histoire, Personnages et ton cahier importé, s’il existe, pour CE projet uniquement. Les briefs artistiques existants restent obligatoires. Elle crée des FICHES et préremplit les cartes ci-dessous ; aucun média n’est généré ou choisi automatiquement.</p>'+
+      '<div class="tools-line" style="margin-top:12px"><button class="btn primary" onclick="compileMediaNotebook()">'+(book&&!changed&&done<total?'▶ Continuer : 5 scènes suivantes':'✨ Compiler le Cahier Média')+'</button><button class="btn" onclick="stopMediaNotebook()">■ Arrêter</button>'+'<label class="btn gold" style="cursor:pointer">📂 Importer mon Cahier Média<input id="media-notebook-import" type="file" accept=".json,.txt,.md,.markdown,.docx,.rtf" style="display:none" onchange="importMediaNotebook(this.files);this.value=\'\'"></label>'+(book?'<button class="btn gold" onclick="exportMediaNotebook()">⬇ Exporter le cahier JSON</button>':'')+'</div>'+
+      '<div id="media-notebook-progress" role="status" aria-live="polite" class="game-note" style="margin-top:12px">'+(changed?'⚠️ Sources modifiées : relancer la compilation pour mettre à jour les fiches.':book?done+' / '+total+' scènes compilées ; chaque fiche reste à vérifier.':'En attente : une requête TEXTE par scène, maximum 5 par clic, après confirmation. Aucune génération image / vidéo / audio.')+'</div>'+((book?.importedFileName||d.mediaImportedNotebookFileName)?'<p class="tiny">📂 Cahier importé : '+esc(book?.importedFileName||d.mediaImportedNotebookFileName)+'</p>':'')+
       (book?.warnings?.length?'<div class="tiny">Correspondances à vérifier : '+esc(book.warnings.slice(-6).join(' | '))+'</div>':'')+
       (body?'<details><summary class="btn" style="cursor:pointer;margin:8px 0">📋 Voir les fiches de scènes ('+done+')</summary><div style="overflow:auto;max-height:520px"><table class="recent" style="min-width:1000px"><thead><tr><th>Scène</th><th>Personnages</th><th>Décor / action</th><th>Mots-clés gratuits</th><th>Prompt image verrouillé</th><th>Mouvement vidéo</th></tr></thead><tbody>'+body+'</tbody></table></div></details>':'')+'</div>'
   }
@@ -1956,6 +2038,38 @@
       el.alt=asset.title||'Média associé';box.replaceChildren(el)
     }catch(e){if(box.isConnected)box.textContent='Aperçu indisponible : '+e.message}
   }
+  var simpleGalleryUrls=[]
+  function simpleMediaGallery(d,assets){
+    var personal=Array.isArray(d.userMediaAssets)?d.userMediaAssets:[]
+    if(!assets.length&&!personal.length)return '<p class="tiny">Aucun média enregistré dans ce projet pour le moment.</p>'
+    var linked=assets.map(function(a){
+      var kind=mediaSceneKind(a),url=a.generatedPreviewUrl||a.url||'',status=gameMediaReady(a)?'✓ Validé':a.localMediaId?'📁 Local':url?'👁 À vérifier':'○ Aucun fichier'
+      var visual=url?(kind==='image'?'<img loading="lazy" src="'+esc(url)+'" alt="Aperçu '+esc(a.code||a.title||'média')+'" style="width:100%;height:105px;object-fit:contain">':kind==='video'?'<video src="'+esc(url)+'" preload="metadata" muted style="width:100%;height:105px;object-fit:contain"></video>':'<audio src="'+esc(url)+'" controls preload="none" style="max-width:100%"></audio>'):'<div class="tiny" style="min-height:90px;display:grid;place-items:center">'+(a.localMediaId?'📁 Fichier sur cet appareil':'Aucun média lié')+'</div>'
+      return '<button class="asset-card" type="button" onclick="simpleChooseMedia('+JSON.stringify(a.id).replace(/"/g,'&quot;')+')" style="cursor:pointer;text-align:left;color:inherit;background:#1a202c;border:1px solid #4a5568;min-width:0;padding:8px">'+visual+'<div class="tiny">'+esc(a.sceneTitle||a.scene||'Sans scène')+' · '+esc(kind)+'</div><b style="font-size:12px;overflow-wrap:anywhere">'+esc(a.code||a.title||a.id)+'</b><div class="tiny">'+status+'</div></button>'
+    }).join('')
+    var own=personal.map(function(m){
+      var id=String(m.id||''),url=String(m.url||''),type=m.kind||'image',visual=url?(type==='image'?'<img loading="lazy" src="'+esc(url)+'" style="width:100%;height:105px;object-fit:contain" alt="'+esc(m.name||'Média personnel')+'">':type==='video'?'<video src="'+esc(url)+'" preload="metadata" muted style="width:100%;height:105px;object-fit:contain"></video>':'<audio controls preload="none" src="'+esc(url)+'" style="width:100%"></audio>'):'<div class="tiny" data-own-media-thumb="'+esc(id)+'" style="min-height:105px;display:grid;place-items:center">📁 '+esc(type)+' local</div>'
+      return '<div class="asset-card" style="min-width:0;background:#1a202c;border:1px solid #4a5568;padding:8px">'+visual+'<b style="font-size:12px;overflow-wrap:anywhere">'+esc(m.name||id)+'</b><div class="tiny">'+esc(type)+' · '+(m.storage==='cloud'?'☁️ Hébergé':'📁 Sur cet appareil')+'</div><button class="btn" onclick="previewProjectMedia('+JSON.stringify(id).replace(/"/g,'&quot;')+')">👁 Voir</button></div>'
+    }).join('')
+    return '<details id="media-gallery" style="margin:12px 0" ontoggle="if(this.open)simpleMediaGalleryHydrate()"><summary class="btn" style="cursor:pointer">🖼️ Voir les médias du projet ('+assets.length+' fiches, '+personal.length+' fichiers importés)</summary><p class="tiny">Une fiche sans image ne contient pas encore de fichier. Les médias locaux sont visibles uniquement sur cet appareil. Clique une fiche pour afficher son média en grand.</p>'+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:9px;max-height:500px;overflow:auto">'+linked+'</div>'+(personal.length?'<h5>Mes fichiers importés</h5><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:9px;max-height:420px;overflow:auto">'+own+'</div>':'')+'</details>'
+  }
+  async function simpleMediaGalleryHydrate(){
+    var root=document.getElementById('media-gallery');if(!root?.open||!currentProject)return
+    simpleGalleryUrls.forEach(function(url){URL.revokeObjectURL(url)});simpleGalleryUrls=[]
+    var projectId=currentProject.id,personal=currentProject.data?.userMediaAssets||[]
+    for(var item of personal){
+      if(item.storage!=='local-browser')continue
+      var slot=Array.from(root.querySelectorAll('[data-own-media-thumb]')).find(function(el){return el.dataset.ownMediaThumb===item.id})
+      if(!slot)continue
+      try{
+        var blob=await getLocalMedia(projectId+':'+item.id);if(!blob||!slot.isConnected||currentProject?.id!==projectId)continue
+        var url=URL.createObjectURL(blob);simpleGalleryUrls.push(url),el=document.createElement(item.kind==='video'?'video':item.kind==='audio'?'audio':'img')
+        el.src=url;el.style.cssText='width:100%;height:105px;object-fit:contain';if(el.tagName!=='IMG')el.controls=true
+        el.alt=item.name||'Média personnel';slot.replaceChildren(el)
+      }catch(_){slot.textContent='Aperçu indisponible sur cet appareil'}
+    }
+  }
   function gameMedia(d){
     var assets=parseProductionAssets(d.productionAssetsJson),asset=simpleMediaAsset(),done=assets.filter(gameMediaReady).length,book=mediaNotebookRead(d)
     var sorted=assets.slice().sort(function(a,b){return (a.sourceField==='mediaNotebook'?0:1)-(b.sourceField==='mediaNotebook'?0:1)})
@@ -1973,7 +2087,7 @@
       '<div id="game-media-search-status" role="status" aria-live="polite" class="tiny" style="margin-bottom:12px">'+esc(d.mediaProductionLog||'Sélectionne une fiche, puis choisis une action.')+'</div>'+
       (asset?'<details style="margin-bottom:10px"><summary class="btn" style="cursor:pointer">📋 Brief de cette scène</summary><div class="game-note" style="white-space:pre-wrap">'+esc(asset.notes||asset.imagePrompt||asset.videoMovement||'Consulte le Cahier Média.')+'</div></details>':'')+
       '<div id="media-viewport" style="background:#141824;border:2px dashed #4a5568;border-radius:8px;min-height:280px;padding:20px;text-align:center">'+simpleMediaViewport(asset)+'</div>'+
-      (asset?'<div id="media-free-results">'+freeSuggestionsHtml(asset)+'</div>':'')+'</div>'+
+      simpleMediaGallery(d,assets)+(asset?'<div id="media-free-results">'+freeSuggestionsHtml(asset)+'</div>':'')+'</div>'+
       '<div class="panel" style="margin-top:15px"><h4>4 · Contrôler la diffusion</h4><p class="muted">'+done+' / '+assets.length+' médias vérifiés et hébergés. Les fichiers locaux doivent être publiés avant le package.</p><div class="tools-line"><button class="btn primary" onclick="automateGameMediaDelivery()">☁️ Publier mes médias approuvés</button><button class="btn gold" onclick="setGameTab(\'package\')">📦 Vérifier le package et le parcours acheteur</button></div></div>'
   }
   function gameLive(d){
