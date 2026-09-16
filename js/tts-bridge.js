@@ -9,7 +9,7 @@ const NAMES = [
   'GOOGLE_TTS_CLIENT_EMAIL', 'GOOGLE_SERVICE_ACCOUNT_EMAIL',
   'GOOGLE_TTS_PRIVATE_KEY', 'GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY',
   'GOOGLE_TTS_ACCESS_TOKEN',
-  'GOOGLE_TTS_API_KEY', 'GOOGLE_CLOUD_TTS_API_KEY', 'GOOGLE_TEXT_TO_SPEECH_API_KEY',
+  'GOOGLE_TTS_API_KEY', 'GOOGLE_CLOUD_TTS_API_KEY', 'GOOGLE_TEXT_TO_SPEECH_API_KEY', 'GOOGLE_API_KEY',
   'GoogleText-to-Speech_', 'GoogleText-to-Speech', 'GOOGLE_TEXT_TO_SPEECH'
 ]
 const KEY_RE = /^AIza[A-Za-z0-9_-]{20,}$/
@@ -21,7 +21,19 @@ const asText = v => typeof v === 'string' ? v.trim() : v == null ? '' : String(v
 const isAccount = v => !!(v && typeof v === 'object' && typeof v.client_email === 'string' && typeof v.private_key === 'string' && v.client_email && v.private_key.includes('PRIVATE KEY'))
 
 function classify(env) {
-  // Priorité à une authentification OAuth configurée explicitement : on ne la remplace pas.
+  // Clés API explicites, y compris le nom déjà utilisé par l'environnement Cloudflare.
+  // Une variable de compte de service mal remplie ne doit pas masquer une clé API valide.
+  // En cas de plusieurs valeurs distinctes, ne choisir aucun secret silencieusement.
+  const apiNames=['GOOGLE_TTS_API_KEY','GOOGLE_CLOUD_TTS_API_KEY','GOOGLE_TEXT_TO_SPEECH_API_KEY','GOOGLE_API_KEY']
+  const validApiNames=apiNames.filter(name=>KEY_RE.test(asText(env[name])))
+  if(validApiNames.length) {
+    const distinct=new Set(validApiNames.map(name=>asText(env[name])))
+    if(distinct.size>1) return {env,ready:false,kind:'none',code:'api-keys-ambiguous',name:'',message:`Plusieurs clés API Google différentes sont disponibles (${validApiNames.join(', ')}). Sélection explicite nécessaire ; aucun secret n'a été modifié.`}
+    const name=validApiNames[0]
+    return {env,ready:true,kind:'api-key',code:'api-key-detected',name,key:asText(env[name]),message:`Clé API Google détectée dans ${name}. Le test vérifiera l'accès réel à la liste des voix.`}
+  }
+
+  // En l'absence de clé API valide, essayer les identifiants du compte de service.
   for (const name of ['GOOGLE_TTS_SERVICE_ACCOUNT_JSON','GOOGLE_SERVICE_ACCOUNT_JSON']) {
     const value=env[name]
     if (!present(value)) continue
