@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>NyXiaLabo — Préparation & coûts internes du livre audio</title>
+<link rel="icon" href="/FavIcon.png" type="image/png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
+<script src="/js/audiobook-cost-core.js" defer></script>
+<style>
+:root{color-scheme:dark;--bg:#060a18;--panel:#121a36;--ink:#f7f4ff;--muted:#b0b6d4;--line:#34345f;--purple:#7b5cff;--lav:#a78bfa;--gold:#f4c56a;--green:#42ddb0;--red:#ff9bac}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 0 0,#212050 0,transparent 42%),var(--bg);color:var(--ink);font:15px/1.5 system-ui,Segoe UI,sans-serif}
+a{color:var(--lav)}.wrap{max-width:1120px;margin:0 auto;padding:28px 18px 72px}.top{display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:22px}.brand{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--gold);font-weight:800}.title{font-size:clamp(25px,4vw,38px);line-height:1.12;margin:7px 0}.sub{margin:0;color:var(--muted)}.tag{display:inline-flex;border-radius:999px;padding:7px 12px;background:#30285d;border:1px solid #7153cc;color:#e4dbff;font-weight:700;font-size:12px}
+.card{background:linear-gradient(145deg,#151b3b,#0f1630);border:1px solid var(--line);border-radius:18px;padding:20px;margin-top:18px;box-shadow:0 10px 30px #0002}.card h2{font-size:19px;margin:0 0 8px}.note{color:var(--muted);font-size:13px;margin:3px 0 14px}.cols{display:grid;grid-template-columns:1.3fr .7fr;gap:18px}label{display:block;font-weight:650;font-size:13px;margin:0 0 6px}input[type=file],input[type=number],textarea,select{color:var(--ink);background:#090f25;border:1px solid #48466c;border-radius:10px;padding:10px;width:100%;font:inherit}textarea{resize:vertical;min-height:240px;line-height:1.55}input:focus,textarea:focus,select:focus{outline:2px solid var(--lav);outline-offset:1px}input[type=checkbox]{accent-color:var(--purple);width:18px;height:18px;vertical-align:middle}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{min-width:0}.metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.metric{background:#0a1028;padding:14px;border:1px solid #32375a;border-radius:12px}.metric small{color:var(--muted);display:block;font-size:12px}.metric b{display:block;font-size:22px;font-variant-numeric:tabular-nums;margin-top:4px}.gold{color:var(--gold)}.green{color:var(--green)}.warning{color:var(--gold)}.danger{color:var(--red)}.help{margin:9px 0 0;color:var(--muted);font-size:12px}.divider{height:1px;background:var(--line);margin:17px 0}
+button{font:inherit;color:var(--ink);border:1px solid #5b548b;background:#2a2858;border-radius:11px;padding:10px 13px;cursor:pointer;font-weight:650}button:hover{filter:brightness(1.2)}button:disabled{opacity:.45;cursor:not-allowed}.primary{background:linear-gradient(135deg,var(--purple),#535bcc);border-color:transparent}.greenbtn{background:#17694e;border-color:#2c9c74}.link{font-weight:650}.status{border:1px solid #4b4d78;border-radius:12px;background:#0a1028;padding:12px;margin:12px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}.status[hidden],.hidden{display:none!important}.status.error{border-color:#a93e5e;color:#ffc9d5}.status.ok{border-color:#278566;color:#aeffe1}.progress{width:100%;height:12px;accent-color:var(--purple)}audio{width:100%;margin-top:12px}.private{border-left:4px solid var(--gold);padding-left:10px}.disabled-layer{opacity:.6;pointer-events:none}#app[hidden]{display:none!important}.checkrow{display:flex;align-items:flex-start;gap:10px;margin:10px 0}.checkrow label{margin:0}.emphasis{border-color:#8065d3;background:#16143e}.warnbox{background:#31240e;border:1px solid #82602d;padding:13px;border-radius:10px;margin-top:12px}
+@media(max-width:800px){.cols,.grid{grid-template-columns:1fr}.wrap{padding:18px 12px 55px}.metrics{grid-template-columns:1fr 1fr}.metric b{font-size:19px}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="top"><div><div class="brand">NyXiaLabo · Espace équipe uniquement</div><h1 class="title">🎧 Préparer et estimer mes coûts audio</h1><p class="sub">Importer → nettoyer si désiré → calculer sans frais → décider de produire.</p></div><a class="link" href="/atelier-equipe.html">← Retour à l'Atelier</a></div>
+  <div id="authState" class="status" role="status">Vérification de ta session du Labo…</div>
+  <div id="app" hidden>
+  <section class="card"><h2>1. Mon manuscrit</h2><p class="note">Import privé d'un fichier Word .docx ou .txt, ou colle le texte de Google Docs. Le document est lu dans ce navigateur et n'est pas envoyé à Google lors de l'analyse.</p>
+    <label for="fileInput">Importer un document</label><input id="fileInput" type="file" accept=".docx,.txt" aria-describedby="fileHelp"><p id="fileHelp" class="help">Ancien format .doc : enregistre-le d'abord en .docx dans Word. Aucun traitement PDF approximatif.</p>
+    <p class="help" id="filename">Aucun document importé.</p><label for="manuscript">Texte destiné à la narration — modifiable</label><textarea id="manuscript" spellcheck="false" placeholder="Colle ton manuscrit ici, ou importe un fichier .docx…"></textarea>
+    <div class="row"><button id="cleanBtn" type="button">🧹 Proposer un nettoyage</button><button id="restoreBtn" type="button" disabled>↶ Annuler le nettoyage</button><button id="analyzeBtn" type="button" class="primary">📊 Calculer mes coûts</button></div>
+    <p class="help">Le nettoyage peut retirer les liens et des numéros de page isolés : tu confirmes avant modification. Les titres, chapitres et passages sensibles restent à vérifier toi-même.</p>
+  </section>
+  <div class="cols"><section class="card"><h2>2. Mes paramètres de coût — privés</h2><p class="note private">Ce calcul est réservé à ton équipe. Il ne fixe aucun tarif au client et n'édite aucune facture.</p>
+    <div class="grid">
+      <div class="field"><label for="usdRate">Tarif de MA voix Google (USD / 1 million de caractères)</label><input id="usdRate" type="number" min="0" step="0.01" placeholder="Renseigner le tarif de la voix" inputmode="decimal"></div>
+      <div class="field"><label for="fxRate">Conversion USD → CAD (facultative)</label><input id="fxRate" type="number" min="0.000001" step="0.0001" placeholder="Ex. taux du jour" inputmode="decimal"></div>
+      <div class="field"><label for="wpm">Rythme estimé (mots / minute)</label><input id="wpm" type="number" min="60" max="250" step="1" value="140"></div>
+      <div class="field"><label for="safetyPct">Réserve pour reprises (%)</label><input id="safetyPct" type="number" min="0" max="200" step="1" value="10"></div>
+      <div class="field"><label for="freeRemaining">Quota gratuit restant CERTAIN (caractères)</label><input id="freeRemaining" type="number" min="0" step="1" value="0"></div>
+      <div class="field"><label for="capUsd">Plafond de cette production (USD)</label><input id="capUsd" type="number" min="0" step="0.01" placeholder="Obligatoire pour produire"></div>
+    </div><p class="help">Aucun tarif ni solde gratuit n'est supposé. À défaut de certitude, laisse le quota gratuit à zéro. La réserve est une estimation, pas une mesure de Google. Le plafond de cette page s'ajoute à tes alertes Google.</p>
+    <div class="divider"></div><label for="voiceName">Voix Google (déjà accessible via le Labo)</label><select id="voiceName"><option value="">Voix automatique fr-FR</option></select><button id="loadVoices" type="button" style="margin-top:9px">🎙️ Charger les voix Google (facultatif)</button>
+    <div class="grid" style="margin-top:12px"><div class="field"><label for="speed">Vitesse</label><input id="speed" type="number" min="0.25" max="4" step="0.05" value="1"></div><div class="field"><label for="pitch">Hauteur</label><input id="pitch" type="number" min="-20" max="20" step="1" value="0"></div></div>
+    <p class="help">Renseigne le tarif de la catégorie de voix sélectionnée : les prix varient selon les modèles et les tarifs Google peuvent changer. Le taux CAD est saisi manuellement, aucune conversion en direct.</p>
+  </section><section class="card emphasis"><h2>3. Ma simulation gratuite</h2><div class="metrics" aria-live="polite">
+    <div class="metric"><small>Caractères du manuscrit</small><b id="sourceChars">—</b></div><div class="metric"><small>Caractères réellement envoyés*</small><b id="sentChars">—</b></div><div class="metric"><small>Mots</small><b id="wordCount">—</b></div><div class="metric"><small>Durée d'écoute estimée</small><b id="duration">—</b></div><div class="metric"><small>Segments prévus</small><b id="segments">—</b></div><div class="metric"><small>Coût estimé en USD</small><b class="gold" id="usdCost">—</b></div><div class="metric"><small>Coût estimé en CAD</small><b class="gold" id="cadCost">—</b></div><div class="metric"><small>Plafond disponible</small><b id="capState">—</b></div>
+  </div><p class="help">*Après découpage et retrait des espaces au début/à la fin de chaque segment. Caractères Unicode comptés localement, facture Google réelle susceptible de différer. Estimation avant toute synthèse.</p><div class="status" id="calcStatus" role="status">Importe ou colle ton manuscrit pour commencer.</div>
+  </section></div>
+  <section class="card"><h2>4. Production — uniquement sur décision explicite</h2><p class="note">Aucun appel payant au chargement ni lors du calcul. La vérification des voix ne génère pas d'audio.</p>
+    <div class="row"><button type="button" id="browserPreview">🔊 Aperçu gratuit (navigateur)</button><button type="button" id="googleExcerpt" disabled>🎙️ Un seul extrait Google (payant)</button></div>
+    <audio id="previewPlayer" controls hidden></audio><div class="divider"></div>
+    <div class="checkrow"><input id="paidApproval" type="checkbox"><label for="paidApproval">Je valide le tarif, le coût estimé, le plafond et j'autorise les appels Google TTS pour ce manuscrit.</label></div>
+    <div class="row"><button type="button" id="makeBook" class="greenbtn" disabled>⬇ Produire tous les segments et télécharger le ZIP</button><button type="button" id="stopBook" class="secondary" disabled>⏹ Arrêter après la requête en cours</button></div>
+    <p class="help">Production complète = fichiers MP3 individuels numérotés dans un ZIP, pas un MP3 unique assemblé. Chaque requête est facturable, même si tu interromps la production. Les fichiers audio ne sont pas publiés au portail client.</p>
+    <progress id="bookProgress" class="progress" value="0" max="1" hidden></progress><div id="status" class="status" role="status" hidden></div>
+    <div class="warnbox">🛡️ Cette page ne modifie ni le Worker TTS vérifié, ni les secrets, ni les budgets Google. Elle reste séparée des parcours clients. Le téléchargement final dépend de ton navigateur et du temps nécessaire à Google.</div>
+  </section>
+  </div>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const fmtInt=n=>Number(n).toLocaleString('fr-CA');
+const fmtMoney=(n,currency)=>n==null?'Tarif à renseigner':new Intl.NumberFormat('fr-CA',{style:'currency',currency,maximumFractionDigits:4}).format(n);
+let active=false, stopRequested=false, approvedSnapshot='', lastClean=null, lastBlobUrl='', lastCalc=null, currentFile='';
+function say(message,kind=''){const e=$('status');e.hidden=false;e.className='status '+kind;e.textContent=message;}
+function authHeaders(){return {'Content-Type':'application/json','Authorization':'Bearer '+(sessionStorage.getItem('sandbox_token')||'')};}
+async function authorizedAPI(path, options={}){
+ const resp=await fetch(path,{...options,headers:{...authHeaders(),...(options.headers||{})}});
+ const data=await resp.json().catch(()=>({}));
+ if(resp.status===401){sessionStorage.removeItem('sandbox_token');location.href='/login.html';throw new Error('Session du Labo expirée.');}
+ if(!resp.ok) throw new Error(data.error||`Erreur HTTP ${resp.status}`);
+ return data;
+}
+async function boot(){
+ const token=sessionStorage.getItem('sandbox_token')||'';
+ if(!token){location.replace('/login.html');return;}
+ try{
+  const auth=await fetch('/api/check-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
+  const result=await auth.json().catch(()=>({}));
+  if(!auth.ok||!result.valid){location.replace('/login.html');return;}
+  await authorizedAPI('/api/atelier/health');
+  $('authState').hidden=true;$('app').hidden=false;
+  // Aucune requête Google (même pour la liste des voix) pendant une estimation.
+  $('calcStatus').textContent='Prêt. Analyse du manuscrit entièrement locale et sans appel Google.';
+ }catch(error){$('authState').textContent='Accès interne indisponible : '+error.message;}
+}
+const params=()=>({usdPerMillion:$('usdRate').value,usdToCad:$('fxRate').value,wordsPerMinute:$('wpm').value,safetyPct:$('safetyPct').value,freeRemaining:$('freeRemaining').value});
+function calculate(){
+ const text=$('manuscript').value;
+ lastCalc=NyXiaAudioCost.compute(text,params());
+ const m=lastCalc;
+ $('sourceChars').textContent=fmtInt(m.sourceCharacters);$('sentChars').textContent=fmtInt(m.charactersToSend);
+ $('wordCount').textContent=fmtInt(m.words);const totalMinutes=Math.round(m.minutes),h=Math.floor(totalMinutes/60),min=totalMinutes%60;
+ $('duration').textContent=h+' h '+String(min).padStart(2,'0')+' min';
+ $('segments').textContent=fmtInt(m.segments);$('usdCost').textContent=fmtMoney(m.usd,'USD');
+ $('cadCost').textContent=m.cad==null?'Taux CAD à renseigner':fmtMoney(m.cad,'CAD');
+ const cap=NyXiaAudioCost.numeric($('capUsd').value);
+ $('capState').textContent=cap==null?'Non défini':m.usd==null?'Tarif requis':m.usd>cap?'Dépassé':'OK · '+fmtMoney(cap,'USD');
+ $('capState').className=cap!=null&&m.usd!=null&&m.usd>cap?'danger':'green';
+ $('calcStatus').textContent=m.words?`Analyse locale terminée : ${fmtInt(m.segments)} segment(s), sans consommation TTS. Coût théorique majoré de ${m.safetyPct} % de réserve.`:'Insère du texte pour obtenir une estimation.';
+ resetApproval();return m;
+}
+function resetApproval(){
+ if(active)return;
+ $('paidApproval').checked=false;approvedSnapshot='';$('googleExcerpt').disabled=true;$('makeBook').disabled=true;
+}
+function snapshot(){return JSON.stringify({text:$('manuscript').value,voice:$('voiceName').value,speed:$('speed').value,pitch:$('pitch').value,...params(),cap:$('capUsd').value});}
+function approvalCheck(){
+ if(active)return false;
+ const m=lastCalc||calculate(),cap=NyXiaAudioCost.numeric($('capUsd').value);
+ const valid=m.words>0&&m.segments>0&&m.rate!=null&&cap!=null&&cap>0&&m.usd!=null&&m.usd<=cap;
+ if(!valid){$('paidApproval').checked=false;resetApproval();say('Avant de produire : ajoute le manuscrit, le tarif de la voix et un plafond USD supérieur ou égal à ton coût estimé.','error');return false;}
+ approvedSnapshot=snapshot();$('googleExcerpt').disabled=false;$('makeBook').disabled=false;return true;
+}
+async function importFile(file){
+ if(!file)return;
+ if(active){say('Importation bloquée pendant une production.','error');return;}
+ try{
+  const name=file.name.toLowerCase();let content;
+  if(name.endsWith('.docx')){
+   if(!window.mammoth)throw new Error('La bibliothèque Word n’a pas chargé. Réessaie après avoir actualisé la page.');
+   content=(await mammoth.extractRawText({arrayBuffer:await file.arrayBuffer()})).value;
+  }else if(name.endsWith('.txt')) content=await file.text();
+  else throw new Error('Format non accepté : utilise .docx, .txt ou colle du texte.');
+  if(!content.trim()) throw new Error('Le fichier ne contient aucun texte exploitable.');
+  $('manuscript').value=content;currentFile=file.name;$('filename').textContent='Document chargé : '+file.name;
+  lastClean=null;$('restoreBtn').disabled=true;calculate();say('Fichier importé localement. Aucun audio généré.','ok');
+ }catch(err){say('Import impossible : '+err.message,'error');}
+}
+function lock(activeNow){active=activeNow;for(const id of ['fileInput','manuscript','cleanBtn','restoreBtn','analyzeBtn','usdRate','fxRate','wpm','safetyPct','freeRemaining','capUsd','voiceName','speed','pitch','paidApproval','googleExcerpt','makeBook','loadVoices'])$(id).disabled=activeNow;
+ $('stopBook').disabled=!activeNow;}
+function validateApproved(){
+ if(!$('paidApproval').checked||!approvedSnapshot||approvedSnapshot!==snapshot()){
+  resetApproval();say('Les paramètres ont changé : recalcule et approuve de nouveau.','error');return false;
+ }
+ return true;
+}
+async function synthesizePart(part){
+ return authorizedAPI('/api/atelier/tts',{method:'POST',body:JSON.stringify({text:part,languageCode:'fr-FR',voiceName:$('voiceName').value,speakingRate:Number($('speed').value)||1,pitch:Number($('pitch').value)||0})});
+}
+function fromBase64(value){const binary=atob(value),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return new Blob([bytes],{type:'audio/mpeg'});}
+async function previewGoogle(){
+ if(!validateApproved())return;
+ const segments=lastCalc.segmentsText;
+ if(!segments.length)return;
+ const part=Array.from(segments[0]).slice(0,550).join('');
+ const cost=NyXiaAudioCost.compute(part,params()).usd;
+ if(!confirm('Générer UN extrait Google TTS (requête potentiellement payante, environ '+fmtMoney(cost,'USD')+') ?'))return;
+ lock(true);
+ try{say('Génération du seul extrait Google…');const data=await synthesizePart(part);if(!data.audioContent)throw new Error('Audio absent de la réponse.');
+  if(lastBlobUrl)URL.revokeObjectURL(lastBlobUrl);lastBlobUrl=URL.createObjectURL(fromBase64(data.audioContent));$('previewPlayer').src=lastBlobUrl;$('previewPlayer').hidden=false;say('Extrait généré. Aucune autre requête lancée.','ok');
+ }catch(error){say('Extrait : '+error.message,'error');}finally{lock(false);resetApproval();}
+}
+async function produceBook(){
+ if(!validateApproved())return;
+ if(!window.JSZip){say('JSZip n’a pas chargé : aucun coût engagé.','error');return;}
+ const m=lastCalc,cap=NyXiaAudioCost.numeric($('capUsd').value);
+ if(m.usd==null||cap==null||m.usd>cap){say('Plafond dépassé ou coût non calculé.','error');return;}
+ if(!confirm(`Lancer ${m.segments} requête(s) Google TTS pour ce manuscrit ?\nCoût estimé prudent : ${fmtMoney(m.usd,'USD')}\nPlafond fixé : ${fmtMoney(cap,'USD')}\n\nChaque requête peut être facturée, même en cas d'arrêt. Continuer ?`))return;
+ const chunks=[...m.segmentsText],zip=new JSZip(),folder=zip.folder('mp3'),index=[];
+ stopRequested=false;lock(true);$('bookProgress').hidden=false;$('bookProgress').max=chunks.length;$('bookProgress').value=0;
+ let succeeded=0;let failed=null;
+ for(let i=0;i<chunks.length;i++){
+  if(stopRequested)break;
+  // Contrôle préventif du plafond sur l'estimation des segments réellement envoyés.
+  const used=chunks.slice(0,i+1).reduce((sum,x)=>sum+NyXiaAudioCost.characters(x),0);
+  const projected=(used*(1+m.safetyPct/100)-m.freeRemaining);
+  if(m.rate!=null&&Math.max(0,projected)/1000000*m.rate>cap){failed=new Error('Plafond de production dépassé avant la prochaine requête.');break;}
+  say(`Google TTS : segment ${i+1} / ${chunks.length}. Tu peux arrêter après la requête en cours.`);
+  try{
+   const result=await synthesizePart(chunks[i]);if(!result.audioContent)throw new Error('Audio vide.');
+   const filename='segment-'+String(i+1).padStart(4,'0')+'.mp3';folder.file(filename,fromBase64(result.audioContent));
+   index.push({numero:i+1,fichier:filename,caracteres:NyXiaAudioCost.characters(chunks[i])});succeeded++;$('bookProgress').value=succeeded;
+  }catch(error){failed=error;break;}
+ }
+ try{
+  if(succeeded){
+   zip.file('rapport-interne.json',JSON.stringify({document:currentFile||'texte collé',statut:failed?'partiel-erreur':stopRequested?'partiel-arrete':'complete',segmentsProduits:succeeded,segmentsPrevus:chunks.length,caracteresEstimes:m.charactersToSend,coutEstimeUsd:m.usd,coutEstimeCad:m.cad,tarifParMillionUsd:m.rate,reservePourcent:m.safetyPct,voix:$('voiceName').value||'fr-FR automatique',fichiers:index,note:'Coût estimé, non facture Google. Segments MP3 indépendants, non concaténés.'},null,2));
+   say(`Préparation du ZIP (${succeeded} segment(s))…`);const blob=await zip.generateAsync({type:'blob',compression:'STORE'});
+   const link=document.createElement('a'),url=URL.createObjectURL(blob);link.href=url;link.download='NyXiaLabo-livre-audio-'+(succeeded===chunks.length?'complet':'partiel')+'.zip';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }
+  say(failed?`Production interrompue à ${succeeded}/${chunks.length} segment(s). Erreur : ${failed.message}. Un ZIP partiel est téléchargé si possible.`:stopRequested?`Production arrêtée à ${succeeded}/${chunks.length}. ZIP partiel téléchargé si possible.`:`Terminé : ${succeeded} segment(s) MP3 dans le ZIP téléchargé. Aucun envoi au portail client.`,failed?'error':'ok');
+ }catch(error){say('Téléchargement ZIP impossible : '+error.message,'error');}
+ finally{lock(false);$('bookProgress').hidden=true;resetApproval();stopRequested=false;}
+}
+window.addEventListener('DOMContentLoaded',()=>{
+ if(!window.NyXiaAudioCost){$('authState').textContent='Calculateur indisponible : vérifie le fichier js/audiobook-cost-core.js.';return;}
+ $('fileInput').addEventListener('change',e=>importFile(e.target.files[0]));
+ $('manuscript').addEventListener('input',()=>{lastClean=null;$('restoreBtn').disabled=true;calculate();});
+ for(const id of ['usdRate','fxRate','wpm','safetyPct','freeRemaining','capUsd','voiceName','speed','pitch'])$(id).addEventListener('input',calculate);
+ $('analyzeBtn').addEventListener('click',calculate);
+ $('loadVoices').addEventListener('click',async()=>{
+  const button=$('loadVoices');button.disabled=true;
+  try{const voices=await authorizedAPI('/api/atelier/tts/voices?languageCode=fr-FR');
+   $('voiceName').replaceChildren();const auto=document.createElement('option');auto.value='';auto.textContent='Voix automatique fr-FR';$('voiceName').append(auto);
+   for(const voice of voices.voices||[]){const option=document.createElement('option');option.value=voice.name;option.textContent=voice.name+' · '+(voice.ssmlGender||'');$('voiceName').append(option);}
+   say((voices.voices||[]).length+' voix disponibles ; aucun audio généré.','ok');
+  }catch(error){say('Chargement des voix : '+error.message,'error');}finally{button.disabled=false;}
+ });
+ $('cleanBtn').addEventListener('click',()=>{const original=$('manuscript').value,result=NyXiaAudioCost.cleanPreview(original);if(!result.changed){say('Aucun nettoyage proposé.','ok');return;}
+  if(confirm('Appliquer le nettoyage facultatif ?\nLiens repérés : '+result.removedUrls+'\nNuméros de page isolés potentiellement retirés : '+(result.removedPageMarkers?'oui':'non')+'\n\nTu pourras annuler le nettoyage.')){lastClean=original;$('restoreBtn').disabled=false;$('manuscript').value=result.text;calculate();say('Nettoyage appliqué. Vérifie le texte avant de lancer une synthèse.','ok');}
+ });
+ $('restoreBtn').addEventListener('click',()=>{if(lastClean==null)return;$('manuscript').value=lastClean;lastClean=null;$('restoreBtn').disabled=true;calculate();say('Texte d’avant nettoyage restauré.','ok');});
+ $('browserPreview').addEventListener('click',()=>{const text=$('manuscript').value.trim();if(!text)return say('Ajoute du texte pour écouter un aperçu.','error');if(!('speechSynthesis'in window))return say('Aperçu vocal non disponible dans ce navigateur.','error');window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text.slice(0,800));u.lang='fr-FR';u.rate=Number($('speed').value)||1;window.speechSynthesis.speak(u);say('Aperçu local du navigateur : aucun appel Google TTS.','ok');});
+ $('paidApproval').addEventListener('change',e=>{if(e.target.checked)approvalCheck();else resetApproval();});
+ $('googleExcerpt').addEventListener('click',previewGoogle);
+ $('makeBook').addEventListener('click',produceBook);
+ $('stopBook').addEventListener('click',()=>{stopRequested=true;say('Arrêt demandé : la requête en cours peut être facturée. Préparation des fichiers déjà générés ensuite.','warning');});
+ calculate();boot();
+});
+</script>
+</body>
+</html>
