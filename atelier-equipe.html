@@ -825,6 +825,43 @@
   function renderAIResult(text,busy){var box=document.getElementById('ai-result');if(!box)return;box.className='result';box.textContent=text;var actions=document.getElementById('ai-actions');if(!actions)return;actions.innerHTML=busy?'':'<div class="result-actions"><button onclick="speakAI()" title="Lecture vocale par ton navigateur — ne dépend pas de Google TTS">🔊 Écouter</button><button onclick="stopAISpeech()" title="Arrêter la lecture">⏹ Arrêter</button><button onclick="copyAI()">📋 Copier</button><button onclick="retryAI()">↺ Réessayer</button><button onclick="pdfAI()">⬇ PDF</button></div>'+applyBar()}
   function applyBar(){if(!lastAI.target)return '';if(lastAI.target==='__mystery_json__')return '<div class="applybar"><button class="btn gold" onclick="applyMysteryProposal()">Appliquer cette Bible proposée</button></div>';if(lastAI.target.indexOf('deliverable:')===0)return '<div class="applybar"><button class="btn gold" onclick="saveDeliverable(\''+lastAI.target.split(':')[1]+'\')">Conserver dans le projet</button></div>';return '<div class="applybar"><span class="tiny">Aucune modification automatique.</span><button class="btn gold" onclick="applyAITo(\''+lastAI.target+'\')">Utiliser cette proposition</button></div>'}
   var aiSpeechQueue=[],aiSpeechIndex=0,aiSpeechStopped=false;
+  function cleanSpeechMarkdown(text){
+    var t=String(text||'');
+    // Blocs de code / marqueurs de langage : ```md, ```json, etc.
+    t=t.replace(/```[a-zA-Z0-9_-]*\s*/g,' ').replace(/```/g,' ');
+    // Images Markdown ![alt](url) -> alt
+    t=t.replace(/!\[([^\]]*)\]\([^)]+\)/g,'$1');
+    // Liens Markdown [texte](url) -> texte
+    t=t.replace(/\[([^\]]+)\]\([^)]+\)/g,'$1');
+    // Titres Markdown
+    t=t.replace(/^\s{0,3}#{1,6}\s+/gm,'');
+    // Citations
+    t=t.replace(/^\s*>\s?/gm,'');
+    // Listes / puces / checkboxes
+    t=t.replace(/^\s*[-*+]\s+\[[ xX]\]\s+/gm,'');
+    t=t.replace(/^\s*[-*+]\s+/gm,'');
+    t=t.replace(/^\s*\d+[\.\)]\s+/gm,'');
+    // Gras, italique, barré, code inline
+    t=t.replace(/\*\*([^*]+)\*\*/g,'$1')
+       .replace(/__([^_]+)__/g,'$1')
+       .replace(/\*([^*]+)\*/g,'$1')
+       .replace(/_([^_]+)_/g,'$1')
+       .replace(/~~([^~]+)~~/g,'$1')
+       .replace(/`([^`]+)`/g,'$1');
+    // Tableaux Markdown : enlève les séparateurs et transforme les pipes en pauses
+    t=t.replace(/^\s*\|?[\s:|-]+\|?\s*$/gm,' ');
+    t=t.replace(/\s*\|\s*/g,', ');
+    // HTML simple éventuellement présent
+    t=t.replace(/<br\s*\/?>/gi,'. ').replace(/<[^>]+>/g,' ');
+    // Entités courantes
+    t=t.replace(/&nbsp;/gi,' ').replace(/&amp;/gi,' et ').replace(/&quot;/gi,'"')
+       .replace(/&#39;/gi,"'").replace(/&lt;/gi,' ').replace(/&gt;/gi,' ');
+    // URLs seules : ne pas lire les adresses complètes
+    t=t.replace(/https?:\/\/\S+/gi,'');
+    // Nettoyage espaces / répétitions
+    t=t.replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,'. ').replace(/\.{2,}/g,'. ');
+    return t.trim()
+  }
   function splitSpeechText(text,maxLen){
     maxLen=maxLen||420;
     var clean=String(text||'').replace(/\s+/g,' ').trim();
@@ -860,9 +897,19 @@
     var u=new SpeechSynthesisUtterance(part);
     u.lang='fr-FR';u.rate=.95;
     var voices=window.speechSynthesis.getVoices()||[];
-    var fr=voices.find(function(v){return /^fr(-|_)/i.test(v.lang||'')})||
-           voices.find(function(v){return /french|français|francais/i.test(v.name||'')});
-    if(fr)u.voice=fr;
+    // Priorité absolue au français de France. On évite qu'un fr-CA soit choisi
+    // simplement parce qu'il apparaît avant dans la liste du navigateur.
+    var fr=voices.find(function(v){return /^fr[-_]FR$/i.test(v.lang||'')})||
+           voices.find(function(v){return /^fr[-_]FR\b/i.test(v.lang||'')})||
+           voices.find(function(v){
+             return /^fr\b/i.test(v.lang||'') && /france|français \(france\)|francais \(france\)/i.test((v.name||'')+' '+(v.lang||''))
+           })||
+           voices.find(function(v){return /^fr\b/i.test(v.lang||'') && !/^fr[-_]CA$/i.test(v.lang||'')});
+    if(fr){u.voice=fr;u.lang='fr-FR'}
+    else{
+      u.lang='fr-FR';
+      toast('Aucune voix Français (France) installée : le navigateur utilisera sa voix fr-FR par défaut.')
+    }
     u.onend=function(){setTimeout(speakNextAIChunk,80)};
     u.onerror=function(e){
       aiSpeechStopped=true;
@@ -871,7 +918,7 @@
     window.speechSynthesis.speak(u)
   }
   function speakAI(){
-    var text=String(lastAI&&lastAI.text||'').trim();
+    var text=cleanSpeechMarkdown(String(lastAI&&lastAI.text||''));
     if(!text){toast('Aucun texte à écouter');return}
     if(!('speechSynthesis' in window)||typeof SpeechSynthesisUtterance==='undefined'){
       toast('La lecture vocale n’est pas disponible dans ce navigateur');return
