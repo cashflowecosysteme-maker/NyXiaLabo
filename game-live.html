@@ -40,10 +40,32 @@ textarea{resize:vertical}.join{max-width:540px;margin:8vh auto}.dice{font-size:3
 .reward{position:fixed;left:50%;top:92px;transform:translateX(-50%) translateY(-12px);z-index:30;background:linear-gradient(135deg,#221a3e,#6d51df);border:1px solid rgba(255,255,255,.16);box-shadow:0 20px 60px rgba(0,0,0,.45);padding:14px 18px;border-radius:16px;font-weight:850;opacity:0;pointer-events:none;transition:.25s}.reward.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .note{padding:10px;border-radius:10px;border:1px solid rgba(232,184,103,.18);background:rgba(232,184,103,.05);color:#e8d19d;font-size:12px;line-height:1.5}
 @media(max-width:760px){.grid,.setupgrid{grid-template-columns:1fr}.full{grid-column:auto}.hero h1{font-size:24px}.portraitbox{grid-template-columns:78px 1fr}.portraitbox .portrait{width:78px;height:78px}}
+
+@keyframes nyxshoot{0%{transform:translate(-25vw,-10vh) rotate(-18deg);opacity:0}8%{opacity:.95}18%{transform:translate(110vw,35vh) rotate(-18deg);opacity:0}100%{opacity:0}}
+body{overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-2;background:
+radial-gradient(2px 2px at 8% 14%,rgba(255,255,255,.75),transparent 60%),
+radial-gradient(1.6px 1.6px at 18% 72%,rgba(255,255,255,.65),transparent 60%),
+radial-gradient(2px 2px at 26% 28%,rgba(167,139,250,.95),transparent 60%),
+radial-gradient(1.8px 1.8px at 34% 82%,rgba(255,255,255,.65),transparent 60%),
+radial-gradient(2px 2px at 46% 18%,rgba(232,184,103,.85),transparent 60%),
+radial-gradient(1.4px 1.4px at 58% 64%,rgba(255,255,255,.7),transparent 60%),
+radial-gradient(2px 2px at 68% 26%,rgba(167,139,250,.9),transparent 60%),
+radial-gradient(1.8px 1.8px at 77% 78%,rgba(255,255,255,.68),transparent 60%),
+radial-gradient(2px 2px at 88% 34%,rgba(232,184,103,.82),transparent 60%),
+radial-gradient(1.6px 1.6px at 94% 66%,rgba(255,255,255,.72),transparent 60%);
+opacity:.95}
+body::after{content:"";position:fixed;left:-20vw;top:8vh;width:34vw;height:2px;pointer-events:none;z-index:-1;background:linear-gradient(90deg,transparent,rgba(255,255,255,.96),rgba(167,139,250,.75),transparent);filter:drop-shadow(0 0 7px rgba(255,255,255,.7));transform:rotate(-18deg);animation:nyxshoot 11s linear infinite}
+.top:before{content:"";position:absolute;inset:auto 0 0 0;height:1px;background:linear-gradient(90deg,transparent,rgba(167,139,250,.45),rgba(232,184,103,.35),transparent)}
+.brandwrap{display:flex;align-items:center;gap:12px}
+.brandimg{width:42px;height:42px;border-radius:14px;object-fit:cover;border:1px solid rgba(167,139,250,.28);box-shadow:0 0 0 1px rgba(255,255,255,.05) inset,0 10px 26px rgba(123,92,255,.22);background:rgba(10,16,35,.85)}
+.brand{display:flex;align-items:center;gap:10px}
+.hero,.welcome h1,.login h1,.game h3,.steptitle,h1,h2{letter-spacing:.2px}
+
 </style>
 </head>
 <body>
-<div class="top"><div class="brand">NyXia <span>Game</span></div><div id="status" class="status">Connexion…</div></div>
+<div class="top"><div class="brandwrap"><img class="brandimg" src="/nyxia-avatar-top-left.png" alt="NyXia" onerror="this.style.display=\'none\'"><div class="brand">NyXia <span>Game</span></div></div><div id="status" class="status">Connexion…</div></div>
 <div id="reward" class="reward"></div>
 <main class="wrap"><div id="app"></div></main>
 <script>
@@ -83,7 +105,7 @@ function selectOrInput(id,values,placeholder,current=''){
 function renderCharacterCreation(){
   let cfg=state.playerConfig||{},prologue=cfg.prologue||`Bienvenue dans ${state.title}. Ton histoire commence ici.`
   status.textContent='Création du personnage'
-  app.innerHTML=`<section class="card"><div class="mut">AVANT TON ARRIVÉE DANS L’HISTOIRE</div><h1>${esc(state.title)}</h1><div class="prologue">${esc(prologue)}</div>${cfg.creationInstructions?`<div class="note" style="margin-top:12px"><b>À respecter pour ton personnage</b><br>${esc(cfg.creationInstructions)}</div>`:''}</section>
+  app.innerHTML=`<section class="card"><div class="mut">AVANT TON ARRIVÉE DANS L’HISTOIRE</div><h1>${esc(state.title)}</h1><div class="note" style="margin-bottom:12px"><b>✨ Entrée joueur immersive</b><br>Lis ton prologue, incarne ton personnage, choisis son image si tu le veux, puis entre dans la partie avec ton identité de joueur.</div><div class="prologue">${esc(prologue)}</div>${cfg.creationInstructions?`<div class="note" style="margin-top:12px"><b>À respecter pour ton personnage</b><br>${esc(cfg.creationInstructions)}</div>`:''}</section>
   <section class="card"><h2>🎭 Crée le personnage que tu vas incarner</h2><p class="mut">Ce personnage est ton <b>PJ</b>. Les PNJ appartiennent au monde et sont contrôlés par le jeu.</p>
     <div class="setupgrid">
       <div class="f"><label>Nom du personnage *</label><input id="characterName" placeholder="Ex. Élyne Vaelor"></div>
