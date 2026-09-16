@@ -20,12 +20,12 @@ opacity:.95}
 body::after{content:"";position:fixed;left:-20vw;top:8vh;width:34vw;height:2px;pointer-events:none;z-index:-1;background:linear-gradient(90deg,transparent,rgba(255,255,255,.96),rgba(167,139,250,.75),transparent);filter:drop-shadow(0 0 7px rgba(255,255,255,.7));transform:rotate(-18deg);animation:nyxshoot 11s linear infinite}
 .top:before{content:"";position:absolute;inset:auto 0 0 0;height:1px;background:linear-gradient(90deg,transparent,rgba(167,139,250,.45),rgba(232,184,103,.35),transparent)}
 .brandwrap{display:flex;align-items:center;gap:12px}
-.brandimg{width:42px;height:42px;border-radius:14px;object-fit:cover;border:1px solid rgba(167,139,250,.28);box-shadow:0 0 0 1px rgba(255,255,255,.05) inset,0 10px 26px rgba(123,92,255,.22);background:rgba(10,16,35,.85)}
+.brandimg{width:50px;height:54px;object-fit:contain;object-position:center bottom;border:0;box-shadow:none;background:transparent;filter:drop-shadow(0 8px 18px rgba(123,92,255,.28))}
 .brand{display:flex;align-items:center;gap:10px}
 .hero,.welcome h1,.login h1,.game h3,.steptitle,h1,h2{letter-spacing:.2px}
 
 </style></head><body>
-<div class="top"><div class="brandwrap"><img class="brandimg" src="/nyxia-avatar-top-left.png" alt="NyXia" onerror="this.style.display=\'none\'"><div class="brand">NyXia <span>Game</span> · Animateur</div></div><div style="display:flex;gap:8px;align-items:center"><button onclick="location.href='/game-library.html'">🎮 Ma bibliothèque</button><span class="pill">Soirée guidée</span></div></div><main class="wrap"><div id="app">Chargement…</div></main>
+<div class="top"><div class="brandwrap"><img class="brandimg" src="/NyXia.png" alt="NyXia" onerror="this.style.display=\'none\'"><div class="brand">NyXia <span>Game</span> · Animateur</div></div><div style="display:flex;gap:8px;align-items:center"><button onclick="location.href='/game-library.html'">🎮 Ma bibliothèque</button><span class="pill">Soirée guidée</span></div></div><main class="wrap"><div id="app">Chargement…</div></main>
 <script>
 const qs=new URLSearchParams(location.search),code=(qs.get('code')||'').toUpperCase(),incoming=qs.get('host')||'';if(incoming){sessionStorage.setItem('nyxgame_host_'+code,incoming);qs.delete('host');history.replaceState({},'',location.pathname+'?'+qs.toString())}let hostToken=sessionStorage.getItem('nyxgame_host_'+code)||'',state=null,joinUrl='',timerId=null,timerEnds=0;
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function h(){return {'Content-Type':'application/json','X-NyXia-Host-Token':hostToken}}async function api(path,opt={}){let r=await fetch(path,{...opt,headers:{...h(),...(opt.headers||{})}}),j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Erreur '+r.status);return j}
