@@ -1,6 +1,159 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NyXia Game — Partie</title><link rel="icon" href="/FavIcon.png"><style>
-:root{--bg:#060a18;--card:#101831;--p:#7B5CFF;--lav:#a78bfa;--gold:#e8b867;--txt:#f8f6ff;--mut:#9da6c5;--line:rgba(167,139,250,.18);--ok:#35d69a}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,rgba(123,92,255,.14),transparent 30%),var(--bg);color:var(--txt);font:14px system-ui,-apple-system,Segoe UI,sans-serif}.top{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:rgba(6,10,24,.94);position:sticky;top:0;z-index:4}.brand{font:700 20px Georgia}.brand span{color:var(--lav)}.wrap{max-width:1050px;margin:auto;padding:18px}.card{border:1px solid var(--line);background:linear-gradient(145deg,rgba(16,24,49,.94),rgba(7,12,27,.96));border-radius:18px;padding:16px;margin-bottom:14px}.hero{min-height:210px;display:flex;flex-direction:column;justify-content:flex-end;background-size:cover;background-position:center;position:relative;overflow:hidden}.hero:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(4,7,16,.15),rgba(4,7,16,.92))}.hero>*{position:relative}.hero h1{font-size:29px;margin:0 0 5px}.mut{color:var(--mut)}.objective{border-left:3px solid var(--gold);padding:12px;background:rgba(232,184,103,.06);border-radius:10px;line-height:1.5}.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}.clue{padding:10px;border:1px solid rgba(232,184,103,.2);background:rgba(232,184,103,.05);border-radius:10px;margin-bottom:7px}.actions{display:flex;gap:8px;flex-wrap:wrap}button{border:1px solid var(--line);background:#121b37;color:#fff;padding:10px 13px;border-radius:10px;font-weight:700;cursor:pointer}button.primary{background:linear-gradient(135deg,var(--p),#5d49d9);border:0}input,textarea,select{width:100%;border:1px solid var(--line);background:#080f22;color:#fff;border-radius:10px;padding:11px}.join{max-width:480px;margin:9vh auto}.dice{font-size:30px;color:var(--gold);font-weight:900;margin:8px 0}.npcReply{white-space:pre-wrap;line-height:1.55;padding:12px;border-left:3px solid var(--p);background:rgba(123,92,255,.07);border-radius:10px}.status{padding:6px 9px;border-radius:999px;border:1px solid var(--line);font-size:11px;color:var(--mut)}@media(max-width:760px){.grid{grid-template-columns:1fr}.hero h1{font-size:24px}}</style></head><body>
-<div class="top"><div class="brand">NyXia <span>Game</span></div><div id="status" class="status">Connexion…</div></div><main class="wrap"><div id="app"></div></main>
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NyXia Game — Partie</title>
+<link rel="icon" href="/FavIcon.png">
+<style>
+:root{--bg:#060a18;--card:#101831;--p:#7B5CFF;--lav:#a78bfa;--gold:#e8b867;--txt:#f8f6ff;--mut:#9da6c5;--line:rgba(167,139,250,.18);--ok:#35d69a;--bad:#ff7188}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at 80% 0,rgba(123,92,255,.14),transparent 30%),radial-gradient(circle at 15% 60%,rgba(232,184,103,.06),transparent 25%),var(--bg);color:var(--txt);font:14px system-ui,-apple-system,Segoe UI,sans-serif}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;background-image:radial-gradient(1px 1px at 10% 20%,rgba(255,255,255,.55),transparent),radial-gradient(1px 1px at 35% 70%,rgba(255,255,255,.4),transparent),radial-gradient(1px 1px at 72% 32%,rgba(255,255,255,.48),transparent),radial-gradient(1px 1px at 91% 82%,rgba(255,255,255,.38),transparent);z-index:-1}
+.top{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:rgba(6,10,24,.94);position:sticky;top:0;z-index:4;backdrop-filter:blur(16px)}
+.brand{font:700 20px Georgia}.brand span{color:var(--lav)}
+.wrap{max-width:1050px;margin:auto;padding:18px}
+.card{border:1px solid var(--line);background:linear-gradient(145deg,rgba(16,24,49,.94),rgba(7,12,27,.96));border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 14px 44px rgba(0,0,0,.18)}
+.hero{min-height:210px;display:flex;flex-direction:column;justify-content:flex-end;background-size:cover;background-position:center;position:relative;overflow:hidden}
+.hero:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(4,7,16,.15),rgba(4,7,16,.92))}
+.hero>*{position:relative}.hero h1{font-size:29px;margin:0 0 5px}
+.mut{color:var(--mut)}.objective{border-left:3px solid var(--gold);padding:12px;background:rgba(232,184,103,.06);border-radius:10px;line-height:1.5}
+.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}
+.clue{padding:10px;border:1px solid rgba(232,184,103,.2);background:rgba(232,184,103,.05);border-radius:10px;margin-bottom:7px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+button{border:1px solid var(--line);background:#121b37;color:#fff;padding:10px 13px;border-radius:10px;font-weight:700;cursor:pointer}
+button.primary{background:linear-gradient(135deg,var(--p),#5d49d9);border:0}
+button.gold{background:linear-gradient(135deg,#b67b27,#e8b867);color:#171006;border:0}
+input,textarea,select{width:100%;border:1px solid var(--line);background:#080f22;color:#fff;border-radius:10px;padding:11px;outline:none}
+textarea{resize:vertical}.join{max-width:540px;margin:8vh auto}.dice{font-size:30px;color:var(--gold);font-weight:900;margin:8px 0}
+.npcReply{white-space:pre-wrap;line-height:1.55;padding:12px;border-left:3px solid var(--p);background:rgba(123,92,255,.07);border-radius:10px}
+.status{padding:6px 9px;border-radius:999px;border:1px solid var(--line);font-size:11px;color:var(--mut)}
+.prologue{white-space:pre-wrap;line-height:1.72;font-size:16px;color:#e9ebf8}
+.setupgrid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.full{grid-column:1/-1}
+.f label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#858eb4;font-weight:800;margin:0 0 5px}
+.portraitbox{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:center;padding:12px;border:1px dashed rgba(167,139,250,.28);border-radius:14px;background:rgba(123,92,255,.04)}
+.portrait{width:96px;height:96px;border-radius:22px;object-fit:cover;border:1px solid var(--line);background:#090f22;display:grid;place-items:center;font-size:36px;overflow:hidden}
+.characterhead{display:grid;grid-template-columns:72px 1fr;gap:12px;align-items:center}.characterhead .portrait{width:72px;height:72px;border-radius:18px;font-size:28px}
+.badges{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.badge{padding:6px 9px;border-radius:999px;border:1px solid rgba(232,184,103,.26);background:rgba(232,184,103,.08);color:#ffe4aa;font-size:11px}
+.reps{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.rep{padding:6px 9px;border-radius:999px;border:1px solid rgba(167,139,250,.23);background:rgba(123,92,255,.08);font-size:11px}
+.secret{margin-top:10px;border:1px solid rgba(255,113,136,.16);background:rgba(255,113,136,.04);border-radius:10px;padding:9px}
+.reward{position:fixed;left:50%;top:92px;transform:translateX(-50%) translateY(-12px);z-index:30;background:linear-gradient(135deg,#221a3e,#6d51df);border:1px solid rgba(255,255,255,.16);box-shadow:0 20px 60px rgba(0,0,0,.45);padding:14px 18px;border-radius:16px;font-weight:850;opacity:0;pointer-events:none;transition:.25s}.reward.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.note{padding:10px;border-radius:10px;border:1px solid rgba(232,184,103,.18);background:rgba(232,184,103,.05);color:#e8d19d;font-size:12px;line-height:1.5}
+@media(max-width:760px){.grid,.setupgrid{grid-template-columns:1fr}.full{grid-column:auto}.hero h1{font-size:24px}.portraitbox{grid-template-columns:78px 1fr}.portraitbox .portrait{width:78px;height:78px}}
+</style>
+</head>
+<body>
+<div class="top"><div class="brand">NyXia <span>Game</span></div><div id="status" class="status">Connexion…</div></div>
+<div id="reward" class="reward"></div>
+<main class="wrap"><div id="app"></div></main>
 <script>
-const q=new URLSearchParams(location.search);let code=(q.get('code')||'').toUpperCase(),token=sessionStorage.getItem('nyxgame_player_'+code)||'',state=null;function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}async function api(path,opt={}){let r=await fetch(path,{...opt,headers:{'Content-Type':'application/json','X-NyXia-Player-Token':token,...(opt.headers||{})}}),j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Erreur '+r.status);return j}function joinForm(msg=''){app.innerHTML=`<div class="join card"><div class="mut">Rejoins une partie NyXia Game</div><h1>${esc(code||'Code requis')}</h1>${msg?`<p style="color:#ff9bac">${esc(msg)}</p>`:''}<input id="name" placeholder="Ton prénom / pseudo"><div style="height:10px"></div><button class="primary" onclick="join()">Entrer dans la partie</button></div>`}async function join(){try{let r=await api('/api/game/live/join',{method:'POST',body:JSON.stringify({code,name:name.value,playerToken:token})});token=r.playerToken;sessionStorage.setItem('nyxgame_player_'+code,token);state=r.state;render()}catch(e){joinForm(e.message)}}async function load(){if(!token){joinForm();return}try{let r=await api('/api/game/live/state?code='+encodeURIComponent(code));state=r.state;render()}catch(e){token='';sessionStorage.removeItem('nyxgame_player_'+code);joinForm(e.message)}}function render(){let r=state.runtime||{},all=[...(r.sharedClues||[]),...(r.teamClues||[])];status.textContent=(state.status||'lobby')+' · '+(state.player?.team||'');let bg=r.imageUrl?`background-image:url('${String(r.imageUrl).replace(/'/g,"%27")}')`:'';app.innerHTML=`<section class="card hero" style="${bg}"><div class="mut">${esc(state.gameType||'')} · ${esc(state.audience||'')}</div><h1>${esc(state.title)}</h1><div>${esc(r.sceneTitle||r.phase||'En attente de l’animateur')}</div></section>${r.announcement?`<section class="card"><b>📣 Annonce</b><p>${esc(r.announcement)}</p></section>`:''}<div class="grid"><div><section class="card"><h2>🎯 Objectif actuel</h2><div class="objective">${esc(r.objective||'L’animateur prépare la prochaine étape…')}</div>${r.narrative?`<p style="line-height:1.65">${esc(r.narrative)}</p>`:''}${r.videoUrl?`<video controls style="width:100%;border-radius:12px" src="${esc(r.videoUrl)}"></video>`:''}${r.audioUrl?`<audio controls style="width:100%" src="${esc(r.audioUrl)}"></audio>`:''}</section><section class="card"><h2>🔎 Tes indices</h2>${all.length?all.map(x=>`<div class="clue">${esc(x)}</div>`).join(''):'<div class="mut">Aucun indice reçu pour l’instant.</div>'}</section></div><div><section class="card"><h2>🎲 Dés</h2>${r.allowDice!==false?`<div class="actions"><button onclick="roll(6)">D6</button><button onclick="roll(10)">D10</button><button onclick="roll(20)">D20</button></div><div id="dice" class="dice">—</div><div class="mut">Tu peux aussi utiliser un vrai dé.</div><div class="actions"><button onclick="physical()">Entrer un résultat physique</button></div>`:'<div class="mut">Dés désactivés pour cette scène.</div>'}</section><section class="card"><h2>🧙 PNJ</h2>${r.allowNpc!==false&&r.activeNpc?`<b>${esc(r.activeNpc)}</b><textarea id="npcmsg" rows="3" placeholder="Pose ta question…"></textarea><div class="actions"><button class="primary" onclick="askNpc()">Parler</button></div><div id="npcreply"></div>`:'<div class="mut">Aucun PNJ disponible maintenant.</div>'}</section><section class="card"><h2>💬 Décision / message</h2><textarea id="decision" rows="3" placeholder="Votre décision d’équipe ou ton action…"></textarea><div class="actions"><button onclick="sendDecision()">Envoyer</button>${r.zoomUrl?`<button onclick="window.open('${esc(r.zoomUrl)}','_blank')">🎥 Zoom</button>`:''}</div></section></div></div>`}async function roll(sides){let r=await api('/api/game/live/action',{method:'POST',body:JSON.stringify({code,playerToken:token,type:'roll',mode:'digital',sides})});dice.textContent='D'+sides+' → '+r.action.result}async function physical(){let sides=Number(prompt('Nombre de faces ?','20')||20),result=Number(prompt('Résultat obtenu ?','')||0);if(!result)return;let r=await api('/api/game/live/action',{method:'POST',body:JSON.stringify({code,playerToken:token,type:'roll',mode:'physical',sides,result})});dice.textContent='D'+sides+' → '+r.action.result}async function sendDecision(){if(!decision.value.trim())return;await api('/api/game/live/action',{method:'POST',body:JSON.stringify({code,playerToken:token,type:'decision',text:decision.value})});decision.value=''}async function askNpc(){if(!npcmsg.value.trim())return;npcreply.innerHTML='<div class="mut">Le personnage réfléchit…</div>';try{let r=await api('/api/game/live/npc-chat',{method:'POST',body:JSON.stringify({code,playerToken:token,message:npcmsg.value})});npcreply.innerHTML='<div class="npcReply">'+esc(r.reply)+'</div>';npcmsg.value=''}catch(e){npcreply.innerHTML='<div class="mut">'+esc(e.message)+'</div>'}}load();setInterval(()=>{if(token)load()},6000)
-</script></body></html>
+const q=new URLSearchParams(location.search)
+let code=(q.get('code')||'').toUpperCase(),token=sessionStorage.getItem('nyxgame_player_'+code)||'',state=null,portraitData='',knownBadgeIds=null,knownRep=null
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function api(path,opt={}){let r=await fetch(path,{...opt,headers:{'Content-Type':'application/json','X-NyXia-Player-Token':token,...(opt.headers||{})}}),j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Erreur '+r.status);return j}
+function rewardToast(msg){let el=document.getElementById('reward');el.textContent=msg;el.classList.add('show');clearTimeout(rewardToast.t);rewardToast.t=setTimeout(()=>el.classList.remove('show'),3600)}
+function inspectRewards(next){
+  let badges=next?.player?.badges||[],ids=new Set(badges.map(b=>b.id+'|'+b.name))
+  if(knownBadgeIds===null)knownBadgeIds=ids
+  else{badges.forEach(b=>{let k=b.id+'|'+b.name;if(!knownBadgeIds.has(k))rewardToast((b.icon||'🏅')+' Nouveau badge : '+b.name)});knownBadgeIds=ids}
+  let rep=next?.player?.reputation||{}
+  if(knownRep===null)knownRep={...rep}
+  else{Object.entries(rep).forEach(([f,v])=>{if(f in knownRep && Number(v)!==Number(knownRep[f]))rewardToast('⭐ Réputation '+f+' : '+v)});knownRep={...rep}}
+}
+function joinForm(msg=''){
+  app.innerHTML=`<div class="join card"><div class="mut">Rejoins une partie NyXia Game</div><h1>${esc(code||'Code requis')}</h1>${msg?`<p style="color:#ff9bac">${esc(msg)}</p>`:''}<p class="mut">Entre d’abord sous ton prénom ou pseudo. Ensuite, tu créeras le personnage que tu incarnes dans cette histoire.</p><input id="name" placeholder="Ton prénom / pseudo"><div style="height:10px"></div><button class="primary" onclick="join()">Entrer dans l’histoire</button></div>`
+}
+async function join(){
+  try{
+    let n=document.getElementById('name')?.value||''
+    let r=await api('/api/game/live/join',{method:'POST',body:JSON.stringify({code,name:n,playerToken:token})})
+    token=r.playerToken;sessionStorage.setItem('nyxgame_player_'+code,token);state=r.state;inspectRewards(state);render()
+  }catch(e){joinForm(e.message)}
+}
+async function load(){
+  if(!token){joinForm();return}
+  try{let r=await api('/api/game/live/state?code='+encodeURIComponent(code));state=r.state;inspectRewards(state);render()}
+  catch(e){token='';sessionStorage.removeItem('nyxgame_player_'+code);joinForm(e.message)}
+}
+function selectOrInput(id,values,placeholder,current=''){
+  values=Array.isArray(values)?values:[]
+  if(values.length)return `<select id="${id}"><option value="">Choisir…</option>${values.map(v=>`<option ${current===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`
+  return `<input id="${id}" value="${esc(current)}" placeholder="${esc(placeholder)}">`
+}
+function renderCharacterCreation(){
+  let cfg=state.playerConfig||{},prologue=cfg.prologue||`Bienvenue dans ${state.title}. Ton histoire commence ici.`
+  status.textContent='Création du personnage'
+  app.innerHTML=`<section class="card"><div class="mut">AVANT TON ARRIVÉE DANS L’HISTOIRE</div><h1>${esc(state.title)}</h1><div class="prologue">${esc(prologue)}</div>${cfg.creationInstructions?`<div class="note" style="margin-top:12px"><b>À respecter pour ton personnage</b><br>${esc(cfg.creationInstructions)}</div>`:''}</section>
+  <section class="card"><h2>🎭 Crée le personnage que tu vas incarner</h2><p class="mut">Ce personnage est ton <b>PJ</b>. Les PNJ appartiennent au monde et sont contrôlés par le jeu.</p>
+    <div class="setupgrid">
+      <div class="f"><label>Nom du personnage *</label><input id="characterName" placeholder="Ex. Élyne Vaelor"></div>
+      <div class="f"><label>Archétype / rôle</label>${selectOrInput('archetype',cfg.archetypes,'Ex. Gardienne, Enquêtrice…')}</div>
+      <div class="f"><label>Faction</label>${selectOrInput('faction',cfg.factions,'Ex. Cercle de la Lune…')}</div>
+      <div class="f"><label>Motivation</label><input id="motivation" placeholder="Qu’est-ce qui le pousse à agir ?"></div>
+      <div class="f"><label>Force</label><input id="strength" placeholder="Sa principale force"></div>
+      <div class="f"><label>Faiblesse</label><input id="weakness" placeholder="Sa faille ou son point faible"></div>
+      <div class="f full"><label>Ce que les autres peuvent savoir de toi</label><textarea id="publicBio" rows="3" placeholder="Une courte présentation publique du personnage…"></textarea></div>
+      <div class="f full"><label>Secret personnel — facultatif</label><textarea id="secret" rows="3" placeholder="Une information que ton personnage garde pour lui…"></textarea><div class="mut" style="margin-top:5px">🔒 Visible par toi et l’animateur. Ce secret n’est pas transmis automatiquement aux PNJ IA.</div></div>
+      <div class="f full"><label>Portrait — facultatif</label><div class="portraitbox"><div id="portraitPreview" class="portrait">🎭</div><div><input id="portraitFile" type="file" accept="image/png,image/jpeg,image/webp" onchange="loadPortrait(this)"><div class="mut" style="margin-top:6px">Photo, avatar ou illustration. L’image est réduite automatiquement pour le jeu.</div></div></div></div>
+    </div>
+    <div class="actions"><button class="primary" onclick="saveCharacter()">✨ Créer mon personnage et entrer dans la partie</button></div>
+  </section>`
+}
+function loadPortrait(input){
+  let file=input.files&&input.files[0];if(!file)return
+  if(!/^image\/(png|jpeg|webp)$/i.test(file.type)){rewardToast('Format d’image non accepté');return}
+  let reader=new FileReader()
+  reader.onload=()=>{let im=new Image();im.onload=()=>{let size=320,canvas=document.createElement('canvas');canvas.width=size;canvas.height=size;let ctx=canvas.getContext('2d'),scale=Math.max(size/im.width,size/im.height),sw=size/scale,sh=size/scale,sx=(im.width-sw)/2,sy=(im.height-sh)/2;ctx.drawImage(im,sx,sy,sw,sh,0,0,size,size);portraitData=canvas.toDataURL('image/jpeg',.76);document.getElementById('portraitPreview').innerHTML=`<img src="${portraitData}" style="width:100%;height:100%;object-fit:cover">`};im.src=reader.result}
+  reader.readAsDataURL(file)
+}
+async function saveCharacter(){
+  try{
+    let body={
+      code,playerToken:token,
+      characterName:document.getElementById('characterName')?.value||'',
+      archetype:document.getElementById('archetype')?.value||'',
+      faction:document.getElementById('faction')?.value||'',
+      motivation:document.getElementById('motivation')?.value||'',
+      strength:document.getElementById('strength')?.value||'',
+      weakness:document.getElementById('weakness')?.value||'',
+      publicBio:document.getElementById('publicBio')?.value||'',
+      secret:document.getElementById('secret')?.value||'',
+      portraitDataUrl:portraitData
+    }
+    let r=await api('/api/game/live/character',{method:'POST',body:JSON.stringify(body)})
+    state=r.state;inspectRewards(state);rewardToast('🎭 Ton personnage est prêt');render()
+  }catch(e){rewardToast(e.message)}
+}
+function characterCard(){
+  let p=state.player||{},c=p.character||{},badges=p.badges||[],rep=p.reputation||{}
+  let portrait=c.portraitDataUrl?`<img src="${esc(c.portraitDataUrl)}" style="width:100%;height:100%;object-fit:cover">`:'🎭'
+  let repHtml=Object.entries(rep).length?Object.entries(rep).map(([f,v])=>`<span class="rep">⭐ ${esc(f)} : <b>${esc(v)}</b></span>`).join(''):'<span class="mut">Aucune réputation modifiée pour l’instant.</span>'
+  let badgesHtml=badges.length?badges.map(b=>`<span class="badge" title="${esc(b.description||'')}">${esc((b.icon||'🏅')+' '+b.name)}</span>`).join(''):'<span class="mut">Aucun badge reçu pour l’instant.</span>'
+  return `<section class="card"><h2>🎭 Ton personnage</h2><div class="characterhead"><div class="portrait">${portrait}</div><div><b style="font-size:18px">${esc(c.name)}</b><div class="mut">${esc(c.archetype||'')}${c.archetype&&c.faction?' · ':''}${esc(c.faction||'')}</div>${c.motivation?`<div style="margin-top:5px">${esc(c.motivation)}</div>`:''}</div></div><div class="reps">${repHtml}</div><div class="badges">${badgesHtml}</div>${c.secret?`<details class="secret"><summary style="cursor:pointer">🔒 Ton secret</summary><div style="margin-top:7px">${esc(c.secret)}</div></details>`:''}</section>`
+}
+function render(){
+  if(!state?.player?.character?.name){renderCharacterCreation();return}
+  let r=state.runtime||{},all=[...(r.sharedClues||[]),...(r.teamClues||[])]
+  status.textContent=(state.status||'lobby')+' · '+(state.player?.team||'')
+  let bg=r.imageUrl?`background-image:url('${String(r.imageUrl).replace(/'/g,"%27")}')`:''
+  app.innerHTML=`<section class="card hero" style="${bg}"><div class="mut">${esc(state.gameType||'')} · ${esc(state.audience||'')}</div><h1>${esc(state.title)}</h1><div>${esc(r.sceneTitle||r.phase||'En attente de l’animateur')}</div></section>
+  ${r.announcement?`<section class="card"><b>📣 Annonce</b><p>${esc(r.announcement)}</p></section>`:''}
+  <div class="grid"><div>
+    <section class="card"><h2>🎯 Objectif actuel</h2><div class="objective">${esc(r.objective||'L’animateur prépare la prochaine étape…')}</div>${r.narrative?`<p style="line-height:1.65">${esc(r.narrative)}</p>`:''}${r.videoUrl?`<video controls style="width:100%;border-radius:12px" src="${esc(r.videoUrl)}"></video>`:''}${r.audioUrl?`<audio controls style="width:100%" src="${esc(r.audioUrl)}"></audio>`:''}</section>
+    <section class="card"><h2>🔎 Tes indices</h2>${all.length?all.map(x=>`<div class="clue">${esc(x)}</div>`).join(''):'<div class="mut">Aucun indice reçu pour l’instant.</div>'}</section>
+  </div><div>
+    ${characterCard()}
+    <section class="card"><h2>🎲 Dés</h2>${r.allowDice!==false?`<div class="actions"><button onclick="roll(6)">D6</button><button onclick="roll(10)">D10</button><button onclick="roll(20)">D20</button></div><div id="dice" class="dice">—</div><div class="mut">Tu peux aussi utiliser un vrai dé.</div><div class="actions"><button onclick="physical()">Entrer un résultat physique</button></div>`:'<div class="mut">Dés désactivés pour cette scène.</div>'}</section>
+    <section class="card"><h2>🧙 PNJ</h2>${r.allowNpc!==false&&r.activeNpc?`<b>${esc(r.activeNpc)}</b><textarea id="npcmsg" rows="3" placeholder="Pose ta question…"></textarea><div class="actions"><button class="primary" onclick="askNpc()">Parler</button></div><div id="npcreply"></div>`:'<div class="mut">Aucun PNJ disponible maintenant.</div>'}</section>
+    <section class="card"><h2>💬 Décision / action</h2><textarea id="decision" rows="3" placeholder="Votre décision d’équipe ou ton action…"></textarea><div class="actions"><button onclick="sendDecision()">Envoyer</button>${r.zoomUrl?`<button onclick="window.open('${esc(r.zoomUrl)}','_blank')">🎥 Zoom</button>`:''}</div></section>
+  </div></div>`
+}
+async function roll(sides){let r=await api('/api/game/live/action',{method:'POST',body:JSON.stringify({code,playerToken:token,type:'roll',mode:'digital',sides})});document.getElementById('dice').textContent='D'+sides+' → '+r.action.result}
+async function physical(){let sides=Number(prompt('Nombre de faces ?','20')||20),result=Number(prompt('Résultat obtenu ?','')||0);if(!result)return;let r=await api('/api/game/live/action',{method:'POST',body:JSON.stringify({code,playerToken:token,type:'roll',mode:'physical',sides,result})});document.getElementById('dice').textContent='D'+sides+' → '+r.action.result}
+async function sendDecision(){let el=document.getElementById('decision');if(!el?.value.trim())return;await api('/api/game/live/action',{method:'POST',body:JSON.stringify({code,playerToken:token,type:'decision',text:el.value})});el.value=''}
+async function askNpc(){let msg=document.getElementById('npcmsg'),reply=document.getElementById('npcreply');if(!msg?.value.trim())return;reply.innerHTML='<div class="mut">Le personnage réfléchit…</div>';try{let r=await api('/api/game/live/npc-chat',{method:'POST',body:JSON.stringify({code,playerToken:token,message:msg.value})});reply.innerHTML='<div class="npcReply">'+esc(r.reply)+'</div>';msg.value=''}catch(e){reply.innerHTML='<div class="mut">'+esc(e.message)+'</div>'}}
+load()
+setInterval(()=>{if(token)load()},6000)
+</script>
+</body>
+</html>
