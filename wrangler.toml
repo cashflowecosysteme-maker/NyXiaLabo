@@ -1,5 +1,5 @@
 name = "nyxialabo"
-main = "tts-bridge.js"
+main = "js/tts-bridge.js"
 compatibility_date = "2026-09-15"
 
 # Le même Worker compile Azgaar avant chaque déploiement.
@@ -25,6 +25,6 @@ binding = "MAPS"
 bucket_name = "nyxia-cartographie"
 
 # Secrets Cloudflare : ne jamais inscrire leur valeur dans ce fichier.
-# tts-bridge.js accepte aussi le nom historique GoogleText-to-Speech_
+# js/tts-bridge.js accepte aussi le nom historique GoogleText-to-Speech_
 # UNIQUEMENT s'il contient un JSON de compte de service (client_email/private_key).
 # Un ID client OAuth (*.apps.googleusercontent.com) n'est PAS suffisant.
