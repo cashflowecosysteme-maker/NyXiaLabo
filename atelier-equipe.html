@@ -24,7 +24,7 @@
     .brand{display:flex;align-items:center;gap:12px;padding:4px 8px 20px}.orb{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,var(--violet),#4b6cff);box-shadow:0 0 34px rgba(123,92,255,.45);font-size:21px}.brand h1{font-size:17px;margin:0}.brand small{display:block;color:var(--gold);margin-top:2px}
     .nav-label{font-size:10px;letter-spacing:1.3px;text-transform:uppercase;color:#606a94;font-weight:800;margin:18px 10px 7px}.nav-btn{width:100%;border:1px solid transparent;background:transparent;color:var(--muted);border-radius:12px;padding:11px 12px;display:flex;gap:10px;align-items:center;text-align:left;cursor:pointer;margin:2px 0}.nav-btn:hover,.nav-btn.active{background:rgba(123,92,255,.12);border-color:rgba(123,92,255,.25);color:#fff}.nav-btn .ico{width:24px;text-align:center}.back{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
     main{min-width:0}.topbar{height:66px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;border-bottom:1px solid var(--line);background:rgba(6,10,24,.64);backdrop-filter:blur(15px);position:sticky;top:0;z-index:20}.topbar h2{font-family:'Cormorant Garamond',serif;font-size:24px;margin:0;background:linear-gradient(120deg,#fff,var(--lav),var(--gold));-webkit-background-clip:text;color:transparent}.status{font-size:12px;color:var(--muted)}.status.ok{color:var(--green)}.status.warn{color:var(--gold)}
-    .content{padding:26px;max-width:1450px;margin:auto}.hero{padding:28px;border:1px solid var(--line);border-radius:24px;background:linear-gradient(135deg,rgba(123,92,255,.13),rgba(244,197,106,.04));box-shadow:var(--shadow)}.hero h3{font-family:'Cormorant Garamond',serif;font-size:34px;margin:0 0 6px}.hero p{max-width:850px;color:var(--muted);line-height:1.65;margin:0}.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(244,197,106,.25);background:rgba(244,197,106,.07);color:#f8d995;border-radius:999px;padding:6px 10px;font-size:11px;font-weight:700;margin-bottom:13px}
+    .tts-tools{display:flex;align-items:center;gap:12px;min-width:0}.tts-tools .status{max-width:340px;overflow-wrap:anywhere}.tts-tools .btn{white-space:nowrap}.content{padding:26px;max-width:1450px;margin:auto}.hero{padding:28px;border:1px solid var(--line);border-radius:24px;background:linear-gradient(135deg,rgba(123,92,255,.13),rgba(244,197,106,.04));box-shadow:var(--shadow)}.hero h3{font-family:'Cormorant Garamond',serif;font-size:34px;margin:0 0 6px}.hero p{max-width:850px;color:var(--muted);line-height:1.65;margin:0}.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(244,197,106,.25);background:rgba(244,197,106,.07);color:#f8d995;border-radius:999px;padding:6px 10px;font-size:11px;font-weight:700;margin-bottom:13px}
     .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:18px}.card{background:rgba(17,26,56,.78);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 12px 36px rgba(0,0,0,.18)}.card h4{margin:0 0 6px;font-size:17px}.card p{margin:0;color:var(--muted);line-height:1.55;font-size:13px}.card .bigico{font-size:28px;margin-bottom:10px}.card-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
     .btn{border:1px solid rgba(123,92,255,.28);background:rgba(123,92,255,.10);color:#fff;border-radius:11px;padding:9px 13px;cursor:pointer;font-size:12px;font-weight:700}.btn:hover{background:rgba(123,92,255,.2)}.btn.primary{border:none;background:linear-gradient(135deg,var(--violet),#5a70ff);box-shadow:0 8px 25px rgba(123,92,255,.25)}.btn.gold{border-color:rgba(244,197,106,.28);background:rgba(244,197,106,.09);color:#ffe6a6}.btn.danger{border-color:rgba(255,113,136,.28);background:rgba(255,113,136,.08);color:#ff9cab}.btn:disabled{opacity:.5;cursor:not-allowed}
     .section-title{display:flex;justify-content:space-between;align-items:end;gap:12px;margin:28px 0 12px}.section-title h3{margin:0;font-size:20px}.section-title p{margin:4px 0 0;color:var(--muted);font-size:12px}
@@ -45,7 +45,7 @@
 
     .map-preview{margin-top:14px;border:1px solid var(--line);border-radius:16px;padding:10px;background:rgba(6,10,24,.48);min-height:180px;display:grid;place-items:center;overflow:auto}.map-preview img{max-width:100%;height:auto;border-radius:10px;display:block}.file-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}.file-btn{padding:10px;border:1px solid var(--line);border-radius:11px;background:rgba(123,92,255,.07);color:#fff;cursor:pointer;text-align:center;font-size:12px}.file-btn:hover{background:rgba(123,92,255,.16)}@media(max-width:850px){.file-grid{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:1050px){.grid{grid-template-columns:repeat(2,1fr)}.workspace{grid-template-columns:1fr}.shell{grid-template-columns:220px 1fr}.row.three{grid-template-columns:1fr 1fr}}
-    @media(max-width:720px){.shell{display:block}aside{position:relative;width:100%;height:auto}.grid{grid-template-columns:1fr}.content{padding:16px}.topbar{padding:0 16px}.row,.row.three{grid-template-columns:1fr}.tool-list{grid-template-columns:1fr}}
+    @media(max-width:720px){.topbar{height:auto;min-height:66px;gap:10px;flex-wrap:wrap;padding:10px 16px}.tts-tools{flex-wrap:wrap}.shell{display:block}aside{position:relative;width:100%;height:auto}.grid{grid-template-columns:1fr}.content{padding:16px}.topbar{padding:0 16px}.row,.row.three{grid-template-columns:1fr}.tool-list{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -66,7 +66,7 @@
   </aside>
 
   <main>
-    <div class="topbar"><h2 id="top-title">Atelier Équipe</h2><div id="health" class="status">Connexion…</div></div>
+    <div class="topbar"><h2 id="top-title">Atelier Équipe</h2><div class="tts-tools"><div id="health" class="status">Connexion…</div><button type="button" class="btn" onclick="testGoogleTts()">🔎 Tester Google TTS</button></div></div><div id="tts-diagnostic" role="status" aria-live="polite" style="display:none;padding:12px 24px;border-bottom:1px solid rgba(167,139,250,.2);font-size:12px;line-height:1.5"></div>
     <div class="content">
       <section id="view-home" class="view"></section>
       <section id="view-ghost" class="view hidden"></section>
@@ -129,9 +129,22 @@
       var savedTool=aiTools.find(function(t){return t.id===savedAi})
       var bootTool=savedTool||preferredGptTool()
       if(bootTool)rememberAiModel(bootTool.id)
-      cartoReady=!!health.cartography; var he=document.getElementById('health'); he.textContent='● Atelier connecté'+(health.googleTts?' · TTS prêt':' · TTS à configurer')+(cartoReady?' · Cartographie prête':' · Cartographie à configurer'); he.className='status '+(health.googleTts&&cartoReady?'ok':'warn')
+      cartoReady=!!health.cartography; var he=document.getElementById('health'); he.textContent='● Atelier connecté · TTS : '+(health.googleTts?'identifiants détectés, test requis':(health.ttsCredentialType==='oauth-client-id'||health.ttsCredentialType==='oauth-client-json'?'ID OAuth non compatible':'configuration à corriger'))+(cartoReady?' · Cartographie prête':' · Cartographie à configurer'); he.className='status warn'; if(health.ttsMessage&&!health.googleTts){var diagnostic=document.getElementById('tts-diagnostic');diagnostic.style.display='block';diagnostic.textContent=health.ttsMessage+' Aucune valeur secrète n’est affichée.'}
       renderHome()
     }catch(e){ document.getElementById('health').textContent='⚠ '+e.message; document.getElementById('health').className='status warn'; renderHome() }
+  }
+
+  async function testGoogleTts(){
+    var box=document.getElementById('tts-diagnostic')
+    var he=document.getElementById('health')
+    box.style.display='block'
+    box.textContent='🔎 Vérification Google TTS en cours (liste des voix seulement ; aucune synthèse audio)…'
+    try {
+      var r=await api('/api/atelier/tts/diagnostic')
+      box.textContent=(r.connected?'✅ ':'⚠ ')+r.message+(r.connected?' Test du Studio Livre Audio réussi. Les voix PNJ du jeu suivent un circuit distinct.':' Aucune production audio lancée.')
+      he.textContent='● Atelier connecté · TTS '+(r.connected?'vérifié':'non connecté')
+      he.className='status '+(r.connected?'ok':'warn')
+    } catch(e){box.textContent='⚠ Test TTS impossible : '+e.message;he.className='status warn'}
   }
 
   function showView(v){
