@@ -179,7 +179,7 @@
   function chooseGame(id){chooseProject('nyxia-game',id,renderGame)}
 
   async function newProject(kind){
-    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',playerPrologue:'',playerCreationInstructions:'',playerArchetypes:'',playerFactions:'',playerStartingReputation:0,playerReputationRules:'',playerBadgeCatalog:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',sourceDocuments:'',importedSourceNames:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',guidedScenesJson:'',mediaUseFreeAudio:true,mediaUseFreeVideo:true,mediaPaidFallback:false,mediaAllowPaidImages:false,deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
+    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',playerPrologue:'',playerCreationInstructions:'',playerArchetypes:'',playerFactions:'',playerStartingReputation:0,playerReputationRules:'',playerBadgeCatalog:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',sourceDocuments:'',importedSourceNames:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',guidedScenesJson:'',mediaUseFreeAudio:true,mediaUseFreeVideo:true,mediaPaidFallback:false,mediaAllowPaidImages:false,mediaPaidVideoLimit:0,mediaAskVideoApproval:true,deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
     var title=prompt('Titre du projet :','Nouveau '+kindLabel(kind))||('Nouveau '+kindLabel(kind))
     try{var d=await api('/api/atelier/projects',{method:'POST',body:JSON.stringify({kind:kind,title:title,data:defaults[kind]||{}})}); currentProject=d.project; await reloadIndex(); showView(({ghostwriting:'ghost',audiobook:'audio','nyxia-game':'game',mystery:'mystery'})[kind]||'home'); toast('Projet créé') }catch(e){alert(e.message)}
   }
@@ -868,6 +868,11 @@
     var useFreeVideo=d.mediaUseFreeVideo!==false
     var paidFallback=d.mediaPaidFallback===true
     var allowPaidImages=d.mediaAllowPaidImages===true
+    var videoPaidLimit=Math.max(0,parseInt(d.mediaPaidVideoLimit||0,10)||0)
+    var askVideoApproval=d.mediaAskVideoApproval!==false
+    var videoPaidUsed=0
+    var videoPaidDecisionTaken=!askVideoApproval
+    var videoPaidApprovedSession=!askVideoApproval
 
     d.mediaImageToolId=imageId
     d.mediaAudioToolId=audioId
@@ -876,6 +881,8 @@
     d.mediaUseFreeVideo=useFreeVideo
     d.mediaPaidFallback=paidFallback
     d.mediaAllowPaidImages=allowPaidImages
+    d.mediaPaidVideoLimit=videoPaidLimit
+    d.mediaAskVideoApproval=askVideoApproval
 
     var queue=assets.filter(function(a){return ['image','badge','map','audio','video'].indexOf(a.kind)>=0&&a.status!=='produit'})
     if(!queue.length){alert('Tous les médias du registre sont déjà produits.');return}
@@ -889,8 +896,10 @@
     if(useFreeVideo)strategy.push('🎬 Vidéos : Pexels GRATUIT d’abord')
     if(allowPaidImages)strategy.push('🎨 Images payantes autorisées')
     else strategy.push('🛑 Images payantes désactivées par sécurité')
-    if(paidFallback)strategy.push('💰 Si aucun gratuit ne convient : IA payante sélectionnée pour audio/vidéo')
+    if(paidFallback)strategy.push('💰 Secours IA audio/vidéo autorisé')
     else strategy.push('🛑 Aucun média payant de remplacement ne sera lancé pour audio/vidéo')
+    strategy.push('🎬 Limite vidéos payantes : '+videoPaidLimit)
+    strategy.push(askVideoApproval?'✋ Demande de confirmation avant vidéos payantes':'⚡ Vidéos payantes sans demande supplémentaire (dans la limite fixée)')
 
     if(!confirm(
       'NyXia va produire '+queue.length+' média(s) sans quitter cette page.\n\n'+
@@ -907,6 +916,8 @@
     if(useFreeAudio)note('🆓 Freesound sera consulté avant toute génération audio payante.')
     if(useFreeVideo)note('🆓 Pexels sera consulté avant toute génération vidéo payante.')
     if(!allowPaidImages)note('🛑 Images payantes désactivées : aucune image GPT ne sera lancée sans ton accord.')
+    note('🎬 Limite vidéos payantes pour ce projet : '+videoPaidLimit+'.')
+    note(askVideoApproval?'✋ NyXia demandera une confirmation avant de lancer les vidéos payantes.':'⚡ NyXia peut lancer les vidéos payantes sans redemander, dans la limite fixée.')
     if(paidFallback && videoTool)note('💸 Vidéo payante de secours : '+(videoTool.name||videoTool.model)+'.')
 
     for(var i=0;i<queue.length;i++){
@@ -968,11 +979,39 @@
             if(!paidFallback){
               a.status='gratuit-introuvable'
               note('   ⏸ Laissé en attente : aucune dépense automatique.')
+            }else if(videoPaidLimit<=0){
+              a.status='attente-autorisation'
+              note('   ⏸ Vidéo payante bloquée : la limite de vidéos payantes est à 0 pour ce projet.')
             }else{
               if(!videoTool)throw new Error('Aucun moteur vidéo payant sélectionné pour le secours.')
-              note('   💰 Passage au modèle économique '+(videoTool.name||videoTool.model)+'…')
-              url=await generateGameVideoAsset(a,videoTool,d)
-              a.toolId=videoTool.id;a.source=videoTool.name||videoTool.model;a.free=false;paidDone++
+              if(askVideoApproval && !videoPaidDecisionTaken){
+                var remainingCap=Math.max(0,videoPaidLimit-videoPaidUsed)
+                var remainingVideos=queue.slice(i).filter(function(x){return x.kind==='video' && x.status!=='produit'}).length
+                var proposed=Math.min(remainingCap,remainingVideos||1)
+                var approxCad=(proposed*1.02).toFixed(2)
+                videoPaidApprovedSession=confirm(
+                  'NyXia n’a pas trouvé de vidéo gratuite pour « '+(a.title||'cette vidéo')+' ».'+
+                  '\n\nAutoriser jusqu’à '+proposed+' vidéo(s) payante(s) pour ce projet ?'+
+                  '\nModèle : '+(videoTool.name||videoTool.model)+
+                  '\nBudget approximatif maximal : ~'+approxCad+' $ CAD (estimation économique).'+
+                  '\n\nTu gardes le contrôle : refuser = aucune vidéo payante ne sera lancée.'
+                )
+                videoPaidDecisionTaken=true
+                if(videoPaidApprovedSession)note('   ✅ Vidéos payantes autorisées pour cette production (max '+videoPaidLimit+').')
+                else note('   ⏸ Vidéos payantes refusées pour cette production.')
+              }
+              if(!videoPaidApprovedSession){
+                a.status='gratuit-introuvable'
+                note('   ⏸ Vidéo laissée en attente : gratuit introuvable et vidéo payante non autorisée.')
+              }else if(videoPaidUsed>=videoPaidLimit){
+                a.status='limite-payante-atteinte'
+                note('   ⏸ Limite de vidéos payantes atteinte ('+videoPaidLimit+').')
+              }else{
+                note('   💰 Passage au modèle économique '+(videoTool.name||videoTool.model)+'…')
+                url=await generateGameVideoAsset(a,videoTool,d)
+                a.toolId=videoTool.id;a.source=videoTool.name||videoTool.model;a.free=false;paidDone++;videoPaidUsed++
+                note('   💸 Vidéo payante générée ('+videoPaidUsed+'/'+videoPaidLimit+').')
+              }
             }
           }else{
             if(!allowPaidImages){
@@ -1004,7 +1043,7 @@
     }
 
     note('')
-    note('RÉSUMÉ : '+done+' produits · '+freeDone+' gratuits · '+paidDone+' IA payants · '+freeMiss+' recherches gratuites sans résultat · '+errors+' erreur(s).')
+    note('RÉSUMÉ : '+done+' produits · '+freeDone+' gratuits · '+paidDone+' IA payants · '+freeMiss+' recherches gratuites sans résultat · '+errors+' erreur(s) · '+videoPaidUsed+' vidéo(s) payante(s) utilisée(s).')
     d.mediaProductionCompletedAt=new Date().toISOString()
     d.productionAssetsJson=JSON.stringify(assets,null,2)
     d.mediaProductionLog=log.join('\n')
@@ -1015,7 +1054,7 @@
   }
 
   function gameMedia(d){
-    var freeAudio=d.mediaUseFreeAudio!==false,freeVideo=d.mediaUseFreeVideo!==false,paidFallback=d.mediaPaidFallback===true,allowPaidImages=d.mediaAllowPaidImages===true
+    var freeAudio=d.mediaUseFreeAudio!==false,freeVideo=d.mediaUseFreeVideo!==false,paidFallback=d.mediaPaidFallback===true,allowPaidImages=d.mediaAllowPaidImages===true,videoPaidLimit=Math.max(0,parseInt(d.mediaPaidVideoLimit||0,10)||0),askVideoApproval=d.mediaAskVideoApproval!==false
     return '<h4>🎬 Production média du jeu</h4>'+
       '<div class="game-note"><b>Mode économie NyXia :</b> les banques gratuites sont utilisées avant les générateurs payants. Les studios séparés restent seulement pour les retouches manuelles.</div>'+
       '<div class="panel" style="padding:16px;margin:12px 0 16px;border-color:rgba(53,214,154,.28)">'+
@@ -1029,11 +1068,14 @@
         '<div class="row one" style="margin-top:10px">'+
           '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(232,184,103,.18);border-radius:12px"><input type="checkbox" '+(paidFallback?'checked':'')+' onchange="setData(\'mediaPaidFallback\',this.checked)"><span><b>💰 Autoriser l’IA payante en secours pour audio/vidéo</b><div class="tiny">Par défaut : NON. Si décoché, NyXia s’arrête aux banques gratuites et laisse le reste en attente.</div></span></label>'+
         '</div>'+
+        '<div class="row two" style="margin-top:10px">'+
+          '<div class="field"><label>🎬 Maximum de vidéos payantes pour ce projet</label><input type="number" min="0" step="1" value="'+esc(videoPaidLimit)+'" onchange="setData(\'mediaPaidVideoLimit\',Math.max(0,parseInt(this.value||\'0\',10)||0))"><div class="tiny">0 = aucune vidéo payante automatique. Exemple : 3 si tu veux au maximum 3 vidéos payantes.</div></div>'+
+          '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(232,184,103,.18);border-radius:12px"><input type="checkbox" '+(askVideoApproval?'checked':'')+' onchange="setData(\'mediaAskVideoApproval\',this.checked)"><span><b>✋ Me demander avant les vidéos payantes</b><div class="tiny">Si coché, NyXia demandera ton accord avant de lancer le lot payant du projet.</div></span></label>'+
         '</div>'+
       '</div>'+
       '<div class="panel" style="padding:16px;margin:12px 0 16px;border-color:rgba(232,184,103,.32)">'+
         '<h4 style="margin:0 0 8px">✨ Produire réellement les médias</h4>'+
-        '<div class="tiny" style="margin-bottom:12px">Pour les images, <b>GPT Image 2</b> est prioritaire mais <b>aucune image payante ne sera lancée tant que tu n’as pas coché l’autorisation</b>. Pour la vidéo payante, NyXia met <b>Luma Ray Flash 2 — Économique</b> en premier. Les banques gratuites restent essayées avant.</div>'+
+        '<div class="tiny" style="margin-bottom:12px">Pour les images, <b>GPT Image 2</b> est prioritaire mais <b>aucune image payante ne sera lancée tant que tu n’as pas coché l’autorisation</b>. Pour la vidéo payante, NyXia met <b>Luma Ray Flash 2 — Économique</b> en premier, avec une <b>limite de quantité par projet</b> et, si tu le veux, une <b>demande de confirmation avant lancement</b>. Les banques gratuites restent essayées avant.</div>'+
         '<div class="row three">'+
           mediaToolSelect('image',d.mediaImageToolId,'🎨 Image — GPT Image 2 en priorité')+
           mediaToolSelect('audio',d.mediaAudioToolId,'🎵 Audio IA — seulement en secours')+
