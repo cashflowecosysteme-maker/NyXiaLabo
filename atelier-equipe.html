@@ -124,6 +124,10 @@
       var data=await Promise.all([api('/api/atelier/health'),api('/api/atelier/projects'),api('/api/tools')])
       var health=data[0]; allProjects=data[1].projects||[]; tools=data[2].tools||[]
       aiTools=tools.filter(function(t){ return t.providerId && t.model && (!t.kind || t.kind==='chat') })
+      var savedAi='';try{savedAi=sessionStorage.getItem('nyxialabo_default_ai_tool')||''}catch(e){}
+      var savedTool=aiTools.find(function(t){return t.id===savedAi})
+      var bootTool=savedTool||preferredGptTool()
+      if(bootTool)rememberAiModel(bootTool.id)
       cartoReady=!!health.cartography; var he=document.getElementById('health'); he.textContent='● Atelier connecté'+(health.googleTts?' · TTS prêt':' · TTS à configurer')+(cartoReady?' · Cartographie prête':' · Cartographie à configurer'); he.className='status '+(health.googleTts&&cartoReady?'ok':'warn')
       renderHome()
     }catch(e){ document.getElementById('health').textContent='⚠ '+e.message; document.getElementById('health').className='status warn'; renderHome() }
@@ -187,8 +191,52 @@
   function setRoot(field,value){if(!currentProject)return;currentProject[field]=value;markDirty()}
   function setData(field,value){if(!currentProject)return;currentProject.data=currentProject.data||{};currentProject.data[field]=value;markDirty()}
 
-  function modelSelector(){var pref=aiTools.find(function(t){return t.category==='livre'})||aiTools[0];var selected=lastAI.toolId|| (pref?pref.id:'');return '<select id="ai-model">'+aiTools.map(function(t){return '<option value="'+t.id+'"'+(t.id===selected?' selected':'')+'>'+esc((t.icon||'🤖')+' '+t.name)+'</option>'}).join('')+'</select>'}
-  function aiPanel(){return '<div class="panel"><h4>🧠 Table de travail IA</h4><div class="field"><label>Modèle de travail</label>'+modelSelector()+'</div><div id="ai-result" class="result empty">La proposition IA apparaîtra ici. Rien ne remplace un champ automatiquement.</div><div id="ai-actions"></div></div>'}
+  function isGptTool(t){
+    if(!t)return false
+    var hay=[t.id,t.name,t.model,t.providerId].filter(Boolean).join(' ')
+    return /gpt|openai/i.test(hay)
+  }
+  function preferredGptTool(){
+    return aiTools.find(function(t){return isGptTool(t)&&/gpt[-_. ]?5/i.test(String(t.model||t.name||''))})||
+           aiTools.find(function(t){return isGptTool(t)&&/gpt[-_. ]?4/i.test(String(t.model||t.name||''))})||
+           aiTools.find(isGptTool)||
+           null
+  }
+  function rememberAiModel(id){
+    if(!id)return
+    lastAI.toolId=id
+    try{sessionStorage.setItem('nyxialabo_default_ai_tool',id)}catch(e){}
+  }
+  function currentAiTool(){
+    var sel=document.getElementById('ai-model')
+    var wanted=(sel&&sel.value)||lastAI.toolId||''
+    var tool=aiTools.find(function(t){return t.id===wanted})
+    if(tool)return tool
+    var gpt=preferredGptTool()
+    if(gpt){rememberAiModel(gpt.id);return gpt}
+    return null
+  }
+  function modelSelector(){
+    var saved=''
+    try{saved=sessionStorage.getItem('nyxialabo_default_ai_tool')||''}catch(e){}
+    var selected=''
+    if(saved&&aiTools.some(function(t){return t.id===saved}))selected=saved
+    else if(lastAI.toolId&&aiTools.some(function(t){return t.id===lastAI.toolId}))selected=lastAI.toolId
+    else{
+      var gpt=preferredGptTool()
+      selected=gpt?gpt.id:''
+      if(selected)rememberAiModel(selected)
+    }
+    return '<select id="ai-model" onchange="rememberAiModel(this.value)">'+
+      (selected?'':'<option value="">— Choisir un modèle —</option>')+
+      aiTools.map(function(t){
+        return '<option value="'+t.id+'"'+(t.id===selected?' selected':'')+'>'+
+          esc((t.icon||'🤖')+' '+t.name+(isGptTool(t)?' · GPT':''))
+          +'</option>'
+      }).join('')+
+      '</select>'
+  }
+  function aiPanel(){return '<div class="panel"><h4>🧠 Table de travail IA</h4><div class="field"><label>Modèle de travail · GPT prioritaire par défaut</label>'+modelSelector()+'</div><div id="ai-result" class="result empty">La proposition IA apparaîtra ici. Rien ne remplace un champ automatiquement.</div><div id="ai-actions"></div></div>'}
 
 
   // ---------------------------------------------------------------------------
@@ -381,8 +429,9 @@
 
   async function npcBuildRuntime(){
     if(!currentProject)return
-    var d=currentProject.data||{},sel=document.getElementById('ai-model'),toolId=sel?sel.value:''
-    if(!toolId){alert('Choisis d’abord ton modèle IA.');return}
+    var d=currentProject.data||{},npcTool=currentAiTool(),toolId=npcTool?npcTool.id:''
+    if(!toolId){alert('Aucun modèle GPT n’est sélectionné ou disponible. Choisis GPT dans la Table de travail IA.');return}
+    rememberAiModel(toolId)
     var ctx=JSON.stringify(gameContext(),null,2),sys=gamePromptBase()
     var prompt='Transforme les PNJ en DONNÉES RUNTIME. Réponds UNIQUEMENT avec un JSON valide, sans markdown, de forme {"npcs":[...]}. Chaque PNJ doit avoir : id, name, role, personality, dialogueStyle, goals[], knowledge[], beliefs[], ignorance[], forbiddenKnowledge[], secrets[{id,text,revealIf}], relationships{}, emotionalTriggers[], autonomy{may[],requiresEngineApproval[],forbidden[]}. Ne mets dans knowledge QUE les faits que ce PNJ connaît vraiment. Un secret du dossier global ne doit jamais apparaître chez un PNJ qui ne le sait pas.\n\nDOSSIER:\n'+ctx
     try{
@@ -707,8 +756,9 @@
     if(!force && String(d.guidedScenesJson||'').trim()){
       try{var existing=parseJsonLoose(d.guidedScenesJson);var arr=Array.isArray(existing)?existing:existing.scenes;if(Array.isArray(arr)&&arr.length)return d.guidedScenesJson}catch(e){}
     }
-    var sel=document.getElementById('ai-model'),tool=aiTools.find(function(t){return t.id===(sel?sel.value:lastAI.toolId)})||aiTools[0]
-    if(!tool)throw new Error('Aucun modèle IA disponible')
+    var tool=currentAiTool()
+    if(!tool)throw new Error('Aucun modèle GPT n’est sélectionné ou disponible.')
+    rememberAiModel(tool.id)
     var ctx=JSON.stringify(gameContext(),null,2)
     var schema='{"scenes":[{"id":"scene-01","phase":"Acte / phase","title":"Titre court","durationMinutes":10,"hostInstruction":"Ce que l’animateur fait maintenant, en langage simple","readAloud":"Texte optionnel à lire aux joueurs","playerObjective":"Objectif visible des joueurs","announcement":"Annonce courte optionnelle","completion":"Comment savoir que cette scène est terminée","breakout":{"enabled":false,"instruction":"","teams":[]},"npc":{"enabled":false,"name":"","instruction":""},"dice":{"enabled":true,"instruction":""},"media":{"imageUrl":"","audioUrl":"","videoUrl":"","instruction":""},"clues":[{"id":"clue-01","label":"Nom de l’indice","scope":"all","team":"","text":"Texte envoyé"}]}]}'
     var prompt='Transforme ce DOSSIER DE JEU en CONDUCTEUR GUIDÉ PRÊT À ANIMER. Réponds UNIQUEMENT avec du JSON valide, sans markdown, exactement selon ce schéma : '+schema+'\n\nRÈGLES : 1) couvre toute la soirée dans l’ordre réel; 2) chaque hostInstruction doit dire précisément quoi faire en 1 à 4 phrases, sans jargon technique; 3) l’animateur ne doit pas inventer le jeu pendant la soirée; 4) conserve toutes les mécaniques puissantes prévues (PNJ IA, dés, médias, Breakout Rooms, indices, embranchements) lorsqu’elles sont pertinentes; 5) ne révèle jamais un secret joueur dans playerObjective/readAloud; 6) utilise les URL médias déjà présentes si le dossier en contient, sinon laisse les URL vides; 7) scope d’un indice = "all" ou "team"; 8) garde un public adulte/16+ selon le dossier; 9) respecte strictement Canon et Bible.\n\nDOSSIER :\n'+ctx
@@ -812,10 +862,9 @@
   function mdSection(title,text){return '# '+title+'\n\n'+String(text||'').trim()+'\n'}
 
   async function runAIText(system,prompt,lockedToolId){
-    var sel=document.getElementById('ai-model');
-    var wanted=lockedToolId||(sel?sel.value:lastAI.toolId);
-    var tool=aiTools.find(function(t){return t.id===wanted});
-    if(!tool)throw new Error('Le modèle sélectionné n’est plus disponible. Resélectionne ton modèle puis relance.');
+    var tool=lockedToolId?aiTools.find(function(t){return t.id===lockedToolId}):currentAiTool();
+    if(!tool)throw new Error('Aucun modèle GPT n’est sélectionné ou disponible. Choisis GPT dans la Table de travail IA.');
+    rememberAiModel(tool.id);
     var d=await api('/api/chat',{method:'POST',body:JSON.stringify({providerId:tool.providerId,model:tool.model,system_prompt:(tool.system_prompt?tool.system_prompt+'\n\n':'')+system,max_tokens:Math.max(Number(tool.max_tokens)||2500,5000),temperature:(tool.temperature == null ? 0.7 : tool.temperature),messages:[{role:'user',content:prompt}]})});
     return d.text||''
   }
@@ -880,9 +929,10 @@
   async function produceGameComplete(){
     if(!currentProject)return
     var d=currentProject.data||{},ctx=JSON.stringify(gameContext(),null,2),sys=gamePromptBase(),log=[]
-    var sel=document.getElementById('ai-model'),lockedToolId=sel?sel.value:''
-    var lockedTool=aiTools.find(function(t){return t.id===lockedToolId})
-    if(!lockedTool){alert('Choisis d’abord le modèle IA que tu veux utiliser pour toute la production.');return}
+    var lockedTool=currentAiTool()
+    if(!lockedTool){alert('Aucun modèle GPT n’est sélectionné ou disponible. Choisis GPT dans la Table de travail IA.');return}
+    var lockedToolId=lockedTool.id
+    rememberAiModel(lockedToolId)
     function stamp(msg){
       log.push('['+(new Date()).toLocaleTimeString('fr-CA')+'] '+msg)
       d.productionLog=log.join('\n');markDirty()
@@ -1101,9 +1151,10 @@
   function toolPill(t){return '<div class="tool-pill">'+esc((t.icon||'⚙️')+' '+t.name)+'<div class="tiny">'+esc(t.category||t.kind||'')+'</div></div>'}
 
   async function runAI(system,prompt,target){
-    var sel=document.getElementById('ai-model'),tool=aiTools.find(function(t){return t.id===(sel?sel.value:lastAI.toolId)})||aiTools[0];if(!tool){alert('Aucun modèle de chat disponible.');return}
-    lastAI={system:system,prompt:prompt,target:target||'',toolId:tool.id,text:''};renderAIResult('… production en cours …',true)
-    try{var d=await api('/api/chat',{method:'POST',body:JSON.stringify({providerId:tool.providerId,model:tool.model,system_prompt:(tool.system_prompt?tool.system_prompt+'\n\n':'')+system,max_tokens:Math.max(Number(tool.max_tokens)||2500,5000),temperature:(tool.temperature == null ? 0.7 : tool.temperature),messages:[{role:'user',content:prompt}]})});lastAI.text=d.text||'(réponse vide)';renderAIResult(lastAI.text,false)}catch(e){lastAI.text='⚠ '+e.message;renderAIResult(lastAI.text,false)}
+    var tool=currentAiTool();if(!tool){alert('Aucun modèle GPT n’est sélectionné ou disponible. Choisis GPT dans la Table de travail IA.');return}
+    rememberAiModel(tool.id)
+    lastAI={system:system,prompt:prompt,target:target||'',toolId:tool.id,text:''};renderAIResult('… production en cours avec '+(tool.name||tool.model)+' …',true)
+    try{var d=await api('/api/chat',{method:'POST',body:JSON.stringify({providerId:tool.providerId,model:tool.model,system_prompt:(tool.system_prompt?tool.system_prompt+'\n\n':'')+system,max_tokens:Math.max(Number(tool.max_tokens)||2500,5000),temperature:(tool.temperature == null ? 0.7 : tool.temperature),messages:[{role:'user',content:prompt}]})});lastAI.text=d.text||'(réponse vide)';renderAIResult(lastAI.text,false)}catch(e){lastAI.text='⚠ '+(tool.name||tool.model)+' : '+e.message+'\n\nNyXia n’a pas changé de modèle automatiquement.';renderAIResult(lastAI.text,false)}
   }
   function renderAIResult(text,busy){var box=document.getElementById('ai-result');if(!box)return;box.className='result';box.textContent=text;var actions=document.getElementById('ai-actions');if(!actions)return;actions.innerHTML=busy?'':'<div class="result-actions"><button onclick="speakAI()" title="Lecture vocale par ton navigateur — ne dépend pas de Google TTS">🔊 Écouter</button><button onclick="stopAISpeech()" title="Arrêter la lecture">⏹ Arrêter</button><button onclick="copyAI()">📋 Copier</button><button onclick="retryAI()">↺ Réessayer</button><button onclick="pdfAI()">⬇ PDF</button></div>'+applyBar()}
   function applyBar(){if(!lastAI.target)return '';if(lastAI.target==='__mystery_json__')return '<div class="applybar"><button class="btn gold" onclick="applyMysteryProposal()">Appliquer cette Bible proposée</button></div>';if(lastAI.target.indexOf('deliverable:')===0)return '<div class="applybar"><button class="btn gold" onclick="saveDeliverable(\''+lastAI.target.split(':')[1]+'\')">Conserver dans le projet</button></div>';return '<div class="applybar"><span class="tiny">Aucune modification automatique.</span><button class="btn gold" onclick="applyAITo(\''+lastAI.target+'\')">Utiliser cette proposition</button></div>'}
