@@ -1,22 +1,20 @@
 name = "nyxialabo"
-main = "js/tts-bridge.js"
+main = "js/game-media-bridge.js"
 compatibility_date = "2026-09-15"
 
-# Le même Worker compile Azgaar avant chaque déploiement.
+# Conserver le même Worker, son routeur et les corrections TTS existantes.
 [build]
 command = "node scripts/build-azgaar.mjs"
 
-# Même site, même domaine, même Worker.
 [assets]
 directory = "./"
 binding = "ASSETS"
-run_worker_first = ["/api/*", "/cartographie/azgaar/*"]
+run_worker_first = ["/api/*", "/cartographie/azgaar/*", "/game-media/*"]
 
 [[kv_namespaces]]
 binding = "HUB_CONFIG"
 id = "75b93baac0974f8cb8d1f2089eceb4e6"
 
-# NyXia Cartographie dans CE MÊME Worker.
 [browser]
 binding = "BROWSER"
 
@@ -24,7 +22,5 @@ binding = "BROWSER"
 binding = "MAPS"
 bucket_name = "nyxia-cartographie"
 
-# Secrets Cloudflare : ne jamais inscrire leur valeur dans ce fichier.
-# js/tts-bridge.js accepte aussi le nom historique GoogleText-to-Speech_
-# UNIQUEMENT s'il contient un JSON de compte de service (client_email/private_key).
-# Un ID client OAuth (*.apps.googleusercontent.com) n'est PAS suffisant.
+# Aucun secret ajouté ou modifié.
+# Le préfixe nyxia-game/media/ isole les fichiers du jeu dans le R2 existant.
