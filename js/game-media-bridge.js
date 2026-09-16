@@ -204,17 +204,29 @@ async function importFree(request,env,ctx){
   let remote
   try{remote=new URL(String(body.url||''))}catch(_){return json({error:'URL invalide'},400)}
   if(remote.protocol!=='https:'||remote.username||remote.password||remote.port||remote.searchParams.has('url'))return json({error:'Source refusée'},400)
-  const hosts={image:['images.pexels.com','images.unsplash.com'],video:['videos.pexels.com'],audio:['cdn.freesound.org']}
+  const hosts={image:['images.pexels.com','images.unsplash.com','cdn.pixabay.com','pixabay.com'],video:['videos.pexels.com','cdn.pixabay.com'],audio:['cdn.freesound.org']}
   if(!hosts[kind]?.includes(remote.hostname))return json({error:'Source gratuite non approuvée pour ce média'},403)
   const source=String(body.source||'')
-  if((kind==='video'||(kind==='image'&&remote.hostname==='images.pexels.com'))&&source!=='Pexels')return json({error:'Provenance Pexels requise'},400)
+  if((remote.hostname==='videos.pexels.com'||remote.hostname==='images.pexels.com')&&source!=='Pexels')return json({error:'Provenance Pexels requise'},400)
   if(kind==='image'&&remote.hostname==='images.unsplash.com'&&source!=='Unsplash')return json({error:'Provenance Unsplash requise'},400)
+  if((remote.hostname==='cdn.pixabay.com'||remote.hostname==='pixabay.com')&&source!=='Pixabay')return json({error:'Provenance Pixabay requise'},400)
+  if(remote.hostname==='pixabay.com'&&(kind!=='image'||!/^\/get\/[a-zA-Z0-9_\/-]+\.(?:jpg|jpeg|png|webp)$/.test(remote.pathname)))return json({error:'Chemin Pixabay refusé'},400)
   if(kind==='audio'){
     if(source!=='Freesound'||!/creativecommons\.org\/(?:publicdomain\/zero\/|licenses\/by\/)/i.test(String(body.license||''))||/licenses\/by-(?:nc|nd)/i.test(String(body.license||'')))return json({error:'Licence Freesound non compatible ou non vérifiée'},403)
   }
   const fetchInit={redirect:'manual',headers:{'Accept':kind+'/*'}}
   let upstream
-  try{upstream=await fetch(remote.toString(),fetchInit)}catch(_){return json({error:'Source gratuite temporairement inaccessible'},502)}
+  try{
+    upstream=await fetch(remote.toString(),fetchInit)
+    // Pixabay /get/ is the documented image URL and may redirect to their CDN.
+    // Follow exactly one hop ONLY to cdn.pixabay.com; never follow arbitrary redirects.
+    if(remote.hostname==='pixabay.com'&&[301,302,303,307,308].includes(upstream.status)){
+      const location=upstream.headers.get('Location')||''
+      const next=new URL(location,remote)
+      if(next.protocol!=='https:'||next.hostname!=='cdn.pixabay.com'||next.port||next.username||next.password)return json({error:'Redirection Pixabay refusée'},403)
+      upstream=await fetch(next.toString(),fetchInit)
+    }
+  }catch(_){return json({error:'Source gratuite temporairement inaccessible'},502)}
   if(!upstream.ok||upstream.status>=300)return json({error:'Téléchargement source refusé : '+upstream.status},502)
   const announced=Number(upstream.headers.get('content-length')||0)
   if(announced>MAX_BYTES)return json({error:'Fichier gratuit trop volumineux'},413)
@@ -341,6 +353,39 @@ async function cloudflareImageGenerate(request,env,ctx){
   }catch(err){return json({error:'Workers AI : '+String(err?.message||'échec')+'. Vérifie la consommation avant toute nouvelle tentative.'},502)}
 }
 
+// Pixabay déjà configuré dans le compte peut être interrogé par la même équipe,
+// côté Worker seulement : ne jamais envoyer la clé au navigateur ni dans la KV projet.
+async function pixabaySearch(request,env,ctx){
+  if(!(await hasTeamAccess(request,env,ctx)))return json({error:'Accès équipe requis'},401)
+  const key=env.PIXABAY_KEY||env.PIXABAY_API_KEY||env.Pixabay_KEY
+  if(!key)return json({error:'Secret Pixabay absent du Worker (PIXABAY_KEY ou PIXABAY_API_KEY). La recherche Pexels reste disponible.'},503)
+  const url=new URL(request.url),kind=url.searchParams.get('kind')||'image',q=(url.searchParams.get('q')||'').trim()
+  if(!['image','video'].includes(kind)||!q||q.length>100)return json({error:'Recherche Pixabay invalide (1 à 100 caractères).'},400)
+  // Repeated human requests can reuse one cached answer for 24h, without cluttering project KV.
+  const cache=typeof caches!=='undefined'&&caches.default?caches.default:null
+  const cacheKey=new Request('https://nyxia-pixabay-cache.invalid/'+kind+'?q='+encodeURIComponent(q.toLowerCase()))
+  if(cache){const stored=await cache.match(cacheKey);if(stored)return stored}
+  const endpoint=new URL(kind==='video'?'https://pixabay.com/api/videos/':'https://pixabay.com/api/')
+  endpoint.searchParams.set('key',key);endpoint.searchParams.set('q',q);endpoint.searchParams.set('per_page','6');endpoint.searchParams.set('safesearch','true')
+  let response
+  try{response=await fetch(endpoint.toString(),{headers:{Accept:'application/json'},redirect:'error'})}
+  catch(_){return json({error:'Pixabay inaccessible temporairement.'},502)}
+  if(!response.ok)return json({error:'Pixabay : erreur '+response.status},response.status===429?429:502)
+  const payload=await response.json().catch(()=>null)
+  if(!payload||!Array.isArray(payload.hits))return json({error:'Réponse Pixabay illisible'},502)
+  // URLs are validated by the import endpoint itself; only CDN Pixabay may be stored.
+  const valid=(url,isImage=false)=>{try{const u=new URL(url);return u.protocol==='https:'&&!u.port&&(u.hostname==='cdn.pixabay.com'||(isImage&&u.hostname==='pixabay.com'&&/^\/get\//.test(u.pathname)))}catch(_){return false}}
+  let result
+  if(kind==='image'){
+    result={photos:payload.hits.map(hit=>({full:hit.largeImageURL||hit.webformatURL,thumb:hit.webformatURL||hit.previewURL,url:hit.pageURL,photographer:hit.user,id:hit.id})).filter(hit=>valid(hit.full,true)&&valid(hit.thumb,true))}
+  }else{
+    result={videos:payload.hits.map(hit=>{const v=hit.videos?.medium||hit.videos?.small||hit.videos?.tiny||{};return {full:v.url,preview:v.url,thumbnail:v.thumbnail,url:hit.pageURL,photographer:hit.user,id:hit.id}}).filter(hit=>valid(hit.full))}
+  }
+  const output=json(result)
+  if(cache){const headers=new Headers(output.headers);headers.set('Cache-Control','public, max-age=86400');await cache.put(cacheKey,new Response(output.clone().body,{headers})).catch(()=>{})}
+  return output
+}
+
 export default {
   async fetch(request,env,ctx){
     const path=new URL(request.url).pathname
@@ -348,6 +393,7 @@ export default {
       if(request.method!=='GET'&&request.method!=='HEAD')return new Response('Méthode interdite',{status:405})
       try{return await serveMedia(request,env,ctx)}catch(_){return new Response('Média indisponible',{status:503})}
     }
+    if(path==='/api/game/media/pixabay-search' && request.method==='GET')return pixabaySearch(request,env,ctx)
     if(path==='/api/game/media/health' && request.method==='GET'){
       if(!(await hasTeamAccess(request,env,ctx)))return json({error:'Accès équipe requis'},401)
       const bearer=request.headers.get('Authorization')||''
