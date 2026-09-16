@@ -388,10 +388,80 @@
   }
 
   function gameCast(d){var imported=(d.importedSourceNames||'').trim(),sourceBox=(d.sourceDocuments||'').trim()?'<details style="margin:12px 0 16px"><summary class="btn" style="display:inline-block;cursor:pointer">📚 Voir les documents sources importés'+(imported?' — '+esc(imported):'')+'</summary><div style="margin-top:12px">'+gameArea('Source originale conservée — ne sera jamais perdue','sourceDocuments',d.sourceDocuments,14)+'</div></details>':'';return '<h4>🧙 Personnages, factions & adversaires</h4><div class="game-note"><b>Tu as déjà tes fiches ?</b> Importe ton document ici. NyXiaLabo peut reconnaître et classer les personnages / PNJ, factions, créatures, ennemis, boss, objets, indices et récompenses. Si le même document contient aussi de l’histoire ou des médias, ces sections seront rangées au bon endroit elles aussi. L’original complet reste conservé.</div><div class="tools-line" style="margin-bottom:14px"><button class="btn gold" onclick="document.getElementById(\'game-import-cast-docs\').click()">📄 Importer personnages / factions / adversaires</button><input id="game-import-cast-docs" type="file" multiple accept=".md,.markdown,.txt,.json,.rtf,.docx,text/plain,text/markdown,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" onchange="importGameDocuments(this.files);this.value=\'\'"></div>'+sourceBox+gameArea('Personnages / PNJ — rôle, personnalité, objectif, secret, connaissances, relations, voix','characters',d.characters,15)+gameArea('Factions, créatures, ennemis, boss','factionsCreatures',d.factionsCreatures,12)+gameArea('Objets, indices, récompenses, loot','itemsRewards',d.itemsRewards,10)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'characters\')">🧙 Créer / enrichir le casting</button><button class="btn" onclick="gameAI(\'enemies\')">Créer / enrichir adversaires / créatures</button><button class="btn" onclick="gameAI(\'items\')">Créer / enrichir objets / récompenses</button><button class="btn gold" onclick="setGameTab(\'npcai\')">🧠 Donner une intelligence aux PNJ</button></div>'}
+
+  function playerSetupHasContent(d){
+    return !![d.playerPrologue,d.playerCreationInstructions,d.playerArchetypes,d.playerFactions,d.playerReputationRules,d.playerBadgeCatalog].some(function(x){return String(x||'').trim()})
+  }
+  function playerVisibleContext(){
+    var d=currentProject.data||{}
+    return {
+      title:currentProject.title,
+      gameType:d.gameType||'',
+      audience:d.audience||'',
+      playMode:d.playMode||'',
+      playerCount:d.playerCount||'',
+      duration:d.duration||'',
+      genre:d.genre||'',
+      tone:d.tone||'',
+      difficulty:d.difficulty||'',
+      idea:d.idea||'',
+      creatorIntent:d.creatorIntent||'',
+      lockedCanon:d.lockedCanon||'',
+      worldBible:d.worldBible||'',
+      storyStructure:d.storyStructure||'',
+      scenesQuests:d.scenesQuests||'',
+      endings:d.endings||'',
+      characters:d.characters||'',
+      factionsCreatures:d.factionsCreatures||'',
+      itemsRewards:d.itemsRewards||'',
+      mechanics:d.mechanics||'',
+      progression:d.progression||'',
+      npcIntelligence:d.npcIntelligence||'',
+      sourceDocuments:d.sourceDocuments||''
+    }
+  }
+  async function generatePlayerPrologueOnly(){
+    if(!currentProject)return
+    var d=currentProject.data||{},tool=currentAiTool()
+    if(!tool){alert('Aucun modèle GPT n’est sélectionné ou disponible.');return}
+    if(String(d.playerPrologue||'').trim()&&!confirm('Le prologue contient déjà du texte. Le remplacer par une nouvelle version créée par NyXia ?'))return
+    var ctx=JSON.stringify(playerVisibleContext(),null,2)
+    var prompt='À partir de TOUT le dossier ci-dessous, rédige le PROLOGUE / CONTEXTE D’ENTRÉE destiné aux joueurs avant la création de leur personnage. Le texte doit être immersif, clair et directement jouable. Longueur cible : 250 à 450 mots. Il doit expliquer ce que le monde sait publiquement, ce qui vient de se produire avant l’arrivée des joueurs, pourquoi leurs personnages sont concernés et quelle tension les appelle dans l’histoire. IMPORTANT : ne révèle AUCUNE solution, fin, vérité cachée, secret de PNJ, coupable, twist, information réservée au MJ ni connaissance que les personnages ne devraient pas avoir au départ. Tu peux utiliser ces informations pour comprendre la cohérence du jeu, mais tu dois filtrer strictement ce qui est visible aux joueurs. Ne parle pas de "dossier", "scénario", "acte" ou "mécanique". Écris directement le texte final, sans titre technique ni commentaire.\n\nDOSSIER COMPLET:\n'+ctx
+    try{
+      toast('✨ NyXia rédige le prologue joueur…')
+      d.playerPrologue=await runAIText(gamePromptBase(),prompt,tool.id)
+      markDirty();await saveCurrent();renderGame();toast('✅ Prologue joueur créé')
+    }catch(e){alert('Prologue impossible : '+e.message)}
+  }
+  async function generateCompletePlayerSetup(){
+    if(!currentProject)return
+    var d=currentProject.data||{},tool=currentAiTool()
+    if(!tool){alert('Aucun modèle GPT n’est sélectionné ou disponible.');return}
+    if(playerSetupHasContent(d)&&!confirm('Une partie de l’entrée joueur contient déjà du contenu. NyXia va remplacer les champs Joueurs par une version complète et cohérente. Continuer ?'))return
+    var ctx=JSON.stringify(playerVisibleContext(),null,2)
+    var prompt='Prépare toute l’ENTRÉE JOUEUR de ce NyXia Game à partir de TOUT le dossier ci-dessous. Réponds UNIQUEMENT avec un JSON valide, sans markdown, de forme exacte : {"prologue":"...","creationInstructions":"...","archetypes":"...","factions":"...","startingReputation":0,"reputationRules":"...","badgeCatalog":"..."}. RÈGLES : 1) prologue = 250 à 450 mots, immersif, public, sans spoiler; 2) creationInstructions = instructions simples pour créer son PJ, incluant nom, rôle, motivation, force, faiblesse, secret personnel, lien au monde et portrait facultatif; 3) archetypes = un rôle jouable par ligne, adaptés à CE jeu; 4) factions = une faction jouable par ligne, uniquement celles qui peuvent réellement accueillir un PJ; 5) startingReputation = nombre entier entre -100 et 100; 6) reputationRules = règles claires de montée/descente de réputation et conséquences; 7) badgeCatalog = une ligne par badge au format emoji | Nom | description. Tu as accès aux secrets, fins et vérités cachées uniquement pour préserver la cohérence : NE LES RÉVÈLE JAMAIS dans le contenu visible au joueur. Ne transforme jamais un PNJ en personnage joueur sauf si le dossier dit explicitement que ce rôle est jouable.\n\nDOSSIER COMPLET:\n'+ctx
+    try{
+      toast('✨ NyXia prépare toute l’entrée joueur…')
+      var out=await runAIText(gamePromptBase(),prompt,tool.id),obj=parseJsonLoose(out)
+      if(!obj||typeof obj!=='object')throw new Error('Réponse structurée invalide.')
+      d.playerPrologue=String(obj.prologue||'').trim()
+      d.playerCreationInstructions=String(obj.creationInstructions||'').trim()
+      d.playerArchetypes=String(obj.archetypes||'').trim()
+      d.playerFactions=String(obj.factions||'').trim()
+      var rep=Number(obj.startingReputation)
+      d.playerStartingReputation=Number.isFinite(rep)?Math.max(-100,Math.min(100,Math.round(rep))):0
+      d.playerReputationRules=String(obj.reputationRules||'').trim()
+      d.playerBadgeCatalog=String(obj.badgeCatalog||'').trim()
+      markDirty();await saveCurrent();renderGame();toast('✅ Entrée joueur complète créée')
+    }catch(e){alert('Création de l’entrée joueur impossible : '+e.message)}
+  }
+
   function gamePlayers(d){
     return '<h4>🎭 Personnages joueurs — entrée dans l’histoire</h4>'+
+      '<div class="game-note"><b>NyXia peut préparer cette section pour toi.</b> Elle utilise la Bible, l’histoire, les scènes, les personnages, les factions et même les secrets/fins pour comprendre la cohérence — mais elle filtre automatiquement tout ce que le joueur ne doit pas savoir.</div>'+
+      '<div class="tools-line" style="margin:12px 0 16px"><button class="btn gold" style="font-size:14px;padding:12px 16px" onclick="generateCompletePlayerSetup()">✨ NyXia prépare toute l’entrée joueur</button><button class="btn primary" onclick="generatePlayerPrologueOnly()">✍️ Générer seulement le prologue</button></div>'+
       '<div class="game-note"><b>Le joueur réel n’est jamais un PNJ.</b> Il entre dans le monde avec son propre <b>personnage joueur (PJ)</b>. Cette section prépare ce qu’il verra avant la partie : contexte, création de son personnage, faction, réputation et badges.</div>'+
-      gameArea('Prologue / contexte d’entrée — ce qui s’est passé avant l’arrivée du joueur','playerPrologue',d.playerPrologue,12)+
+      gameArea('Prologue / contexte d’entrée — généré à partir du jeu, sans spoiler','playerPrologue',d.playerPrologue,12)+
       gameArea('Instructions de création visibles par le joueur — limites, ton, éléments à respecter','playerCreationInstructions',d.playerCreationInstructions,7)+
       '<div class="row"><div class="field"><label>Réputation de départ dans sa faction</label><input type="number" min="-100" max="100" value="'+esc(d.playerStartingReputation==null?0:d.playerStartingReputation)+'" oninput="setData(\'playerStartingReputation\',Number(this.value)||0)"></div><div class="field"><label>Portrait</label><div class="lockline">🖼️ Le joueur pourra téléverser une image facultative. Elle sera réduite automatiquement avant d’être conservée dans la session.</div></div></div>'+
       gameArea('Archétypes / rôles proposés — un par ligne','playerArchetypes',d.playerArchetypes,7)+
