@@ -3,7 +3,7 @@
  * Ne remplace PAS labo-router.js : toutes les routes sont déléguées.
  * N'expose jamais le contenu des secrets.
  */
-import router from './labo-router.js'
+import router from '../labo-router.js'
 
 const legacyName = 'GoogleText-to-Speech_'
 const JSON_NAMES = ['GOOGLE_TTS_SERVICE_ACCOUNT_JSON','GOOGLE_SERVICE_ACCOUNT_JSON']
