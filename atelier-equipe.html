@@ -861,7 +861,7 @@
     }else{
       a.localMediaId=m.id;a.userMediaId=m.id;a.status='local-assigné';a.url='';delete a.mediaVerifiedAt
     }
-    a.source='Fichier personnel ('+m.name+')';a.license=m.license||'À vérifier';a.free=false;a.editorialApproved=true;delete a.error
+    a.source='Fichier personnel ('+m.name+')';a.license=m.license||'À vérifier';a.free=false;a.editorialApproved=true;delete a.error;delete a.paidToolId;delete a.paidApprovedCostCAD;delete a.cloudflareUsage;delete a.generatedPreviewUrl
     d.productionAssetsJson=JSON.stringify(assets,null,2)
     if(oldUrl&&oldUrl!==a.url)detachSceneMediaUrl(d,oldUrl,assets,a.id)
     try{await persistMediaProject();renderGame();toast('Média associé : '+m.name)}catch(e){alert('Lien non sauvegardé : '+e.message)}
@@ -1247,46 +1247,73 @@
       Object.assign(tool,saved.tool);renderGame();toast('Tarif sauvegardé · aucun appel IA')
     }catch(e){alert('Tarif non enregistré : '+e.message)}
   }
+  // Modèles AIMLAPI économiques vérifiés : prix indicatifs USD pour 1 MP, non forfaits garantis.
+  // Aucune modification du catalogue d'outils global : choix local pour NyXia Game.
+  var ECON_IMAGE_MODELS=[
+    {id:'cf-flux-schnell',name:'Cloudflare · Flux Schnell',model:'@cf/black-forest-labs/flux-1-schnell',kind:'image',cloudflare:true},
+    {id:'flux/schnell',name:'Flux Schnell',model:'flux/schnell',kind:'image',economy:true,usd:0.0039,unit:'MP',source:'https://aimlapi.com/models/flux-1-schnell-api'},
+    {id:'flux/dev',name:'Flux Dev',model:'flux/dev',kind:'image',economy:true,usd:0.0325,unit:'MP',source:'https://aimlapi.com/models/flux-1-dev-api'},
+    {id:'stable-diffusion-v3-medium',name:'SD3 Medium',model:'stable-diffusion-v3-medium',kind:'image',economy:true,usd:0.0455,unit:'MP',source:'https://aimlapi.com/ai-ml-api-pricing'},
+    {id:'dall-e-3',name:'DALL-E 3',model:'dall-e-3',kind:'image',economy:true,usd:0.052,unit:'image 1024² standard',source:'https://aimlapi.com/models/openai-dall-e-3'}
+  ]
+  function imageMediaOptions(){
+    var seen=new Set(ECON_IMAGE_MODELS.map(function(m){return m.model}))
+    // Seuls les choix demandés ici. Les outils historiques restent disponibles ailleurs dans le Labo.
+    return ECON_IMAGE_MODELS.concat(mediaToolList('image').filter(function(m){return !seen.has(m.model)&&['img-gpt15','img-gpt2','img-wan27'].includes(m.id)}))
+  }
+  function mediaModelUsdLabel(model){
+    if(model.cloudflare)return 'quota Workers AI (10 000 neurones gratuits/jour partagés ; dépassement facturable sur plan payant)'
+    return model.economy?'≈ '+model.usd.toFixed(4)+' $ US / '+model.unit+' · indicatif, reconfirmer':null
+  }
   function mediaPaidChoice(kind,assetId){
-    var available=mediaToolList(kind),a=parseProductionAssets(currentProject?.data?.productionAssetsJson).find(function(x){return x.id===assetId})
+    var available=kind==='image'?imageMediaOptions():mediaToolList(kind),a=parseProductionAssets(currentProject?.data?.productionAssetsJson).find(function(x){return x.id===assetId})
     if(!available.length)return '<span class="tiny">Aucun modèle '+esc(kind)+' connecté.</span>'
     var selected=a?.selectedToolId||available[0].id
-    var opts=available.map(function(t){var p=verifiedMediaPrice(t);return '<option value="'+esc(t.id)+'"'+(t.id===selected?' selected':'')+'>'+esc(t.name+' · '+(Number.isFinite(p)?p.toFixed(3)+' $ CAD / création':'tarif à renseigner'))+'</option>'}).join('')
+    var opts=available.map(function(t){var p=verifiedMediaPrice(t),price=(t.economy||t.cloudflare)?mediaModelUsdLabel(t):(Number.isFinite(p)?p.toFixed(3)+' $ CAD / appel':'tarif non vérifié');return '<option value="'+esc(t.id)+'"'+(t.id===selected?' selected':'')+'>'+esc(t.name+' · '+price)+'</option>'}).join('')
     var id=String(assetId||'').replace(/[^a-zA-Z0-9_-]/g,'')
-    return '<label class="tiny" for="game-paid-'+id+'">Choisir mon modèle · tarif réel croissant lorsque connu</label><select id="game-paid-'+id+'" onchange="selectAssetMediaTool(\''+esc(assetId)+'\',this.value)" style="width:100%;max-width:320px;background:#0b1430;border:1px solid var(--line);color:#fff;padding:8px;border-radius:9px">'+opts+'</select>'
+    return '<label class="tiny" for="game-paid-'+id+'">'+(kind==='image'?'Créer une image · modèles économiques d’abord':'Créer '+esc(kind)+' · choisir un moteur')+'</label><select id="game-paid-'+id+'" onchange="selectAssetMediaTool(\''+esc(assetId)+'\',this.value)" style="width:100%;max-width:340px;background:#0b1430;border:1px solid var(--line);color:#fff;padding:8px;border-radius:9px">'+opts+'</select>'
   }
   async function selectAssetMediaTool(assetId,toolId){
     if(!currentProject)return
     var list=parseProductionAssets(currentProject.data.productionAssetsJson),asset=list.find(function(a){return a.id===assetId})
-    if(!asset||!tools.some(function(t){return t.id===toolId}))return
+    if(!asset||!(tools.some(function(t){return t.id===toolId})||ECON_IMAGE_MODELS.some(function(t){return t.id===toolId})))return
     asset.selectedToolId=toolId
     currentProject.data.productionAssetsJson=JSON.stringify(list,null,2)
     try{await persistMediaProject()}catch(e){mediaProgress('Modèle sélectionné localement ; sauvegarde impossible : '+e.message)}
   }
+  var mediaGenerationBusy=new Set()
   async function proposePaidGameMedia(assetId){
+    if(mediaGenerationBusy.has(assetId))return
     if(!currentProject)return
     var a=parseProductionAssets(currentProject.data.productionAssetsJson).find(function(x){return x.id===assetId})
     if(!a)return
     if(a.localMediaId||gameMediaReady(a))return alert('Média déjà disponible : pas de dépense nécessaire.')
     if(a.generatedPreviewUrl)return alert('Un résultat payant attend déjà ta validation. Télécharge-le ou remplace-le avant de commander une autre création.')
     var key=mediaFreeKey(assetId)
-    if(gameFreeSearchErrors[key]&&!gameFreeSuggestions[key]?.length&&!gameFreeRejected[key])return alert('Recherche gratuite incomplète : '+gameFreeSearchErrors[key]+'. Tu peux affiner, importer ton propre fichier ou refuser explicitement les résultats avant une création payante.')
-    if(!Object.prototype.hasOwnProperty.call(gameFreeSuggestions,key))return alert('Recherche gratuite non effectuée : commence par tes fichiers, puis les banques gratuites.')
-    if(gameFreeSuggestions[key].length&&!gameFreeRejected[key])return alert('Des propositions gratuites existent. Tu peux les utiliser ou indiquer qu’aucune ne convient avant toute dépense.')
-    var projectId=currentProject.id,kind=mediaSceneKind(a),available=mediaToolList(kind).filter(function(t){return Number.isFinite(verifiedMediaPrice(t))})
-    if(!available.length)return alert('Aucun coût réel enregistré pour les modèles '+kind+'. Choisis un modèle dans le menu et renseigne le tarif de ton fournisseur dans « Tarifs réels ». Aucun appel payant lancé.')
+    var menu=document.getElementById('game-paid-'+String(assetId).replace(/[^a-zA-Z0-9_-]/g,''))
+    var cloudflareSelected=(menu?.value||a.selectedToolId||'cf-flux-schnell')==='cf-flux-schnell'
+    // Choix explicite Cloudflare : ne jamais bloquer sur une banque gratuite en 403.
+    if(!cloudflareSelected&&gameFreeSearchErrors[key]&&!gameFreeSuggestions[key]?.length&&!gameFreeRejected[key])return alert('Recherche gratuite incomplète : '+gameFreeSearchErrors[key]+'. Tu peux affiner, importer ton propre fichier ou refuser explicitement les résultats avant une création payante.')
+    if(!cloudflareSelected&&!Object.prototype.hasOwnProperty.call(gameFreeSuggestions,key))return alert('Recherche gratuite non effectuée : commence par tes fichiers, puis les banques gratuites.')
+    if(!cloudflareSelected&&gameFreeSuggestions[key]?.length&&!gameFreeRejected[key])return alert('Des propositions gratuites existent. Tu peux les utiliser ou indiquer qu’aucune ne convient avant toute dépense.')
+    var projectId=currentProject.id,kind=mediaSceneKind(a),available=kind==='image'?imageMediaOptions():mediaToolList(kind)
+    if(!available.length)return alert('Aucun modèle connecté pour ce type. Aucun appel payant lancé.')
     var id='game-paid-'+String(assetId).replace(/[^a-zA-Z0-9_-]/g,'')
     var selected=(document.getElementById(id)||{}).value||a.selectedToolId||available[0].id
     var cheapest=available.find(function(t){return t.id===selected})
-    if(!cheapest)return alert('Ce modèle n’a pas de tarif réel renseigné. Choisis-en un autre ou complète son prix dans « Tarifs réels ». Aucun appel payant lancé.')
-    var amount=verifiedMediaPrice(cheapest)
-    if(!confirm('Les gratuits ont été examinés pour '+(a.title||a.code)+'.\nModèle choisi : '+cheapest.name+'\nPlafond renseigné : '+amount.toFixed(3)+' $ CAD / appel (à reconfirmer chez le fournisseur).\nAutoriser UN SEUL appel payant pour CE média ?'))return
-    // Ne jamais faire semblant qu'un URL externe éphémère est un média livré au client.
+    if(!cheapest)return alert('Sélectionne un modèle présent dans la liste. Aucun appel lancé.')
+    var amount=cheapest.cloudflare?null:cheapest.economy?cheapest.usd:verifiedMediaPrice(cheapest)
+    if(!cheapest.cloudflare&&!Number.isFinite(amount))return alert('Tarif non vérifié pour '+cheapest.name+'. Ce modèle existant reste bloqué tant que son coût réel n’est pas renseigné. Choisis un modèle au coût vérifié, ou téléverse ton propre fichier.')
+    var estimate=cheapest.cloudflare?'Workers AI : 10 000 neurones gratuits/jour partagés ; consommation éventuellement facturée sur plan payant au-delà du quota. Vérifier la consommation Cloudflare avant cet appel.':cheapest.economy?(cheapest.id==='dall-e-3'?'≈ 0,052 $ US / image 1024×1024 standard':'≈ '+amount.toFixed(4)+' $ US par mégapixel ; taille demandée 1024×768 (environ 0,79 MP)'):(amount.toFixed(3)+' $ CAD / appel (tarif renseigné)')
+    if(!confirm('Média : '+(a.title||a.code)+'\nModèle choisi : '+cheapest.name+'\nTarif INDICATIF : '+estimate+'\nVérifie ton quota ou le tarif fournisseur. Autoriser UNE SEULE création pour CE média ?'))return
+    // Bloquer tout double-clic et prévenir sans prétendre que ce rendu est approuvé.
+    mediaGenerationBusy.add(assetId)
+    mediaProgress('Génération de '+(a.code||a.title)+' avec '+cheapest.name+' : un seul appel demandé…')
     try{
       var output=kind==='image'?await generateGameImageAsset(a,cheapest,currentProject.data):kind==='audio'?await generateGameAudioAsset(a,cheapest,currentProject.data):await generateGameVideoAsset(a,cheapest,currentProject.data)
       if(!currentProject||currentProject.id!==projectId)throw Error('Projet changé pendant la génération : le résultat ne sera pas associé à un autre jeu.')
       if(typeof output!=='string'||!output)throw Error('Résultat de génération illisible')
-      a.paidToolId=cheapest.id;a.paidApprovedCostCAD=amount
+      a.paidToolId=cheapest.id;if(cheapest.cloudflare){delete a.paidApprovedCostCAD;a.cloudflareUsage=true}else{a.paidApprovedCostCAD=amount;delete a.cloudflareUsage}
       if(/^data:image\/(?:png|jpe?g|webp);base64,/i.test(output)&&kind==='image'){
         var blob=await (await fetch(output)).blob()
         if(!blob.size||blob.size>75*1024*1024)throw Error('Image générée vide ou trop volumineuse pour R2')
@@ -1298,10 +1325,10 @@
         var d=currentProject.data||{}
         d.userMediaAssets=d.userMediaAssets||[]
         d.userMediaAssets.push({id:mediaId,name:file.name,kind:'image',mime:file.type,size:file.size,sizeLabel:(file.size/1048576).toFixed(1)+' Mo',tags:a.code||'',source:'Image IA · '+cheapest.name,license:'Création IA du projet',storage:'local-browser',addedAt:new Date().toISOString()})
-        a.localMediaId=mediaId;a.userMediaId=mediaId;a.status='local-assigné';a.url='';delete a.mediaVerifiedAt;delete a.generatedPreviewUrl
+        a.localMediaId=mediaId;a.userMediaId=mediaId;a.status='local-assigné';a.editorialApproved=false;a.url='';delete a.mediaVerifiedAt;delete a.generatedPreviewUrl
         currentProject.data.productionAssetsJson=JSON.stringify(parseProductionAssets(d.productionAssetsJson).map(function(x){return x.id===a.id?a:x}),null,2)
         await persistMediaProject();renderGame()
-        alert('UNE image produite et sauvegardée dans ta bibliothèque locale, sans stocker le lourd base64 dans le projet. Utilise Aperçu, puis « Associer, héberger et placer » pour la publier dans R2 privé. Aucun autre appel payant.')
+        alert('UNE image produite et conservée localement. Clique « 👁 Aperçu » puis « ✓ Approuver » avant la publication R2. Aucune autre génération automatique.')
       }else{
         if(!/^https:\/\//i.test(output))throw Error('Le moteur a retourné un format média non pris en charge')
         a.generatedPreviewUrl=output;a.status='à valider'
@@ -1309,7 +1336,8 @@
         await persistMediaProject();renderGame()
         alert('UN média généré. Prévisualise le résultat, puis enregistre et importe le fichier dans cette fiche pour le publier en privé sur R2. Aucun autre appel payant.')
       }
-    }catch(e){alert('Génération payante échouée : '+e.message+' — vérifie la facturation du fournisseur. Aucun nouvel appel automatique.')}
+    }catch(e){alert('Génération échouée : '+e.message+' — vérifie la consommation du fournisseur avant de relancer. Aucun nouvel appel automatique.')}
+    finally{mediaGenerationBusy.delete(assetId)}
   }
 
   function detachSceneMediaUrl(d,url,assets,removedId){
@@ -1334,12 +1362,32 @@
     if(!confirm('Retirer uniquement le média lié à « '+(a.title||a.code)+' » et son lien éventuel dans les scènes ? Ton brief, tes autres images et le fichier original ne seront pas supprimés.'))return
     var priorUrl=String(a.url||'')
     delete a.url;delete a.localMediaId;delete a.userMediaId;delete a.mediaVerifiedAt;delete a.generatedPreviewUrl
-    delete a.source;delete a.sourceUrl;delete a.license;delete a.credit;delete a.free;delete a.editorialApproved
+    delete a.source;delete a.sourceUrl;delete a.license;delete a.credit;delete a.free;delete a.editorialApproved;delete a.paidToolId;delete a.paidApprovedCostCAD;delete a.cloudflareUsage
     a.status='à produire'
     if(priorUrl)detachSceneMediaUrl(d,priorUrl,assets,a.id)
     d.productionAssetsJson=JSON.stringify(assets,null,2)
     delete gameFreeSuggestions[mediaFreeKey(assetId)];delete gameFreeRejected[mediaFreeKey(assetId)]
     await persistMediaProject();renderGame();mediaProgress('Média retiré de ce jeu uniquement. Tu peux importer ton image ou relancer sa recherche.')
+  }
+  async function previewGeneratedImage(assetId){
+    if(!currentProject)return
+    var a=parseProductionAssets(currentProject.data.productionAssetsJson).find(function(x){return x.id===assetId})
+    var box=document.getElementById('generated-preview-'+String(assetId).replace(/[^a-zA-Z0-9_-]/g,''))
+    if(!a?.localMediaId||!box)return alert('Aucun aperçu local disponible pour cette carte.')
+    var file=await getLocalMedia(currentProject.id+':'+a.localMediaId)
+    if(!file)return alert('Fichier temporaire absent de ce navigateur. Relance uniquement après vérification du compte fournisseur.')
+    var uri=URL.createObjectURL(file),img=document.createElement('img')
+    img.alt='Image IA en attente de ton approbation';img.style.cssText='max-width:100%;max-height:310px;object-fit:contain;border-radius:10px'
+    box.replaceChildren(img);img.onload=function(){URL.revokeObjectURL(uri)};img.onerror=function(){URL.revokeObjectURL(uri);box.textContent='Aperçu illisible'};img.src=uri
+  }
+  async function approveGeneratedImage(assetId){
+    if(!currentProject)return
+    var a=parseProductionAssets(currentProject.data.productionAssetsJson).find(function(x){return x.id===assetId})
+    if(!a?.paidToolId||!a.localMediaId)return alert('Aucune image IA en attente de validation.')
+    if(!(await getLocalMedia(currentProject.id+':'+a.localMediaId)))return alert('Image absente de ce navigateur : validation impossible.')
+    if(!confirm('Tu approuves cette image pour ce jeu et autorises son association puis sa publication R2 ?'))return
+    a.editorialApproved=true;currentProject.data.productionAssetsJson=JSON.stringify(parseProductionAssets(currentProject.data.productionAssetsJson).map(function(x){return x.id===a.id?a:x}),null,2)
+    await persistMediaProject();renderGame();toast('Image approuvée ; elle peut maintenant être publiée dans R2 privé ✓')
   }
   async function approveExistingFreeGameMedia(assetId){
     if(!currentProject)return
@@ -1367,7 +1415,7 @@
       var choices=lib.filter(function(m){return m.kind===kind})
       var sel='<option value="">— Choisir un média existant —</option>'+choices.map(function(m){return '<option value="'+esc(m.id)+'"'+(m.id===a.localMediaId||m.id===a.userMediaId?' selected':'')+'>'+esc(m.name)+' · '+esc(m.sizeLabel||'')+'</option>'}).join('')
       var key=String(a.id||'').replace(/[^a-zA-Z0-9_-]/g,'')
-      var badge=a.free&&!a.editorialApproved?'⚠️ Gratuit hébergé — À REVALIDER pour l’histoire':gameMediaReady(a)?'☁️ Hébergé et validé':a.status==='local-assigné'?'📍 Fichier local':a.url?'⚠️ URL non vérifiée':'⏳ À associer'
+      var badge=a.paidToolId&&a.localMediaId&&!a.editorialApproved?'⚠️ Image IA à approuver':a.free&&!a.editorialApproved?'⚠️ Gratuit hébergé — À REVALIDER pour l’histoire':gameMediaReady(a)?'☁️ Hébergé et validé':a.status==='local-assigné'?'📍 Fichier local':a.url?'⚠️ URL non vérifiée':'⏳ À associer'
       var image=a.url&&kind==='image'?'<img src="'+esc(a.url)+'" alt="Média actuellement lié" loading="lazy" style="max-width:240px;width:100%;max-height:185px;object-fit:contain;background:#060a18;border-radius:10px;margin:6px 0">':''
       var audio=a.url&&kind==='audio'?'<audio controls preload="none" src="'+esc(a.url)+'"></audio>':''
       var video=a.url&&kind==='video'?'<video controls preload="none" src="'+esc(a.url)+'" style="max-width:280px;width:100%"></video>':''
@@ -1375,6 +1423,7 @@
         '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>'+esc(a.title||a.code||'Média')+'</b><span class="pill">'+esc(a.priority||'')+' · '+esc(a.kind)+' · '+badge+'</span></div>'+
         '<div class="tiny" style="margin:5px 0 9px">Brief : '+esc(String(a.notes||'non renseigné').slice(0,400))+(a.scene?' · Scène : '+esc(a.scene):'')+'</div>'+
         image+audio+video+
+        (a.paidToolId&&a.localMediaId&&!a.editorialApproved?'<div class="game-note">Image produite mais PAS approuvée : aperçu et décision nécessaires. Le bouton de publication l’ignore.</div><div id="generated-preview-'+key+'"></div><button class="btn" onclick="previewGeneratedImage(\''+esc(a.id)+'\')">👁 Aperçu de mon image</button> <button class="btn gold" onclick="approveGeneratedImage(\''+esc(a.id)+'\')">✓ Approuver cette image</button>':'')+
         (a.free&&!a.editorialApproved?'<div class="game-note">Ancien gratuit : sa conformité narrative n’est PAS validée. Contrôle-le ou retire-le.</div>':'')+
         (a.generatedPreviewUrl?'<div class="game-note"><b>Résultat IA à valider — pas encore livré au client.</b>'+(kind==='image'?'<img src="'+esc(a.generatedPreviewUrl)+'" alt="À valider" style="max-width:100%;max-height:180px;object-fit:contain">':kind==='audio'?'<audio controls src="'+esc(a.generatedPreviewUrl)+'"></audio>':'<video controls src="'+esc(a.generatedPreviewUrl)+'" style="max-width:100%;max-height:180px"></video>')+'<a class="btn" href="'+esc(a.generatedPreviewUrl)+'" target="_blank" rel="noopener noreferrer">Ouvrir / enregistrer</a></div>':'')+
         '<div class="tools-line">'+
@@ -1387,7 +1436,7 @@
         (a.kind==='map'?'<button class="btn" onclick="showView(\'maps\')">🗺️ Cartes Azgaar</button>':'<button class="btn" onclick="suggestFreeGameMedia(\''+esc(a.id)+'\',false)">🔎 Trouver gratuitement pour CE média</button>')+
         '<button class="btn" onclick="adjustGameMediaSearch(\''+esc(a.id)+'\')">✏️ Affiner les mots-clés</button>'+
         mediaPaidChoice(kind,a.id)+
-        '<button class="btn" onclick="proposePaidGameMedia(\''+esc(a.id)+'\')">💰 Créer 1 média avec mon accord</button>'+
+        '<button class="btn" onclick="proposePaidGameMedia(\''+esc(a.id)+'\')">'+(kind==='image'?'🎨 Créer une image':kind==='video'?'🎬 Créer une vidéo':'🎵 Créer un son')+'</button>'+
         (gameMediaReady(a)&&kind==='image'?'<button class="btn gold" onclick="setGameCoverFromAsset(\''+esc(a.id)+'\')">🖼️ Couverture</button>':'')+
         '</div>'+freeSuggestionsHtml(a)+'</div>'
     }).join('')
@@ -1521,7 +1570,7 @@
       if(!health.ok)throw new Error('Stockage R2 non raccordé. Aucune publication effectuée.')
       mediaProgress('Stockage R2 vérifié. Association des fichiers par code exact…')
       await autoAssignOwnMedia(true)
-      var todo=parseProductionAssets(currentProject.data.productionAssetsJson).filter(function(a){return a.status==='local-assigné'&&a.localMediaId})
+      var todo=parseProductionAssets(currentProject.data.productionAssetsJson).filter(function(a){return a.status==='local-assigné'&&a.localMediaId&&(!a.paidToolId||a.editorialApproved===true)})
       if(!todo.length)mediaProgress('Aucun nouveau fichier local à publier. Vérification des scènes…')
       for(var i=0;i<todo.length;i++){
         if(!currentProject||currentProject.id!==projectId)throw new Error('Le projet a changé pendant la publication. Arrêt sans perte.')
@@ -1589,12 +1638,43 @@
     var direction=visualDirectionFromCurrentGame(d)
     var instruction='Créer UNIQUEMENT cet élément. Respecter le personnage, le décor, l’époque, les objets et la direction artistique du jeu courant. Ne pas ajouter des éléments absents du brief et ne pas mélanger les jeux.\n'
     if(asset.kind==='audio')return base+single+'Nature : son ciblé selon le brief.\n'+instruction
-    if(asset.kind==='video')return base+single+'Nature : une vidéo ciblée.\n'+instruction
+    if(asset.kind==='video')return base+single+'Mouvement de cette scène : '+(asset.videoMovement||'à définir')+'\n'+instruction
+    if(asset.sourceField==='mediaNotebook'){
+      var fixed=mediaNotebookStyle(d)
+      if(!fixed)throw Error('Charte visuelle absente. Vérifie les directives de ce jeu avant de générer une image.')
+      if(!asset.imagePrompt)throw Error('Prompt image manquant pour cette scène : compléter le Cahier Média avant génération.')
+      return base+'CHARTE VISUELLE VERROUILLÉE :\n'+fixed+'\nPROMPT APPROUVÉ POUR CETTE SCÈNE (à vérifier) :\n'+asset.imagePrompt+'\n'+single+instruction
+    }
     if(!direction)throw Error('Direction artistique du jeu absente de son plan visuel. Complète le brief existant avant de payer une image.')
     return base+'DIRECTION ARTISTIQUE IMPÉRATIVE, ISSUE DU PLAN VALIDÉ DE CE JEU :\n'+direction+'\n'+single+instruction
   }
+  function cloudflareMediaPrompt(asset,d){
+    var style=mediaNotebookStyle(d)||visualDirectionFromCurrentGame(d)
+    if(!style)throw Error('Charte visuelle absente : Cloudflare n’a reçu aucun prompt.')
+    var subject=String(asset.imagePrompt||asset.notes||asset.title||'').trim()
+    // The cahier prompt normally reproduces the charter already: avoid repeating it unnecessarily.
+    var charterRepeated=subject.includes(style.slice(0,Math.min(70,style.length)))
+    var parts=['ŒUVRE : '+(currentProject?.title||'NyXia Game'),'MÉDIA : '+(asset.code||asset.id)]
+    if(!charterRepeated)parts.push('CHARTE VISUELLE IMPÉRATIVE : '+style)
+    parts.push('SCÈNE : '+(asset.sceneTitle||asset.scene||''),'IMAGE À PRODUIRE : '+subject,'Un seul visuel. Aucun élément étranger au récit ni autre univers.')
+    var prompt=parts.join('\n')
+    if(prompt.length>2048)throw Error('Le prompt dépasse 2 048 caractères (limite Cloudflare). Réduis le brief de CE média sans perdre la charte et les descriptions des personnages, ou choisis Flux AIMLAPI. Aucun appel lancé.')
+    if(!subject)throw Error('Cette image n’a pas de brief : complète sa fiche avant de générer.')
+    return prompt
+  }
   async function generateGameImageAsset(asset,tool,d){
-    var prompt=mediaAssetPrompt(asset,d),ratio=tool.aspect_ratio||'16:9'
+    var prompt=tool.cloudflare?cloudflareMediaPrompt(asset,d):mediaAssetPrompt(asset,d),ratio=tool.aspect_ratio||'16:9'
+    if(tool.cloudflare){
+      var result=await api('/api/game/media/image/cloudflare',{method:'POST',body:JSON.stringify({projectId:currentProject.id,assetId:asset.id,prompt:prompt,model:tool.model,confirmed:true})})
+      if(!result.ok||!result.images?.length)throw Error(result.error||'Aucune image renvoyée par Workers AI')
+      return result.images[0]
+    }
+    if(tool.economy){
+      if(prompt.length>4000)throw Error('Prompt de cette scène trop long pour le modèle (limite 4 000 caractères). Raccourcis son brief sans retirer les consignes essentielles ; aucun appel lancé.')
+      var out=await api('/api/game/media/image/generate',{method:'POST',body:JSON.stringify({projectId:currentProject.id,assetId:asset.id,model:tool.model,prompt:prompt,confirmed:true})})
+      if(!out.ok||!out.images?.length)throw Error(out.error||'Aucune image retournée par AIMLAPI')
+      return out.images[0]
+    }
     if(tool.kind==='image-async'){
       var start=await api('/api/alexya/generate',{method:'POST',body:JSON.stringify({toolId:tool.id,prompt:prompt,aspect_ratio:ratio})})
       if(start.output_url)return start.output_url
@@ -1622,11 +1702,157 @@
     // Hard stop: jamais de lot de 125 appels payants depuis cette interface.
     await autoAssignOwnMedia()
   }
+  // Cahier média : une fiche issue des quatre onglets validés, par scène. Aucun rendu payant.
+  var mediaNotebookBusy=false,mediaNotebookStop=false
+  function mediaNotebookSource(d){
+    return JSON.stringify({concept:d.idea||'',intent:d.creatorIntent||'',canon:d.lockedCanon||'',bible:d.worldBible||'',structure:d.storyStructure||'',history:d.scenesQuests||'',guide:String(d.scenesQuests||'').trim()?'':d.guidedScenesJson||'',characters:d.characters||'',art:d.imageBriefs||''})
+  }
+  function mediaNotebookFingerprint(str){
+    var hash=2166136261
+    for(var i=0;i<str.length;i++){hash^=str.charCodeAt(i);hash=Math.imul(hash,16777619)}
+    return (hash>>>0).toString(16)+'-'+str.length
+  }
+  function mediaNotebookStyle(d){
+    var approved=visualDirectionFromCurrentGame(d)
+    var bible=String(d.worldBible||''),lines=bible.split(/\r?\n/),start=lines.findIndex(function(x){return /(?:charte visuelle|direction artistique|style artistique|palette visuelle|style visuel|identit[eé] visuelle)/i.test(x)})
+    var extracted=[]
+    if(start>=0){for(var i=start;i<Math.min(lines.length,start+18)&&extracted.join('\n').length<2400;i++){
+      if(i>start&&/^#{1,5}\s/.test(lines[i]))break
+      extracted.push(lines[i])
+    }}
+    return [approved,extracted.join('\n').trim()].filter(Boolean).join('\n\n').slice(0,3400)
+  }
+  function mediaNotebookScenes(d){
+    var raw=String(d.scenesQuests||'').trim(),structured
+    if(raw){
+      try{structured=parseJsonLoose(raw)}catch(_){}
+      var nodes=Array.isArray(structured)?structured:structured?.scenes
+      if(Array.isArray(nodes)&&nodes.length)return nodes.map(function(x,i){return {id:String(x.id||'scene-'+String(i+1).padStart(3,'0')),title:String(x.title||x.name||'Scène '+(i+1)),text:JSON.stringify(x)}})
+      // Seules les scènes explicitement séparées sont retenues ; pas de découpage inventé du roman.
+      var lines=raw.split(/\r?\n/),marks=[]
+      lines.forEach(function(line,i){if(/^\s*(?:#{1,5}\s*)?(?:\*\*)?\s*(?:sc[eè]ne|s[eé]quence|chapitre|[eé]pisode|[eé]tape)\s*(?:n\s*[°o.]?\s*)?\d+[^\r\n]*(?:\*\*)?\s*$/i.test(line)||/^\s*#{1,4}\s*\d{1,3}\s*[.\-–:]\s*\S/.test(line))marks.push(i)})
+      if(marks.length)return marks.map(function(start,i){return {id:'scene-'+String(i+1).padStart(3,'0'),title:lines[start].replace(/^[#*\s]+|\*+$/g,'').trim(),text:lines.slice(start,marks[i+1]===undefined?lines.length:marks[i+1]).join('\n').trim()}})
+    }
+    // Conducteur déjà existant : source secondaire, jamais généré ou réécrit ici.
+    try{var guide=parseJsonLoose(d.guidedScenesJson||'{}'),scenes=Array.isArray(guide)?guide:guide.scenes
+      if(Array.isArray(scenes)&&scenes.length)return scenes.map(function(x,i){return {id:String(x.id||'scene-'+String(i+1).padStart(3,'0')),title:String(x.title||x.phase||'Scène '+(i+1)),text:JSON.stringify(x)}})
+    }catch(_){}
+    return []
+  }
+  function mediaNotebookRead(d){
+    try{var book=JSON.parse(String(d.mediaSceneNotebookJson||'{}'));return book&&Array.isArray(book.scenes)?book:null}catch(_){return null}
+  }
+  function mediaNotebookText(v,max){return String(v==null?'':v).trim().slice(0,max||1600)}
+  function mediaNotebookCleanScene(result,source,index){
+    if(!result||typeof result!=='object'||Array.isArray(result))throw Error('Fiche JSON invalide')
+    var characters=Array.isArray(result.characters)?result.characters.slice(0,24).map(function(x){return {name:mediaNotebookText(x?.name,140),appearance:mediaNotebookText(x?.appearance,1100)}}):[]
+    var out={id:source.id,title:source.title,number:index+1,characters:characters,place:mediaNotebookText(result.place,1500),action:mediaNotebookText(result.action,1800),freeImageQuery:mediaNotebookText(result.freeImageQuery,160),freeSoundQuery:mediaNotebookText(result.freeSoundQuery,160),freeVideoQuery:mediaNotebookText(result.freeVideoQuery,160),imageBrief:mediaNotebookText(result.imageBrief,1700),audioBrief:mediaNotebookText(result.audioBrief,1700),videoBrief:mediaNotebookText(result.videoBrief,1700),imagePrompt:mediaNotebookText(result.imagePrompt,4300),videoMovement:mediaNotebookText(result.videoMovement,1700),imageNeeded:result.imageNeeded===true,audioNeeded:result.audioNeeded===true,videoNeeded:result.videoNeeded===true,warnings:Array.isArray(result.warnings)?result.warnings.slice(0,12).map(function(x){return mediaNotebookText(x,500)}):[],reviewed:false}
+    if(out.imageNeeded&&!out.imagePrompt)throw Error('Prompt image obligatoire si image nécessaire')
+    if(out.audioNeeded&&!out.freeSoundQuery&&!out.audioBrief)throw Error('Brief audio absent')
+    if(out.videoNeeded&&!out.videoMovement)throw Error('Mouvement vidéo absent')
+    return out
+  }
+  function mediaNotebookAssetsFromScene(scene){
+    var idx=String(scene.number).padStart(3,'0'),characters=scene.characters.map(function(x){return x.name+(x.appearance?' : '+x.appearance:'')}).join(' ; ')
+    var common='Lieu : '+scene.place+' ; Action : '+scene.action+(characters?' ; Apparences fixes : '+characters:'')
+    var result=[]
+    if(scene.imageNeeded)result.push({id:'notebook-img-'+idx,code:'KV-S'+idx,kind:'image',title:'KV-S'+idx+' · '+scene.title+' — image',scene:scene.id,sceneTitle:scene.title,notes:(scene.imageBrief+'\n'+common).slice(0,2700),imagePrompt:scene.imagePrompt,searchTerms:scene.freeImageQuery,priority:'P1',status:'à produire',sourceField:'mediaNotebook',editorialApproved:false})
+    if(scene.audioNeeded)result.push({id:'notebook-audio-'+idx,code:'SFX-S'+idx,kind:'audio',title:'SFX-S'+idx+' · '+scene.title+' — ambiance',scene:scene.id,sceneTitle:scene.title,notes:(scene.audioBrief+'\n'+common).slice(0,2700),searchTerms:scene.freeSoundQuery,priority:'P1',status:'à produire',sourceField:'mediaNotebook',editorialApproved:false})
+    if(scene.videoNeeded)result.push({id:'notebook-video-'+idx,code:'VID-S'+idx,kind:'video',title:'VID-S'+idx+' · '+scene.title+' — mouvement',scene:scene.id,sceneTitle:scene.title,notes:(scene.videoBrief+'\n'+common).slice(0,2700),videoMovement:scene.videoMovement,searchTerms:scene.freeVideoQuery,priority:'P2',status:'à produire',sourceField:'mediaNotebook',editorialApproved:false})
+    return result
+  }
+  function mediaNotebookMergeAssets(d,scene){
+    var existing=parseProductionAssets(d.productionAssetsJson),added=0,conflicts=[]
+    mediaNotebookAssetsFromScene(scene).forEach(function(a){
+      var prev=existing.find(function(x){return x.id===a.id||x.code===a.code})
+      if(!prev){existing.push(a);added++;return}
+      if(prev.sourceField!=='mediaNotebook'){
+        conflicts.push(a.code+' : code déjà utilisé dans ton plan existant, média préservé');return
+      }
+      // Si un choix est déjà attaché, garder intégralement son brief et son URL.
+      if(prev.url||prev.localMediaId||prev.generatedPreviewUrl){conflicts.push(a.code+' : média existant conservé, vérifier sa conformité au nouveau cahier');return}
+      Object.assign(prev,a)
+    })
+    d.productionAssetsJson=JSON.stringify(existing,null,2)
+    return {added:added,conflicts:conflicts}
+  }
+  function mediaNotebookProgress(msg){var node=document.getElementById('media-notebook-progress');if(node)node.textContent=msg}
+  function stopMediaNotebook(){mediaNotebookStop=true;mediaNotebookProgress('Arrêt demandé : les scènes déjà enregistrées restent disponibles.')}
+  async function compileMediaNotebook(){
+    if(!currentProject||mediaNotebookBusy)return
+    var projectId=currentProject.id,d=currentProject.data||{},source=mediaNotebookSource(d),fingerprint=mediaNotebookFingerprint(source),scenes=mediaNotebookScenes(d),style=mediaNotebookStyle(d)
+    if(!String(d.idea||'').trim()||!String(d.worldBible||'').trim()||!String(d.characters||'').trim()||!(String(d.scenesQuests||'').trim()||String(d.guidedScenesJson||'').trim()))return alert('Complète le Concept, la Bible, les Personnages et les scènes de l’Histoire avant de compiler. Aucun champ ne sera modifié.')
+    if(!style)return alert('Aucune charte visuelle identifiée dans la Bible ou les directives Images existantes. Précise la palette, l’époque et le style avant de compiler : NyXia ne doit pas les inventer.')
+    if(!scenes.length)return alert('Aucune scène délimitée trouvée dans Histoire. Ajoute des titres « Scène 1 », « Scène 2 »… ou utilise ton conducteur existant. Aucune scène inventée.')
+    if(scenes.length>250)return alert('Plus de 250 scènes détectées : vérifier le découpage. Aucun appel lancé.')
+    var book=mediaNotebookRead(d),changed=book&&book.fingerprint!==fingerprint
+    if(changed&&!confirm('La Bible, les personnages, l’histoire ou le brief artistique ont changé depuis ce cahier. Recommencer son analyse ? Les médias déjà choisis resteront dans leur registre et ne seront pas effacés.'))return
+    if(!book||changed)book={version:1,projectId:projectId,fingerprint:fingerprint,total:scenes.length,nextIndex:0,scenes:[],warnings:[],createdAt:new Date().toISOString()}
+    if(book.nextIndex>=scenes.length){mediaNotebookProgress('Toutes les scènes ont déjà leur fiche. Aucun appel supplémentaire.');renderGame();return}
+    var tool=currentAiTool()
+    if(!tool)return alert('Aucun modèle texte disponible dans la Table de travail IA. Aucun appel lancé.')
+    var remaining=scenes.length-book.nextIndex,count=Math.min(5,remaining)
+    if(!confirm('Compiler '+count+' scène(s) sur '+remaining+' restante(s), UNE PAR UNE, avec '+count+' appel(s) maximum au modèle texte « '+tool.name+' » ? Les appels texte peuvent être facturés par ton fournisseur. Aucune image, vidéo ou musique ne sera générée.'))return
+    mediaNotebookBusy=true;mediaNotebookStop=false
+    try{
+      for(var k=0;k<count;k++){
+        if(mediaNotebookStop||!currentProject||currentProject.id!==projectId)break
+        // Un changement de source pendant une compilation ne doit jamais mélanger deux versions.
+        d=currentProject.data||{}
+        if(mediaNotebookFingerprint(mediaNotebookSource(d))!==fingerprint)throw Error('Les sources ont changé pendant la compilation. Arrêt pour éviter de mélanger les versions.')
+        var index=book.nextIndex,scene=scenes[index]
+        if(scene.text.length>22000)throw Error(scene.title+' dépasse 22 000 caractères : subdivise cette scène avant de poursuivre, sans perdre les fiches précédentes.')
+        var context={title:currentProject.title,idea:d.idea,creatorIntent:d.creatorIntent,lockedCanon:d.lockedCanon,worldBible:d.worldBible,visualCharter:style,characters:d.characters,storyStructure:d.storyStructure,scene:{id:scene.id,title:scene.title,content:scene.text}}
+        if(JSON.stringify(context).length>95000)throw Error('Bible / fiches Personnages trop volumineuses pour un contrôle sûr : réduis leur longueur avant de poursuivre. Aucun texte modifié.')
+        mediaNotebookProgress('Cahier Média : scène '+(index+1)+' / '+scenes.length+' — '+scene.title+' · analyse texte seulement…')
+        var sys='Tu es le Directeur Artistique et Régisseur Média de CETTE œuvre uniquement. Convertis UNE scène en fiche technique JSON. Le Canon, la Bible, la charte visuelle et les fiches Personnages sont impératifs. Recopie exactement l’apparence de tout personnage présent ; n’invente ni visage ni vêtement ni accessoire, ni présence non explicitement établie. Si une information manque, ajoute-la à warnings et laisse le champ concerné vide. Pour chaque champ, base-toi uniquement sur la scène et le dossier fournis. N’ajoute pas de média inutile. Un bruit de pluie ne nécessite pas de création payante. Une vidéo est facultative et videoNeeded ne vaut true que si la scène exige réellement un mouvement distinct. Les résultats des banques sont uniquement des PROPOSITIONS, jamais des images validées. Une image de personne fictive ou d’objet unique ne sera jamais automatiquement acceptée à partir d’une banque de stock. N’utilise aucun univers extérieur au projet. Retourne UNIQUEMENT un objet JSON, sans markdown ni commentaire.'
+        var schema='{"characters":[{"name":"nom exact","appearance":"description physique exacte issue des fiches ou vide"}],"place":"lieu attesté","action":"action de la scène","freeImageQuery":"mots-clés anglais précis ou vide","freeSoundQuery":"mots-clés anglais du bruitage ou vide","freeVideoQuery":"mots-clés anglais ou vide","imageNeeded":false,"audioNeeded":false,"videoNeeded":false,"imageBrief":"sujet exact, décor, composition, époque","audioBrief":"bruit ou ambiance utile","videoBrief":"mouvement requis ou vide","imagePrompt":"prompt de CETTE image, avec charte visuelle complète et apparences exactes, ou vide","videoMovement":"mouvement souhaité, ou vide","warnings":[]}'
+        var prompt='Cahier Média technique pour UNE scène. Le texte source fait autorité. Produis UNIQUEMENT le JSON conforme au schéma suivant, avec des booléens réels : '+schema+'\n\nRÈGLES : imageNeeded/audioNeeded/videoNeeded = true uniquement si nécessaire. Pas de génération média. Mots-clés gratuits simples. Le prompt image doit reprendre charte + apparences exactes. Aucun changement de texte, aucune invention. Si information insuffisante, noter warnings et ne pas prétendre la vérifier.\n\nDOSSIER ET SCÈNE :\n'+JSON.stringify(context)
+        var answer=await api('/api/chat',{method:'POST',body:JSON.stringify({providerId:tool.providerId,model:tool.model,system_prompt:sys,max_tokens:2600,temperature:0.1,messages:[{role:'user',content:prompt}]})})
+        if(!currentProject||currentProject.id!==projectId)throw Error('Le projet ouvert a changé ; aucun autre projet modifié.')
+        var output
+        try{output=parseJsonLoose(answer.text||'')}catch(_){throw Error('JSON inexploitable pour '+scene.title+'. Les scènes précédentes restent sauvegardées ; celle-ci peut être relancée.')}
+        var card=mediaNotebookCleanScene(output,scene,index)
+        var castSource=String(d.characters||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+        card.characters.forEach(function(ch){
+          var name=String(ch.name||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+          var look=String(ch.appearance||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+          if(!name||!castSource.includes(name))card.warnings.push('Personnage à vérifier dans la fiche : '+(ch.name||'sans nom'))
+          if(look&&!castSource.includes(look))card.warnings.push('Description physique non retrouvée mot pour mot : '+(ch.name||'inconnu')+' (vérifier avant toute image)')
+        })
+        book.scenes.push(card);book.nextIndex=index+1;book.total=scenes.length
+        d=currentProject.data||{};var merged=mediaNotebookMergeAssets(d,card)
+        book.warnings=book.warnings.concat(merged.conflicts)
+        d.mediaSceneNotebookJson=JSON.stringify(book,null,2)
+        try{await persistMediaProject()}catch(e){throw Error('Sauvegarde non confirmée après '+scene.title+' : '+e.message+'. Arrêt sans nouvel appel IA.')}
+        mediaNotebookProgress('Cahier Média : '+book.nextIndex+'/'+scenes.length+' scène(s) sauvegardée(s), '+merged.added+' nouvelle(s) carte(s). Aucune image ni vidéo générée.')
+      }
+      if(currentProject&&currentProject.id===projectId){renderGame();mediaNotebookProgress('Cahier Média : '+book.nextIndex+'/'+scenes.length+' scène(s) sauvegardée(s). '+(book.nextIndex<scenes.length?'Clique « Continuer » pour les 5 suivantes.':'Terminé : vérifie les fiches, puis choisis tes médias un à un.'))}
+    }catch(e){renderGame();mediaNotebookProgress('Compilation interrompue : '+e.message);alert('Cahier Média : '+e.message)}
+    finally{mediaNotebookBusy=false;mediaNotebookStop=false}
+  }
+  function exportMediaNotebook(){
+    var book=mediaNotebookRead(currentProject?.data||{})
+    if(!book)return alert('Compile une scène avant d’exporter le cahier.')
+    var url=URL.createObjectURL(new Blob([JSON.stringify(book,null,2)],{type:'application/json'})),a=document.createElement('a')
+    a.href=url;a.download='cahier-media-'+safeName(currentProject.title)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},2500)
+  }
+  function mediaNotebookHtml(d){
+    var book=mediaNotebookRead(d),done=book?.nextIndex||0,total=book?.total||0,changed=!!book&&book.fingerprint!==mediaNotebookFingerprint(mediaNotebookSource(d))
+    var body=book?.scenes?.map(function(s){return '<tr><td style="min-width:70px">'+String(s.number).padStart(2,'0')+'<div class="tiny">'+esc(s.title)+'</div></td><td>'+esc(s.characters.map(function(c){return c.name+' : '+(c.appearance||'⚠️ description absente')}).join(' ; ')||'Aucun personnage identifié')+'</td><td>'+esc(s.place)+'<br>'+esc(s.action)+'</td><td>🖼️ '+esc(s.freeImageQuery)+'<br>🎵 '+esc(s.freeSoundQuery)+(s.freeVideoQuery?'<br>🎬 '+esc(s.freeVideoQuery):'')+'</td><td>'+esc(s.imagePrompt||'Aucune image requise')+'</td><td>'+esc(s.videoMovement||'Aucune vidéo requise')+(s.warnings.length?'<div class="game-note">⚠️ '+esc(s.warnings.join(' · '))+'</div>':'')+'</td></tr>'}).join('')||''
+    return '<div class="panel" style="margin:12px 0 16px;border-color:rgba(167,139,250,.5)"><h4>🎬 Cahier Média automatique — scène par scène</h4><p class="muted">NyXia lit uniquement Concept, Bible, Histoire et Personnages de ce projet. Les briefs artistiques existants restent obligatoires. Elle crée des FICHES et préremplit les cartes ci-dessous ; aucun média n’est généré ou choisi automatiquement.</p>'+
+      '<div class="tools-line" style="margin-top:12px"><button class="btn primary" onclick="compileMediaNotebook()">'+(book&&!changed&&done<total?'▶ Continuer : 5 scènes suivantes':'✨ Compiler le Cahier Média')+'</button><button class="btn" onclick="stopMediaNotebook()">■ Arrêter</button>'+(book?'<button class="btn gold" onclick="exportMediaNotebook()">⬇ Exporter le cahier JSON</button>':'')+'</div>'+
+      '<div id="media-notebook-progress" role="status" aria-live="polite" class="game-note" style="margin-top:12px">'+(changed?'⚠️ Sources modifiées : relancer la compilation pour mettre à jour les fiches.':book?done+' / '+total+' scènes compilées ; chaque fiche reste à vérifier.':'En attente : une requête TEXTE par scène, maximum 5 par clic, après confirmation. Aucune génération image / vidéo / audio.')+'</div>'+
+      (book?.warnings?.length?'<div class="tiny">Correspondances à vérifier : '+esc(book.warnings.slice(-6).join(' | '))+'</div>':'')+
+      (body?'<details open><summary class="btn" style="cursor:pointer;margin:8px 0">📋 Voir les fiches de scènes ('+done+')</summary><div style="overflow:auto;max-height:520px"><table class="recent" style="min-width:1000px"><thead><tr><th>Scène</th><th>Personnages</th><th>Décor / action</th><th>Mots-clés gratuits</th><th>Prompt image verrouillé</th><th>Mouvement vidéo</th></tr></thead><tbody>'+body+'</tbody></table></div></details>':'')+'</div>'
+  }
+
   function gameMedia(d){
     var list=parseProductionAssets(d.productionAssetsJson),done=list.filter(gameMediaReady).length,hosted=list.filter(isHostedGameMedia).length,local=list.filter(function(a){return !!a.localMediaId}).length
     return '<h4>🎬 Production des médias — budget protégé</h4>'+
       '<div class="game-note"><b>État réel :</b> '+hosted+' hébergé(s) ici · '+local+' uniquement dans ce navigateur · '+(list.length-done)+' sans URL prête. La vente exige encore un test client complet.</div>'+
-      '<div class="game-note"><b>Priorité économique :</b> 1. Tes fichiers fournis ; 2. banques gratuites (Pexels, Unsplash, Freesound selon la licence) ; 3. modèles classés par prix lorsqu’il est renseigné, un seul appel avec ton accord. Aucun lot payant automatique.</div>'+
+      '<div class="game-note"><b>Priorité économique :</b> 1. Tes fichiers ; 2. recherche gratuite (Pexels / Freesound ; Unsplash peut être indisponible) ; 3. Cloudflare Flux ou modèle choisi, UNE image avec ton accord. Aucun lot payant automatique.</div>'+
+      mediaNotebookHtml(d)+
       '<div class="panel" style="margin:12px 0 16px;border-color:rgba(53,214,154,.30)"><h4>1 · Direction artistique ET plans du jeu courant — une seule source</h4>'+
       '<div class="game-note"><b>Ces directives existantes s’appliquent obligatoirement aux images du jeu.</b> Ce sont tes vrais champs déjà enregistrés : pas de nouveau plan ni de doublon. NyXia n’impose aucun style générique et ne sélectionne aucune photo simplement parce que le titre correspond.</div>'+
       gameArea('🎨 Images / portraits / tokens / cartes / objets — CONSIGNES ARTISTIQUES','imageBriefs',d.imageBriefs,10)+
@@ -1640,7 +1866,7 @@
       '<div class="tiny" style="margin-top:8px">Médias livrés via R2 privé et accès vérifié pour le jeu concerné : équipe, bibliothèque achetée, animateur ou joueur autorisé. Aucun coût IA à cette étape. Les liens ne sont pas des liens publics ; vérifier que le compartiment R2 n’est pas exposé directement par un domaine public.</div></div>'+
       '<div class="panel" style="margin:12px 0 16px;border-color:rgba(232,184,103,.25)"><h4>3 · Trouver le gratuit, puis demander avant le payant</h4>'+
       '<div class="tools-line"><button class="btn gold" onclick="proposeFreeGameMedia()">🔎 Rechercher 8 besoins précis · 0 $ IA</button><button class="btn" onclick="stopFreeGameMediaSearch()">■ Arrêter</button></div>'+
-      '<div id="game-media-search-status" role="status" aria-live="polite" class="game-note" style="margin-top:12px;border-color:rgba(53,214,154,.4)">'+esc(d.mediaProductionLog||'En attente : 8 besoins ciblés par série, jamais 127 photos acceptées sans vérification.')+'</div>'+mediaPriceEditorHtml()+
+      '<div id="game-media-search-status" role="status" aria-live="polite" class="game-note" style="margin-top:12px;border-color:rgba(53,214,154,.4)">'+esc(d.mediaProductionLog||'Recherche gratuite : une scène précise à la fois, aucune proposition validée automatiquement.')+'</div>'+
 
       '<div class="tiny" style="margin-bottom:12px">Le tableau propose des médias gratuits à prévisualiser avant validation. Si aucun gratuit n’est trouvé, le payant demande ton accord explicite avec le tarif disponible. Les scènes et les choix existants restent intacts.</div>'+
       '<div class="game-note"><b>État :</b> '+done+' / '+list.length+' médias avec URL prête · '+(list.length-done)+' à compléter. '+esc(d.mediaPlacementReport||'Placement des scènes non encore vérifié.')+'</div>'+
@@ -1873,6 +2099,9 @@
     [['image','imageBriefs'],['audio','audioPlan'],['video','videoPlan'],['map','mapPlan']].forEach(function(p){
       all=all.concat(parseAssetBriefRows(d[p[1]],p[0],p[1]))
     })
+    // Reconstituer les cartes du cahier sans altérer les quatre champs créatifs.
+    var book=mediaNotebookRead(d)
+    if(book&&Array.isArray(book.scenes))book.scenes.forEach(function(scene){all=all.concat(mediaNotebookAssetsFromScene(scene))})
     var seen={}
     return all.filter(function(a){if(seen[a.code])return false;seen[a.code]=true;return true})
   }
@@ -1972,6 +2201,7 @@
       zip.file('06-regles.md',mdSection('Mécaniques',d.mechanics)+'\n'+mdSection('Combat',d.combatRules)+'\n'+mdSection('Progression',d.progression))
       zip.file('07-materiel.md',mdSection('Joueurs',d.playerMaterials)+'\n'+mdSection('Animateur / MJ',d.hostMaterials))
       zip.file('08-medias.md',mdSection('Images',d.imageBriefs)+'\n'+mdSection('Audio',d.audioPlan)+'\n'+mdSection('Vidéo',d.videoPlan)+'\n'+mdSection('Cartes',d.mapPlan))
+      if(mediaNotebookRead(d))zip.file('08d-cahier-media.json',JSON.stringify(mediaNotebookRead(d),null,2))
       zip.file('08b-production-assets.json',String(d.productionAssetsJson||'[]'))
       zip.file('08c-production-log.md',mdSection('Journal de production',d.productionLog)+'\n'+mdSection('Journal médias réels',d.mediaProductionLog))
       var mediaList=parseProductionAssets(d.productionAssetsJson),embeds=[],missing=[],af=zip.folder('assets')
