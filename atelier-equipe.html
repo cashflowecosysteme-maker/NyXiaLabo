@@ -123,7 +123,7 @@
       if(!auth.valid){ location.href='/login.html'; return }
       var data=await Promise.all([api('/api/atelier/health'),api('/api/atelier/projects'),api('/api/tools')])
       var health=data[0]; allProjects=data[1].projects||[]; tools=data[2].tools||[]
-      await ensureEconomyVideoTool()
+      // Aucun ajout automatique de moteur payant au démarrage.
       aiTools=tools.filter(function(t){ return t.providerId && t.model && (!t.kind || t.kind==='chat') })
       var savedAi='';try{savedAi=sessionStorage.getItem('nyxialabo_default_ai_tool')||''}catch(e){}
       var savedTool=aiTools.find(function(t){return t.id===savedAi})
@@ -179,7 +179,7 @@
   function chooseGame(id){chooseProject('nyxia-game',id,renderGame)}
 
   async function newProject(kind){
-    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',playerPrologue:'',playerCreationInstructions:'',playerArchetypes:'',playerFactions:'',playerStartingReputation:0,playerReputationRules:'',playerBadgeCatalog:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',sourceDocuments:'',importedSourceNames:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',guidedScenesJson:'',mediaUseFreeAudio:true,mediaUseFreeVideo:true,mediaPaidFallback:false,mediaAllowPaidImages:false,mediaPaidVideoLimit:0,mediaAskVideoApproval:true,mediaUseUserAssets:true,userMediaAssets:[],deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
+    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',playerPrologue:'',playerCreationInstructions:'',playerArchetypes:'',playerFactions:'',playerStartingReputation:0,playerReputationRules:'',playerBadgeCatalog:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',sourceDocuments:'',importedSourceNames:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',guidedScenesJson:'',mediaUseFreeAudio:true,mediaUseFreeVideo:true,mediaPaidFallback:false,mediaAllowPaidImages:false,mediaPaidVideoLimit:0,mediaAskVideoApproval:true,mediaUseUserAssets:true,userMediaAssets:[],mediaImageQuality:'low',mediaPaidImageLimit:0,deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
     var title=prompt('Titre du projet :','Nouveau '+kindLabel(kind))||('Nouveau '+kindLabel(kind))
     try{var d=await api('/api/atelier/projects',{method:'POST',body:JSON.stringify({kind:kind,title:title,data:defaults[kind]||{}})}); currentProject=d.project; await reloadIndex(); showView(({ghostwriting:'ghost',audiobook:'audio','nyxia-game':'game',mystery:'mystery'})[kind]||'home'); toast('Projet créé') }catch(e){alert(e.message)}
   }
@@ -676,7 +676,7 @@
     return '<label style="display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid rgba(167,139,250,.12);border-radius:12px;background:rgba(255,255,255,.03)"><input type="checkbox" '+((d[key]===false)?'':'checked')+' onchange="setData(\''+key+'\',this.checked)"><span><b>'+label+'</b>'+(help?'<div class="tiny" style="margin-top:2px">'+help+'</div>':'')+'</span></label>'
   }
   function parseProductionAssets(val){
-    try{return JSON.parse(String(val||'').trim()||'[]')}catch(e){return []}
+    try{var parsed=JSON.parse(String(val||'').trim()||'[]');return Array.isArray(parsed)?parsed:[]}catch(e){return []}
   }
   function summarizeProductionAssets(d){
     var list=parseProductionAssets(d.productionAssetsJson),counts={}
@@ -733,39 +733,102 @@
       fr.readAsDataURL(file)
     })
   }
+  function mediaDatabase(){
+    return new Promise(function(resolve,reject){
+      if(!window.indexedDB){reject(new Error('Ce navigateur ne prend pas en charge la bibliothèque locale de fichiers.'));return}
+      var r=indexedDB.open('nyxia-game-media-v1',1)
+      r.onupgradeneeded=function(){var db=r.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files')}
+      r.onsuccess=function(){resolve(r.result)}
+      r.onerror=function(){reject(r.error||new Error('Stockage des médias indisponible'))}
+    })
+  }
+  async function storeLocalMedia(id,file){
+    var db=await mediaDatabase()
+    return new Promise(function(resolve,reject){
+      var tr=db.transaction('files','readwrite')
+      tr.objectStore('files').put(file,id)
+      tr.oncomplete=function(){db.close();resolve(true)}
+      tr.onerror=function(){db.close();reject(tr.error||new Error('Stockage du fichier impossible'))}
+      tr.onabort=function(){db.close();reject(tr.error||new Error('Espace de stockage insuffisant'))}
+    })
+  }
+  async function getLocalMedia(id){
+    var db=await mediaDatabase()
+    return new Promise(function(resolve,reject){
+      var tr=db.transaction('files','readonly'),r=tr.objectStore('files').get(id)
+      r.onsuccess=function(){resolve(r.result||null)}
+      r.onerror=function(){reject(r.error||new Error('Lecture du média impossible'))}
+      tr.oncomplete=function(){db.close()}
+    })
+  }
+  async function persistMediaProject(){
+    if(!currentProject)throw new Error('Aucun projet ouvert')
+    var snapshot=currentProject
+    var result=await api('/api/atelier/projects/'+snapshot.id,{method:'PUT',body:JSON.stringify(snapshot)})
+    if(!result||!result.project)throw new Error('Sauvegarde non confirmée : conserve tes fichiers locaux.')
+    currentProject=result.project
+    await reloadIndex()
+    markDirty()
+    return true
+  }
   async function importProjectMediaFiles(files){
     if(!currentProject||!files||!files.length)return
-    var d=currentProject.data||{}
+    var d=currentProject.data||{},n=0,skipped=[]
     d.userMediaAssets=d.userMediaAssets||[]
-    var imported=0,skipped=0
     for(var i=0;i<files.length;i++){
       var f=files[i],kind=mediaKindFromMime(f.type,f.name)
-      if(kind==='other'){skipped++;continue}
-      var sizeMb=(f.size||0)/1024/1024
-      if(sizeMb>25){
-        skipped++
-        continue
-      }
-      var url=await readFileAsDataURL(f)
-      d.userMediaAssets.push({
-        id:'usr_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),
-        name:f.name,
-        kind:kind,
-        mime:f.type||'',
-        size:f.size||0,
-        sizeLabel:(sizeMb<1?sizeMb.toFixed(2):sizeMb.toFixed(1))+' Mo',
-        tags:'',
-        source:'Utilisateur',
-        license:'Asset personnel / acheté',
-        url:url,
-        addedAt:new Date().toISOString()
-      })
-      imported++
+      if(kind==='other'){skipped.push(f.name+' : format non pris en charge');continue}
+      var id='usr_'+Date.now()+'_'+Math.random().toString(36).slice(2,12)
+      try{
+        await storeLocalMedia(currentProject.id+':'+id,f)
+        d.userMediaAssets.push({id:id,name:f.name,kind:kind,mime:f.type||'',size:f.size||0,sizeLabel:((f.size||0)/1048576).toFixed(1)+' Mo',tags:'',source:'Fichier personnel local',license:'À confirmer avant distribution',storage:'local-browser',addedAt:new Date().toISOString()})
+        n++
+      }catch(e){skipped.push(f.name+' : '+e.message);break}
     }
-    markDirty()
-    await saveCurrent()
-    renderGame()
-    toast('Médias importés : '+imported+(skipped?(' · ignorés : '+skipped):''))
+    try{await persistMediaProject();renderGame()}catch(e){alert('Sauvegarde du projet non confirmée : '+e.message);return}
+    alert(n+' fichier(s) importé(s) dans CE navigateur. '+(skipped.length?'\nNon importés : '+skipped.join('\n'):'')+'\n\nIls seront incorporés à un .nyxgame téléchargé sur cet appareil. Ils ne sont PAS automatiquement envoyés au portail acheteur.')
+  }
+  async function importExistingVisualPlan(files){
+    if(!currentProject||!files||!files.length)return
+    var file=files[0]
+    if(!/\.(md|markdown|txt)$/i.test(file.name)){alert('Choisis le plan visuel en .md ou .txt.');return}
+    var t=await file.text(),parsed=parseAssetBriefRows(t,'image','imageBriefs')
+    if(!parsed.length){alert('Aucun asset visuel avec code (KV-01, CH-01, OBJ-02…) trouvé. Rien modifié.');return}
+    if(!confirm(parsed.length+' véritables assets visuels détectés. Importer le plan et réparer le registre SANS IA ni dépense ? Les médias déjà liés seront conservés.'))return
+    currentProject.data.imageBriefs=t
+    rebuildProductionAssets(true)
+    try{await persistMediaProject();renderGame();toast('Plan importé : '+parsed.length+' assets réels · 0 $')}catch(e){alert('Import non sauvegardé : '+e.message)}
+  }
+  async function attachMediaToAsset(assetId,mediaId){
+    if(!currentProject||!mediaId){alert('Choisis un fichier à associer.');return}
+    var d=currentProject.data||{},assets=parseProductionAssets(d.productionAssetsJson)
+    var a=assets.find(function(x){return x.id===assetId}),m=(d.userMediaAssets||[]).find(function(x){return x.id===mediaId})
+    if(!a||!m)return
+    var kind=(a.kind==='map'||a.kind==='badge')?'image':a.kind
+    if(kind!==m.kind){alert('Le type du média ne correspond pas à cet asset.');return}
+    if(m.storage==='local-browser'&&!(await getLocalMedia(currentProject.id+':'+m.id))){alert('Ce fichier n’est plus sur ce navigateur : réimporte-le.');return}
+    a.localMediaId=m.id;a.userMediaId=m.id;a.status='local-assigné';a.source='Fichier personnel ('+m.name+')';a.license=m.license||'À vérifier';a.url='';delete a.error
+    d.productionAssetsJson=JSON.stringify(assets,null,2)
+    try{await persistMediaProject();renderGame();toast('Média associé : '+m.name)}catch(e){alert('Lien non sauvegardé : '+e.message)}
+  }
+  async function attachDirectAsset(files,assetId){
+    if(!files||!files.length||!currentProject)return
+    var d=currentProject.data||{},f=files[0],kind=mediaKindFromMime(f.type,f.name)
+    var a=parseProductionAssets(d.productionAssetsJson).find(function(x){return x.id===assetId})
+    if(!a)return
+    var expected=(a.kind==='badge'||a.kind==='map')?'image':a.kind
+    if(kind!==expected){alert('Ce fichier doit être de type '+expected+'.');return}
+    await importProjectMediaFiles([f])
+    var last=(currentProject.data.userMediaAssets||[]).slice(-1)[0]
+    if(last&&last.name===f.name)await attachMediaToAsset(assetId,last.id)
+  }
+  async function previewProjectMedia(id){
+    var m=((currentProject||{}).data||{}).userMediaAssets||[]
+    var x=m.find(function(a){return a.id===id});if(!x)return
+    var blob=x.storage==='local-browser'?await getLocalMedia(currentProject.id+':'+id):null
+    if(!blob&&x.url){window.open(x.url,'_blank');return}
+    if(!blob){alert('Fichier indisponible sur cet appareil : réimporte-le.');return}
+    var u=URL.createObjectURL(blob);window.open(u,'_blank');setTimeout(function(){URL.revokeObjectURL(u)},60000)
   }
   function removeProjectMediaAsset(id){
     if(!currentProject)return
@@ -803,20 +866,19 @@
     A.forEach(function(x){if(setB[x])score++})
     return score
   }
+  function assetCodeFromTitle(title){
+    var m=String(title||'').toUpperCase().match(/\b((?:KV|ID|CH|CON|CR|TOK|OBJ|DOC|BG|MAP|UI|AUD|SFX|MUS|VID|CLIP)[-–][A-Z0-9]+)\b/)
+    return m?m[1].replace('–','-'):''
+  }
   function findUserProvidedAsset(asset,d){
-    var list=(d.userMediaAssets||[])
-    if(!list.length)return null
-    var wanted=asset.kind==='badge'||asset.kind==='map'?'image':asset.kind
-    var pool=list.filter(function(x){return x.kind===wanted})
-    if(!pool.length)return null
-    var needle=[asset.title||'',asset.notes||'',asset.prompt||''].join(' ')
-    var best=null,bestScore=0
-    pool.forEach(function(item){
-      var score=matchScore(needle,[item.name||'',item.tags||''].join(' '))
-      if(score>bestScore){best=item;bestScore=score}
+    var code=asset.code||assetCodeFromTitle(asset.title)
+    if(!code)return null
+    var wanted=['badge','map'].indexOf(asset.kind)>=0?'image':asset.kind
+    var list=(d.userMediaAssets||[]).filter(function(x){return x.kind===wanted})
+    var exact=list.filter(function(m){
+      return (String(m.name||'')+' '+String(m.tags||'')).toUpperCase().replace(/–/g,'-').match(new RegExp('(?:^|[^A-Z0-9])'+code+'(?:[^A-Z0-9]|$)'))
     })
-    if(best && bestScore>0)return best
-    return null
+    return exact.length===1?exact[0]:null
   }
   function renderProjectMediaLibrary(d){
     var list=d.userMediaAssets||[]
@@ -911,6 +973,42 @@
     }).join('')
     return '<div class="game-note"><b>🎞️ Médias produits :</b> '+done.length+' fichier(s) attaché(s) au jeu.</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin:10px 0 14px">'+cards+'</div>'
   }
+  function mediaAssetBoard(d){
+    var assets=parseProductionAssets(d.productionAssetsJson),lib=d.userMediaAssets||[]
+    if(!assets.length)return '<div class="game-note">Importe ton plan visuel ou crée le registre pour afficher les vrais médias.</div>'
+    var done=assets.filter(function(a){return a.status==='produit'||a.status==='local-assigné'}).length
+    var rows=assets.map(function(a){
+      var kind=['badge','map'].indexOf(a.kind)>=0?'image':a.kind
+      var choices=lib.filter(function(m){return m.kind===kind})
+      var sel='<option value="">— Choisir un média existant —</option>'+choices.map(function(m){return '<option value="'+esc(m.id)+'"'+(m.id===a.localMediaId?' selected':'')+'>'+esc(m.name)+' · '+esc(m.sizeLabel||'')+'</option>'}).join('')
+      var key=String(a.id||'').replace(/[^a-zA-Z0-9_-]/g,'')
+      var badge=a.status==='local-assigné'?'✓ Présent localement':a.status==='produit'?'✓ URL fournie':'⏳ À associer'
+      return '<div class="asset-assign" style="border:1px solid var(--line);background:rgba(6,10,24,.45);border-radius:14px;padding:13px;margin:9px 0">'+
+        '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>'+esc(a.title||a.code||'Asset')+'</b><span class="pill">'+esc(a.priority||'')+' · '+esc(a.kind)+' · '+badge+'</span></div>'+
+        '<div class="tiny" style="margin:5px 0 9px">'+esc(String(a.notes||'').slice(0,180))+'</div>'+
+        '<div class="tools-line"><select id="asset-select-'+key+'" style="width:min(100%,320px);background:#0b1430;border:1px solid var(--line);color:#fff;padding:10px;border-radius:10px">'+sel+'</select>'+
+        '<button class="btn" onclick="attachMediaToAsset(\''+esc(a.id)+'\',document.getElementById(\'asset-select-'+key+'\').value)">✓ Associer ce fichier</button>'+
+        '<button class="btn primary" onclick="document.getElementById(\'asset-upload-'+key+'\').click()">📥 Choisir sur mon ordinateur</button>'+
+        '<input id="asset-upload-'+key+'" type="file" accept="'+(kind==='image'?'image/*':kind==='video'?'video/*':'audio/*')+'" style="display:none" onchange="attachDirectAsset(this.files,\''+esc(a.id)+'\');this.value=\'\'">'+
+        '</div></div>'
+    }).join('')
+    return '<div class="game-note"><b>📋 Tableau de production :</b> '+done+' / '+assets.length+' médias liés. Aucun modèle IA n’est appelé par ces actions. Les fichiers sur ton ordinateur restent disponibles uniquement sur ce navigateur jusqu’à l’export ZIP.</div>'+rows
+  }
+  async function autoAssignOwnMedia(){
+    if(!currentProject)return
+    var d=currentProject.data||{},assets=parseProductionAssets(d.productionAssetsJson),count=0
+    for(var a of assets){
+      if(a.status==='produit'||a.status==='local-assigné')continue
+      var m=findUserProvidedAsset(a,d)
+      if(!m)continue
+      if(m.storage==='local-browser'&&!(await getLocalMedia(currentProject.id+':'+m.id)))continue
+      a.localMediaId=m.id;a.userMediaId=m.id;a.status='local-assigné';a.source='Fichier personnel ('+m.name+')';a.url='';count++
+    }
+    d.productionAssetsJson=JSON.stringify(assets,null,2)
+    d.mediaProductionLog='Correspondances exactes des codes d’assets : '+count+'. AUCUNE API payante appelée. Les autres restent en attente.'
+    try{await persistMediaProject();renderGame();alert(count+' fichier(s) associé(s) par code exact. Aucun fichier non correspondant n’a été choisi. 0 $ de génération.')}catch(e){alert('Échec de sauvegarde : '+e.message)}
+  }
+
   function mediaProgress(msg){
     var el=document.getElementById('game-media-production-progress')
     if(el){el.textContent=msg;el.scrollTop=el.scrollHeight}
@@ -961,313 +1059,32 @@
     return await pollGameMedia('/api/generate-video/status?id='+encodeURIComponent(start.id),'video',65,5000)
   }
   async function produceAllGameMedia(){
-    if(!currentProject)return
-    var d=currentProject.data||{}
-    var assets=parseProductionAssets(d.productionAssetsJson)
-    if(!assets.length){
-      assets=buildDefaultProductionAssets(d)
-      d.productionAssetsJson=JSON.stringify(assets,null,2)
-      markDirty()
-    }
-    var imageId=(document.getElementById('game-media-image-tool')||{}).value||d.mediaImageToolId||''
-    var audioId=(document.getElementById('game-media-audio-tool')||{}).value||d.mediaAudioToolId||''
-    var videoId=(document.getElementById('game-media-video-tool')||{}).value||d.mediaVideoToolId||''
-    var imageTool=tools.find(function(t){return t.id===imageId})
-    var audioTool=tools.find(function(t){return t.id===audioId})
-    var videoTool=tools.find(function(t){return t.id===videoId})
-    var useFreeAudio=d.mediaUseFreeAudio!==false
-    var useFreeVideo=d.mediaUseFreeVideo!==false
-    var paidFallback=d.mediaPaidFallback===true
-    var allowPaidImages=d.mediaAllowPaidImages===true
-    var useUserAssets=d.mediaUseUserAssets!==false
-    var videoPaidLimit=Math.max(0,parseInt(d.mediaPaidVideoLimit||0,10)||0)
-    var askVideoApproval=d.mediaAskVideoApproval!==false
-    var userDone=0
-    var videoPaidUsed=0
-    var videoPaidDecisionTaken=!askVideoApproval
-    var videoPaidApprovedSession=!askVideoApproval
-
-    d.mediaImageToolId=imageId
-    d.mediaAudioToolId=audioId
-    d.mediaVideoToolId=videoId
-    d.mediaUseFreeAudio=useFreeAudio
-    d.mediaUseFreeVideo=useFreeVideo
-    d.mediaPaidFallback=paidFallback
-    d.mediaAllowPaidImages=allowPaidImages
-    d.mediaUseUserAssets=useUserAssets
-    d.mediaPaidVideoLimit=videoPaidLimit
-    d.mediaAskVideoApproval=askVideoApproval
-
-    var queue=assets.filter(function(a){return ['image','badge','map','audio','video'].indexOf(a.kind)>=0&&a.status!=='produit'})
-    if(!queue.length){alert('Tous les médias du registre sont déjà produits.');return}
-
-    var needImage=queue.some(function(a){return ['image','badge','map'].indexOf(a.kind)>=0})
-    if(needImage&&allowPaidImages&&!imageTool){alert('Aucun moteur image n’est sélectionné/détecté.');return}
-
-    var summary=queue.reduce(function(o,a){o[a.kind]=(o[a.kind]||0)+1;return o},{})
-    var strategy=[]
-    if(useUserAssets)strategy.push('🎒 Tes médias importés : utilisés d’abord si NyXia trouve un bon match')
-    if(useFreeAudio)strategy.push('🎵 Sons : Freesound GRATUIT d’abord')
-    if(useFreeVideo)strategy.push('🎬 Vidéos : Pexels GRATUIT d’abord')
-    if(allowPaidImages)strategy.push('🎨 Images payantes autorisées')
-    else strategy.push('🛑 Images payantes désactivées par sécurité')
-    if(paidFallback)strategy.push('💰 Secours IA audio/vidéo autorisé')
-    else strategy.push('🛑 Aucun média payant de remplacement ne sera lancé pour audio/vidéo')
-    strategy.push('🎬 Limite vidéos payantes : '+videoPaidLimit)
-    strategy.push(askVideoApproval?'✋ Demande de confirmation avant vidéos payantes':'⚡ Vidéos payantes sans demande supplémentaire (dans la limite fixée)')
-
-    if(!confirm(
-      'NyXia va produire '+queue.length+' média(s) sans quitter cette page.\n\n'+
-      strategy.join('\n')+'\n\n'+
-      Object.keys(summary).map(function(k){return k+' : '+summary[k]}).join('\n')+
-      '\n\nContinuer ?'
-    ))return
-
-    var btn=document.getElementById('produce-all-media-btn')
-    if(btn){btn.disabled=true;btn.textContent='⏳ NyXia produit les médias…'}
-    var log=[],done=0,errors=0,freeDone=0,paidDone=0,freeMiss=0
-    function note(s){log.push(s);mediaProgress(log.join('\n'))}
-    note('Production média NyXia démarrée — '+queue.length+' élément(s).')
-    if(useUserAssets)note('🎒 NyXia va d’abord essayer ta bibliothèque de médias importés.')
-    if(useFreeAudio)note('🆓 Freesound sera consulté avant toute génération audio payante.')
-    if(useFreeVideo)note('🆓 Pexels sera consulté avant toute génération vidéo payante.')
-    if(!allowPaidImages)note('🛑 Images payantes désactivées : aucune image GPT ne sera lancée sans ton accord.')
-    note('🎬 Limite vidéos payantes pour ce projet : '+videoPaidLimit+'.')
-    note(askVideoApproval?'✋ NyXia demandera une confirmation avant de lancer les vidéos payantes.':'⚡ NyXia peut lancer les vidéos payantes sans redemander, dans la limite fixée.')
-    if(paidFallback && videoTool)note('💸 Vidéo payante de secours : '+(videoTool.name||videoTool.model)+'.')
-
-    for(var i=0;i<queue.length;i++){
-      var a=queue[i]
-      try{
-        note('['+(i+1)+'/'+queue.length+'] '+a.kind+' · '+(a.title||'asset')+'…')
-        a.status='production'
-        d.productionAssetsJson=JSON.stringify(assets,null,2)
-        var result=null,url=''
-
-        if(useUserAssets){
-          var own=findUserProvidedAsset(a,d)
-          if(own){
-            a.url=own.url
-            a.status='produit'
-            a.generatedAt=new Date().toISOString()
-            a.source='Bibliothèque utilisateur'
-            a.credit=own.name||''
-            a.license=own.license||'Asset personnel / acheté'
-            a.free=true
-            a.userProvided=true
-            a.userMediaId=own.id
-            done++;userDone++
-            note('   🎒 Média trouvé dans ta bibliothèque : '+(own.name||'asset personnel'))
-            d.productionAssetsJson=JSON.stringify(assets,null,2)
-            d.mediaProductionLog=log.join('\n')
-            markDirty()
-            await saveCurrent()
-            continue
-          }else{
-            note('   🔎 Aucun média perso correspondant trouvé, on passe à la suite…')
-          }
-        }
-
-        if(a.kind==='audio'&&useFreeAudio){
-          try{
-            note('   🔎 Recherche gratuite Freesound…')
-            result=await findFreeAudioAsset(a)
-          }catch(bankErr){
-            note('   ⚠ Freesound indisponible : '+bankErr.message)
-          }
-          if(result){
-            Object.assign(a,result)
-            url=result.url
-            freeDone++
-            note('   🆓 Son trouvé sur Freesound · 0 $ de génération.')
-          }else{
-            freeMiss++
-            note('   Aucun son gratuit trouvé pour cet asset.')
-          }
-        }
-
-        if(a.kind==='video'&&useFreeVideo){
-          try{
-            note('   🔎 Recherche vidéo gratuite Pexels…')
-            result=await findFreeVideoAsset(a)
-          }catch(bankErr2){
-            note('   ⚠ Pexels indisponible : '+bankErr2.message)
-          }
-          if(result){
-            Object.assign(a,result)
-            url=result.url
-            freeDone++
-            note('   🆓 Vidéo trouvée sur Pexels · 0 $ de génération.')
-          }else{
-            freeMiss++
-            note('   Aucune vidéo gratuite trouvée pour cet asset.')
-          }
-        }
-
-        if(!url){
-          if(a.kind==='audio'){
-            if(!paidFallback){
-              a.status='gratuit-introuvable'
-              note('   ⏸ Laissé en attente : aucune dépense automatique.')
-            }else{
-              if(!audioTool)throw new Error('Aucun moteur audio payant sélectionné pour le secours.')
-              note('   💰 Passage à '+(audioTool.name||audioTool.model)+'…')
-              url=await generateGameAudioAsset(a,audioTool,d)
-              a.toolId=audioTool.id;a.source=audioTool.name||audioTool.model;a.free=false;paidDone++
-            }
-          }else if(a.kind==='video'){
-            if(!paidFallback){
-              a.status='gratuit-introuvable'
-              note('   ⏸ Laissé en attente : aucune dépense automatique.')
-            }else if(videoPaidLimit<=0){
-              a.status='attente-autorisation'
-              note('   ⏸ Vidéo payante bloquée : la limite de vidéos payantes est à 0 pour ce projet.')
-            }else{
-              if(!videoTool)throw new Error('Aucun moteur vidéo payant sélectionné pour le secours.')
-              if(askVideoApproval && !videoPaidDecisionTaken){
-                var remainingCap=Math.max(0,videoPaidLimit-videoPaidUsed)
-                var remainingVideos=queue.slice(i).filter(function(x){return x.kind==='video' && x.status!=='produit'}).length
-                var proposed=Math.min(remainingCap,remainingVideos||1)
-                var approxCad=(proposed*1.02).toFixed(2)
-                videoPaidApprovedSession=confirm(
-                  'NyXia n’a pas trouvé de vidéo gratuite pour « '+(a.title||'cette vidéo')+' ».'+
-                  '\n\nAutoriser jusqu’à '+proposed+' vidéo(s) payante(s) pour ce projet ?'+
-                  '\nModèle : '+(videoTool.name||videoTool.model)+
-                  '\nBudget approximatif maximal : ~'+approxCad+' $ CAD (estimation économique).'+
-                  '\n\nTu gardes le contrôle : refuser = aucune vidéo payante ne sera lancée.'
-                )
-                videoPaidDecisionTaken=true
-                if(videoPaidApprovedSession)note('   ✅ Vidéos payantes autorisées pour cette production (max '+videoPaidLimit+').')
-                else note('   ⏸ Vidéos payantes refusées pour cette production.')
-              }
-              if(!videoPaidApprovedSession){
-                a.status='gratuit-introuvable'
-                note('   ⏸ Vidéo laissée en attente : gratuit introuvable et vidéo payante non autorisée.')
-              }else if(videoPaidUsed>=videoPaidLimit){
-                a.status='limite-payante-atteinte'
-                note('   ⏸ Limite de vidéos payantes atteinte ('+videoPaidLimit+').')
-              }else{
-                note('   💰 Passage au modèle économique '+(videoTool.name||videoTool.model)+'…')
-                url=await generateGameVideoAsset(a,videoTool,d)
-                a.toolId=videoTool.id;a.source=videoTool.name||videoTool.model;a.free=false;paidDone++;videoPaidUsed++
-                note('   💸 Vidéo payante générée ('+videoPaidUsed+'/'+videoPaidLimit+').')
-              }
-            }
-          }else{
-            if(!allowPaidImages){
-              a.status='attente-autorisation'
-              note('   ⏸ Image laissée en attente : coche « Autoriser les images payantes » si tu veux lancer GPT Image 2.')
-            }else{
-              url=await generateGameImageAsset(a,imageTool,d)
-              a.toolId=imageTool.id;a.source=imageTool.name||imageTool.model;a.free=false;paidDone++
-            }
-          }
-        }
-
-        if(url){
-          a.url=url
-          a.status='produit'
-          a.generatedAt=new Date().toISOString()
-          delete a.error
-          done++
-          note('✅ '+(a.title||a.kind)+(a.free?' · gratuit':''))
-        }
-      }catch(e){
-        a.status='erreur';a.error=e.message||String(e);errors++
-        note('⚠ '+(a.title||a.kind)+' — '+a.error)
-      }
-      d.productionAssetsJson=JSON.stringify(assets,null,2)
-      d.mediaProductionLog=log.join('\n')
-      markDirty()
-      await saveCurrent()
-    }
-
-    note('')
-    note('RÉSUMÉ : '+done+' produits · '+userDone+' depuis ta bibliothèque · '+freeDone+' gratuits · '+paidDone+' IA payants · '+freeMiss+' recherches gratuites sans résultat · '+errors+' erreur(s) · '+videoPaidUsed+' vidéo(s) payante(s) utilisée(s).')
-    d.mediaProductionCompletedAt=new Date().toISOString()
-    d.productionAssetsJson=JSON.stringify(assets,null,2)
-    d.mediaProductionLog=log.join('\n')
-    markDirty();await saveCurrent()
-    if(btn){btn.disabled=false;btn.textContent='✨ PRODUIRE TOUS LES MÉDIAS DU JEU'}
-    renderGame()
-    toast('Médias : '+done+' · bibliothèque : '+userDone+' · gratuits : '+freeDone+' · payants : '+paidDone)
+    // Hard stop: jamais de lot de 125 appels payants depuis cette interface.
+    await autoAssignOwnMedia()
   }
-
   function gameMedia(d){
-    var freeAudio=d.mediaUseFreeAudio!==false,freeVideo=d.mediaUseFreeVideo!==false,paidFallback=d.mediaPaidFallback===true,allowPaidImages=d.mediaAllowPaidImages===true,videoPaidLimit=Math.max(0,parseInt(d.mediaPaidVideoLimit||0,10)||0),askVideoApproval=d.mediaAskVideoApproval!==false,useUserAssets=d.mediaUseUserAssets!==false
-    return '<h4>🎬 Production média du jeu</h4>'+
-      '<div class="game-note"><b>Mode économie NyXia :</b> les banques gratuites sont utilisées avant les générateurs payants. Les studios séparés restent seulement pour les retouches manuelles.</div>'+
-      '<div class="panel" style="padding:16px;margin:12px 0 16px;border-color:rgba(123,92,255,.34)">'+
-        '<h4 style="margin:0 0 8px">🎒 Tes médias déjà créés</h4>'+
-        '<div class="tiny" style="margin-bottom:12px">Tu peux importer <b>tes propres images, vidéos et sons</b> pour ce projet : créations SeaArt, vidéos parlées, audios achetés (ex. Envato) ou tout autre matériel déjà prêt. NyXia essaiera de les utiliser <b>avant</b> les banques gratuites et avant l’IA payante.</div>'+
-        '<div class="tools-line" style="margin-bottom:10px"><label style="display:flex;gap:8px;align-items:center;padding:10px;border:1px solid rgba(123,92,255,.24);border-radius:12px"><input type="checkbox" '+(useUserAssets?'checked':'')+' onchange="setData(\'mediaUseUserAssets\',this.checked)"><span><b>Utiliser mes médias d’abord</b></span></label><button class="btn primary" onclick="document.getElementById(\'project-media-upload\').click()">📥 Ajouter mes médias</button><button class="btn" onclick="clearProjectMediaAssets()">🗑 Vider la bibliothèque du projet</button></div>'+
-        '<input id="project-media-upload" type="file" multiple accept="image/*,video/*,audio/*" style="display:none" onchange="importProjectMediaFiles(this.files); this.value=\'\'">'+
-        '<div class="game-note" style="margin:10px 0"><b>Conseil :</b> donne des noms de fichiers parlants ou ajoute des <b>tags</b> comme “orc”, “taverne”, “forêt”, “combat”, “âme sœur”, “horreur”, etc. pour aider NyXia à faire le bon match.</div>'+
-        renderProjectMediaLibrary(d)+
-      '</div>'+
-      '<div class="panel" style="padding:16px;margin:12px 0 16px;border-color:rgba(53,214,154,.28)">'+
-        '<h4 style="margin:0 0 8px">🆓 Gratuit d’abord — puis IA seulement si nécessaire</h4>'+
-        '<div class="tiny" style="margin-bottom:12px">NyXia peut chercher les sons dans <b>Freesound</b> et les vidéos dans <b>Pexels</b> directement depuis ce jeu. Les crédits/licences sont conservés dans le registre.</div>'+
-        '<div class="row three">'+
-          '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(53,214,154,.18);border-radius:12px"><input type="checkbox" '+(freeAudio?'checked':'')+' onchange="setData(\'mediaUseFreeAudio\',this.checked)"><span><b>🎵 Freesound d’abord</b><div class="tiny">Sons / bruitages / ambiances gratuits</div></span></label>'+
-          '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(53,214,154,.18);border-radius:12px"><input type="checkbox" '+(freeVideo?'checked':'')+' onchange="setData(\'mediaUseFreeVideo\',this.checked)"><span><b>🎬 Pexels vidéo d’abord</b><div class="tiny">Banque vidéo gratuite avant toute génération</div></span></label>'+
-          '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(232,184,103,.18);border-radius:12px"><input type="checkbox" '+(allowPaidImages?'checked':'')+' onchange="setData(\'mediaAllowPaidImages\',this.checked)"><span><b>🎨 Autoriser les images payantes</b><div class="tiny">Par défaut : NON. À cocher seulement si tu veux lancer GPT Image 2</div></span></label>'+
-        '</div>'+
-        '<div class="row one" style="margin-top:10px">'+
-          '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(232,184,103,.18);border-radius:12px"><input type="checkbox" '+(paidFallback?'checked':'')+' onchange="setData(\'mediaPaidFallback\',this.checked)"><span><b>💰 Autoriser l’IA payante en secours pour audio/vidéo</b><div class="tiny">Par défaut : NON. Si décoché, NyXia s’arrête aux banques gratuites et laisse le reste en attente.</div></span></label>'+
-        '</div>'+
-        '<div class="row two" style="margin-top:10px">'+
-          '<div class="field"><label>🎬 Maximum de vidéos payantes pour ce projet</label><input type="number" min="0" step="1" value="'+esc(videoPaidLimit)+'" onchange="setData(\'mediaPaidVideoLimit\',Math.max(0,parseInt(this.value||\'0\',10)||0))"><div class="tiny">0 = aucune vidéo payante automatique. Exemple : 3 si tu veux au maximum 3 vidéos payantes.</div></div>'+
-          '<label style="display:flex;gap:9px;align-items:flex-start;padding:10px;border:1px solid rgba(232,184,103,.18);border-radius:12px"><input type="checkbox" '+(askVideoApproval?'checked':'')+' onchange="setData(\'mediaAskVideoApproval\',this.checked)"><span><b>✋ Me demander avant les vidéos payantes</b><div class="tiny">Si coché, NyXia demandera ton accord avant de lancer le lot payant du projet.</div></span></label>'+
-        '</div>'+
-      '</div>'+
-      '<div class="panel" style="padding:16px;margin:12px 0 16px;border-color:rgba(232,184,103,.32)">'+
-        '<h4 style="margin:0 0 8px">✨ Produire réellement les médias</h4>'+
-        '<div class="tiny" style="margin-bottom:12px">Pour les images, <b>GPT Image 2</b> est prioritaire mais <b>aucune image payante ne sera lancée tant que tu n’as pas coché l’autorisation</b>. Pour la vidéo payante, NyXia met <b>Luma Ray Flash 2 — Économique</b> en premier, avec une <b>limite de quantité par projet</b> et, si tu le veux, une <b>demande de confirmation avant lancement</b>. Les banques gratuites restent essayées avant.</div>'+
-        '<div class="row three">'+
-          mediaToolSelect('image',d.mediaImageToolId,'🎨 Image — GPT Image 2 en priorité')+
-          mediaToolSelect('audio',d.mediaAudioToolId,'🎵 Audio IA — seulement en secours')+
-          mediaToolSelect('video',d.mediaVideoToolId,'🎬 Vidéo IA — moins chère en priorité')+
-        '</div>'+
-        '<div class="game-note" style="margin-top:10px"><b>💸 Vidéo économique :</b> Ray Flash 2 est placé en premier lorsqu’il est disponible. Tu peux toujours choisir un autre modèle dans la liste.</div>'+
-        '<div class="tools-line" style="margin-top:12px"><button id="produce-all-media-btn" class="btn gold" style="font-size:15px;padding:14px 20px" onclick="produceAllGameMedia()">✨ PRODUIRE TOUS LES MÉDIAS DU JEU</button></div>'+
-        '<div id="game-media-production-progress" class="result" style="margin-top:12px;max-height:240px;overflow:auto">'+esc(d.mediaProductionLog||'Prêt. NyXia utilisera les banques gratuites cochées avant les générateurs payants.')+'</div>'+
-      '</div>'+
-      '<div class="panel" style="padding:16px;margin:12px 0 16px"><h4 style="margin:0 0 8px">🧠 Préparer / compléter les plans de production</h4>'+
-        '<div class="tiny" style="margin-bottom:10px">Cette étape prépare les briefs et documents. Elle utilise le modèle IA sélectionné dans la Table de travail. <b>Ce n’est pas la génération des fichiers médias.</b></div>'+
-        '<div class="row two">'+
-          '<div>'+prodTick('prodAutoPlayerDocs','🖨️ Matériel joueurs',d,'Brief joueurs, fiches, secrets, aides, documents individuels ou communs')+'</div>'+
-          '<div>'+prodTick('prodAutoHostDocs','🎲 Dossier animateur / MJ',d,'Vérité complète, conducteur, déclencheurs, solutions et checklist')+'</div>'+
-        '</div>'+
-        '<div class="row three">'+
-          '<div>'+prodTick('prodAutoImages','🎨 Images & portraits',d,'Couverture, portraits, décors, objets, indices, illustrations')+'</div>'+
-          '<div>'+prodTick('prodAutoAudio','🎵 Audio',d,'Voix, musiques, ambiances, bruitages, messages')+'</div>'+
-          '<div>'+prodTick('prodAutoVideo','🎬 Vidéo',d,'Intro, clips, révélations, transitions, messages')+'</div>'+
-        '</div>'+
-        '<div class="row three">'+
-          '<div>'+prodTick('prodAutoMaps','🗺️ Cartes & battlemaps',d,'Carte, lieux, donjons, versions imprimables')+'</div>'+
-          '<div>'+prodTick('prodAutoBadges','🏅 Badges',d,'Catalogue de badges et récompenses visibles côté joueur')+'</div>'+
-          '<div>'+prodTick('prodAutoTokens','🪙 Tokens / portraits de pions',d,'Visuels de personnages jouables, PNJ, ennemis et marqueurs')+'</div>'+
-        '</div>'+
-        '<div class="tools-line" style="margin-top:12px"><button class="btn primary" onclick="produceGameComplete()">🧠 Préparer les plans de production</button><button class="btn" onclick="rebuildProductionAssets()">📁 Générer / mettre à jour le registre des assets</button></div>'+
-      '</div>'+
-      gameArea('🎨 Images / portraits / tokens / cartes / objets — briefs de génération','imageBriefs',d.imageBriefs,10)+
-      '<div class="quick-actions"><button class="quick-btn" onclick="gameAI(\'images\')"><span class="emoji">🎨</span><span>Générer les briefs visuels</span></button></div>'+
-      gameArea('🎵 Musiques / ambiances / bruitages / voix','audioPlan',d.audioPlan,9)+
-      '<div class="quick-actions"><button class="quick-btn audio" onclick="gameAI(\'audio\')"><span class="emoji">🎵</span><span>Générer le plan audio</span></button></div>'+
-      gameArea('🎬 Clips / intro / révélations / transitions — storyboard','videoPlan',d.videoPlan,10)+
-      '<div class="quick-actions"><button class="quick-btn video" onclick="gameAI(\'videos\')"><span class="emoji">🎬</span><span>Générer le storyboard vidéo</span></button></div>'+
-      gameArea('🗺️ Cartes monde / battlemaps / lieux à produire','mapPlan',d.mapPlan,8)+
-      '<div class="quick-actions"><button class="quick-btn map" onclick="gameAI(\'maps\')"><span class="emoji">🗺️</span><span>Générer le plan cartographique</span></button></div>'+
-      summarizeProductionAssets(d)+
-      '<div class="game-note" style="margin-top:12px"><b>📁 Registre :</b> tu ne l’écris jamais à la main. Clique sur le bouton suivant pour le créer ou le mettre à jour à partir des plans ci-dessus.</div>'+
-      '<div class="tools-line" style="margin:10px 0 12px"><button class="btn gold" onclick="rebuildProductionAssets()">📁 Générer / mettre à jour le registre des assets</button></div>'+
-      gameArea('📁 Registre des assets du jeu (JSON auto-généré — ne rien écrire à la main)','productionAssetsJson',d.productionAssetsJson,10)+
-      producedAssetsHtml(d)+
-      '<details style="margin-top:14px"><summary class="btn" style="display:inline-block;cursor:pointer">🛠️ Retouche avancée — optionnelle</summary>'+
-        '<div class="game-note" style="margin-top:10px">Ces boutons sont uniquement pour refaire manuellement un média précis. <b>Ils ne font pas partie du parcours normal.</b></div>'+
-        '<div class="tools-line"><button class="btn" onclick="showView(\'visual\')">🎨 Studio visuel</button><button class="btn" onclick="showView(\'video\')">🎬 Studio vidéo</button><button class="btn" onclick="showView(\'maps\')">🗺️ Cartographie Azgaar</button></div>'+
-      '</details>'
+    var list=parseProductionAssets(d.productionAssetsJson),done=list.filter(function(a){return a.status==='local-assigné'||a.status==='produit'}).length
+    return '<h4>🎬 Production des médias — budget protégé</h4>'+
+      '<div class="game-note"><b>⛔ Dépense IA : 0 $ dans cet écran.</b> Le bouton qui pouvait déclencher 125 appels successifs est neutralisé. Le réglage « basse qualité » n’était pas transmis à l’API : aucune génération payante n’est proposée tant que son contrôle et son prix ne sont pas réellement vérifiés.</div>'+
+      '<div class="panel" style="margin:12px 0 16px;border-color:rgba(53,214,154,.30)"><h4>1 · Réparer le plan sans quota</h4><p class="muted">Importer ton plan ACE .md ou .txt, ignorer titres et consignes, garder uniquement les vrais assets codés. Les médias déjà associés sont conservés.</p>'+
+      '<div class="tools-line"><button class="btn primary" onclick="document.getElementById(\'visual-plan-import\').click()">📄 Importer mon plan visuel — 0 $</button><input id="visual-plan-import" type="file" accept=".md,.markdown,.txt,text/plain,text/markdown" style="display:none" onchange="importExistingVisualPlan(this.files);this.value=\'\'"><button class="btn gold" onclick="rebuildProductionAssets()">🛠 Réparer mon registre — 0 $</button></div>'+
+      '<div class="tiny" style="margin-top:9px">Un titre comme « Direction artistique » ne devient plus une image à générer. Un code comme KV-01 ou CH-01 correspond à un asset.</div></div>'+
+      '<div class="panel" style="margin:12px 0 16px;border-color:rgba(123,92,255,.35)"><h4>2 · Mes images, vidéos et sons déjà prêts</h4>'+
+      '<p class="muted">Fichiers SeaArt, vidéos de personnages, sons Envato : utilise-les avant de fabriquer du neuf. Fichiers conservés localement dans ce navigateur, pas encore envoyés au serveur client. Vérifie tes droits de redistribution.</p>'+
+      '<div class="tools-line"><button class="btn primary" onclick="document.getElementById(\'project-media-upload\').click()">📥 Importer mes fichiers</button><input id="project-media-upload" type="file" multiple accept="image/*,video/*,audio/*" style="display:none" onchange="importProjectMediaFiles(this.files);this.value=\'\'"><button class="btn gold" onclick="autoAssignOwnMedia()">✨ Associer automatiquement par code exact — 0 $</button></div>'+
+      '<div style="margin-top:12px">'+renderProjectMediaLibrary(d)+'</div></div>'+
+      '<div class="panel" style="margin:12px 0 16px;border-color:rgba(232,184,103,.25)"><h4>3 · Vérifier puis associer les médias manquants</h4>'+
+      '<div class="tiny" style="margin-bottom:12px">Tu peux attribuer une image, une vidéo ou un son précis à chaque asset sans toucher au JSON. Les associations restent dans le projet et seront mises dans le package exporté sur CET ordinateur.</div>'+
+      '<div class="game-note"><b>État :</b> '+done+' / '+list.length+' médias associés · '+(list.length-done)+' à compléter · coût de cette étape : 0 $.</div>'+
+      '<details open><summary class="btn" style="cursor:pointer;display:inline-block;margin-bottom:10px">📋 Ouvrir mon tableau de médias ('+list.length+')</summary>'+mediaAssetBoard(d)+'</details></div>'+
+      '<div class="panel"><h4>4 · Préparer le package</h4><p class="muted">L’export .nyxgame peut intégrer les vrais fichiers de cet ordinateur. Si des médias manquent, il sera clairement nommé BROUILLON. La finalisation acheteur est bloquée lorsque des médias locaux ne sont pas encore accessibles au portail en ligne.</p><button class="btn gold" onclick="setGameTab(\'package\')">📦 Aller au package et voir ce qui manque</button></div>'+
+      '<details style="margin-top:14px"><summary class="btn" style="cursor:pointer;display:inline-block">🔧 Plans / briefs existants — optionnel</summary><div style="margin-top:12px">'+
+      gameArea('🎨 Images / portraits / tokens / cartes / objets','imageBriefs',d.imageBriefs,10)+
+      gameArea('🎵 Audio','audioPlan',d.audioPlan,7)+gameArea('🎬 Vidéo','videoPlan',d.videoPlan,7)+gameArea('🗺️ Cartographie','mapPlan',d.mapPlan,7)+
+      '<button class="btn" onclick="rebuildProductionAssets()">Réparer le registre à partir des plans</button></div></details>'+
+      '<details style="margin-top:10px"><summary class="btn" style="cursor:pointer;display:inline-block">📋 Journal de production / JSON — lecture</summary><div style="margin-top:10px">'+
+      '<div id="game-media-production-progress" class="result" style="min-height:90px">'+esc(d.mediaProductionLog||'Aucun appel IA lancé. Mode réutilisation locale.')+'</div>'+summarizeProductionAssets(d)+
+      '<pre style="max-height:230px;overflow:auto;color:#abb5e6;font-size:10px">'+esc(d.productionAssetsJson||'[]')+'</pre></div></details>'
   }
   function gameLive(d){
     var code=d.liveSessionCode||''
@@ -1308,15 +1125,19 @@
     var map=d.cartography
     var guidedCount=0
     try{var gj=parseJsonLoose(d.guidedScenesJson||'');guidedCount=Array.isArray(gj)?gj.length:(Array.isArray(gj.scenes)?gj.scenes.length:0)}catch(e){}
-    return '<h4>📦 Finaliser & publier</h4><div class="game-note"><b>But :</b> transformer le travail de l’équipe en une soirée que l’acheteur peut animer sans connaître le Labo. Les réglages avancés restent disponibles, mais le client reçoit un conducteur guidé scène par scène.</div>'+ 
+    var mediaAssets=parseProductionAssets(d.productionAssetsJson),linked=mediaAssets.filter(function(x){return x.status==='local-assigné'||x.status==='produit'}),localOnly=mediaAssets.filter(function(x){return !!x.localMediaId}),unlinked=mediaAssets.length-linked.length
+    var clientReady=!!(mediaAssets.length&&!unlinked&&!localOnly.length&&String(d.coverUrl||'').trim()&&guidedCount)
+    return '<h4>📦 Package & vérification</h4><div class="game-note"><b>État réel :</b> '+linked.length+'/'+mediaAssets.length+' médias liés · '+unlinked+' manquants · '+localOnly.length+' uniquement sur cet ordinateur · '+guidedCount+' scène(s) guidée(s) · couverture '+(d.coverUrl?'indiquée':'absente')+'.</div>'+
+      '<div class="game-note"><b>Important :</b> exporter le .nyxgame permet de réunir tes véritables fichiers locaux. Cela ne les héberge PAS automatiquement sur le portail acheteur. Le bouton de finalisation est indisponible tant que tous les prérequis ne sont pas présents; le rendu client reste à tester sur le site réellement déployé.</div>'+ 
       gameArea('Notes de publication / fiche Boutique','packageNotes',d.packageNotes,6)+
       '<div class="row three"><div class="field"><label>Sous-titre client</label><input value="'+esc(d.packageSubtitle||'')+'" oninput="setData(\'packageSubtitle\',this.value)"></div><div class="field"><label>Version</label><input value="'+esc(d.productVersion||'1.0')+'" oninput="setData(\'productVersion\',this.value)"></div><div class="field"><label>Image couverture URL</label><input value="'+esc(d.coverUrl||'')+'" oninput="setData(\'coverUrl\',this.value)"></div></div>'+ 
       '<div class="game-status-grid"><div class="game-status '+(guidedCount?'ready':'')+'"><strong>'+(guidedCount?'✓ Conducteur guidé prêt':'Conducteur à finaliser')+'</strong>'+(guidedCount?guidedCount+' scène(s) préparée(s)':'NyXia transformera automatiquement le dossier en étapes simples pour l’animateur.')+'</div><div class="game-status '+(String(d.npcRuntimeJson||'').trim()?'ready':'')+'"><strong>'+(String(d.npcRuntimeJson||'').trim()?'✓ PNJ runtime prêts':'PNJ runtime à compléter')+'</strong>Les PNJ IA restent une capacité complète du jeu.</div><div class="game-status '+(map?'ready':'')+'"><strong>'+(map?'✓ Cartographie liée':'Cartographie optionnelle')+'</strong>Azgaar reste disponible sans réduction de capacité.</div></div>'+ 
-      '<div class="tools-line" style="margin-top:16px"><button class="btn gold" style="font-size:14px;padding:12px 18px" onclick="finalizeAndTestAsBuyer()">✨ Finaliser et tester comme acheteuse</button></div>'+ 
-      '<div class="tiny" style="margin-top:8px">Un clic : prépare/valide les scènes guidées, publie une copie client temporaire et ouvre la vraie bibliothèque NyXia Game. Aucune clé à manipuler pour ce test interne.</div>'+ 
+      '<div class="tools-line" style="margin-top:16px"><button class="btn primary" style="font-size:14px;padding:12px 18px" onclick="packageNyxiaGame()">📦 Exporter mes fichiers .nyxgame (brouillon si incomplet)</button></div>'+
+      '<div class="tools-line" style="margin-top:10px"><button class="btn gold" style="font-size:14px;padding:12px 18px" onclick="finalizeAndTestAsBuyer()" '+(clientReady?'':'disabled title="Médias, couverture et conducteur doivent être prêts et disponibles en ligne"')+'>✨ Finaliser et tester comme acheteuse</button></div>'+ 
+      '<div class="tiny" style="margin-top:8px">'+(clientReady?'Conditions de prépublication réunies dans le dossier : exécuter ensuite le test réel de bibliothèque et des scènes.':'Blocages à résoudre : médias manquants / fichiers seulement locaux / couverture absente / conducteur absent. Aucun test client promis avant cela.')+'</div>'+ 
       '<details style="margin-top:18px"><summary class="btn" style="display:inline-block;cursor:pointer">⚙️ Outils avancés de production</summary><div style="margin-top:12px">'+
       '<div class="game-file-list"><b>Package maître interne :</b><br>manifest.json · project.json · runtime/npc-ai-config.json · runtime/live-config.json · bible.md · story.md · characters.md · pnj-ia.md · rules.md · materials.md · media.md · live.md · control.md'+(map?'<br>🗺️ Carte Azgaar liée : oui':'<br>🗺️ Carte Azgaar liée : non')+'</div>'+ 
-      '<div class="tools-line" style="margin-top:12px"><button class="btn primary" onclick="packageNyxiaGame()">📦 Générer .nyxgame maître</button><button class="btn" onclick="exportGamePDF()">⬇ Dossier PDF</button><button class="btn gold" onclick="gameAI(\'store\')">🛍️ Préparer la fiche Boutique</button><button class="btn" onclick="regenerateGuidedScenes()">↺ Regénérer le conducteur guidé</button></div>'+ 
+      '<div class="tools-line" style="margin-top:12px"><button class="btn primary" onclick="packageNyxiaGame()">📦 Exporter le .nyxgame (vérifie les médias)</button><button class="btn" onclick="exportGamePDF()">⬇ Dossier PDF</button><button class="btn gold" onclick="gameAI(\'store\')">🛍️ Préparer la fiche Boutique</button><button class="btn" onclick="regenerateGuidedScenes()">↺ Regénérer le conducteur guidé</button></div>'+ 
       '</div></details>'
   }
 
@@ -1349,6 +1170,15 @@
 
   async function finalizeAndTestAsBuyer(){
     if(!currentProject)return
+    var clientAssets=parseProductionAssets((currentProject.data||{}).productionAssetsJson)
+    var pending=clientAssets.filter(function(a){return ['image','badge','map','audio','video'].indexOf(a.kind)>=0&&a.status!=='produit'})
+    var local=clientAssets.filter(function(a){return a.localMediaId})
+    var guide=(currentProject.data||{}).guidedScenesJson||'',sceneCount=0
+    try{var parsedGuide=parseJsonLoose(guide),sceneList=Array.isArray(parsedGuide)?parsedGuide:parsedGuide.scenes;sceneCount=Array.isArray(sceneList)?sceneList.length:0}catch(e){}
+    if(!clientAssets.length||pending.length||local.length||!String((currentProject.data||{}).coverUrl||'').trim()||!sceneCount){
+      alert('FINALISATION BLOQUÉE : '+pending.length+' média(s) restent sans fichier publié ; '+local.length+' média(s) sont seulement dans TON navigateur. Vérifie aussi la couverture, le registre et les scènes guidées.\n\nTu peux exporter un .nyxgame contenant tes fichiers locaux, mais le portail acheteur ne sait pas encore les héberger automatiquement. Aucun produit client « fini » ne sera annoncé tant que ce transfert et le rendu ne sont pas vérifiés.')
+      return
+    }
     var popup=window.open('about:blank','nyxia-game-client-test')
     if(popup){popup.document.write('<title>NyXia Game</title><body style="background:#060a18;color:white;font-family:sans-serif;padding:40px">Préparation de ta bibliothèque cliente…</body>')}
     try{
@@ -1364,6 +1194,11 @@
 
   async function publishGameClient(){
     if(!currentProject)return
+    var entries=parseProductionAssets((currentProject.data||{}).productionAssetsJson)
+    if(!entries.length||!String((currentProject.data||{}).coverUrl||'').trim()||!String((currentProject.data||{}).guidedScenesJson||'').trim()||entries.some(function(a){return ['image','badge','map','audio','video'].indexOf(a.kind)>=0&&(a.status!=='produit'||a.localMediaId)})){
+      alert('Publication bloquée : médias manquants / locaux, couverture ou conducteur absent. Un .nyxgame exporté ne transfère pas automatiquement les médias au portail client.')
+      return
+    }
     await saveCurrent()
     var d=currentProject.data||{}
     try{
@@ -1439,56 +1274,52 @@
     return d.text||''
   }
   function splitAssetLines(txt){
-    return String(txt||'').split(/\r?\n/).map(function(line){return line.replace(/^[\-\*\d\.\)\s]+/,'').trim()}).filter(Boolean)
+    return String(txt||'').split(/\r?\n/).map(function(line){return line.trim()}).filter(Boolean)
   }
-  function buildDefaultProductionAssets(d){
-    var out=[],id=1
-    function add(kind,title,source,scene,priority,notes){
-      out.push({id:'asset-'+(id++),kind:kind,title:title,status:'à produire',sourceField:source||'',scene:scene||'',priority:priority||'moyenne',notes:notes||''})
-    }
-    if(String(d.imageBriefs||'').trim()){
-      var lines=splitAssetLines(d.imageBriefs)
-      if(lines.length){
-        lines.slice(0,40).forEach(function(line){add('image',line,'imageBriefs','',/priorité\s*[:\-]?\s*haute/i.test(line)?'haute':'moyenne','Brief image')})
-      } else {
-        add('image','Couverture du jeu','imageBriefs','','haute','Couverture principale')
-      }
-    }
-    if(d.prodAutoTokens!==false){
-      add('image','Portraits des personnages joueurs','imageBriefs','','haute','PJ / rôles jouables')
-      add('image','Portraits des PNJ principaux','imageBriefs','','haute','PNJ IA')
-      add('image','Tokens / pions des personnages et ennemis','imageBriefs','','moyenne','Utilisation plateau / écran')
-    }
-    if(String(d.audioPlan||'').trim()){
-      var alines=splitAssetLines(d.audioPlan)
-      if(alines.length){alines.slice(0,30).forEach(function(line){add('audio',line,'audioPlan','','moyenne','Plan audio')})}
-      else add('audio','Ambiance principale du jeu','audioPlan','','moyenne','Boucle d’ambiance')
-    }
-    if(String(d.videoPlan||'').trim()){
-      var vlines=splitAssetLines(d.videoPlan)
-      if(vlines.length){vlines.slice(0,20).forEach(function(line){add('video',line,'videoPlan','','moyenne','Storyboard vidéo')})}
-      else add('video','Clip d’introduction','videoPlan','','moyenne','Ouverture de la partie')
-    }
-    if(String(d.mapPlan||'').trim()){
-      var mlines=splitAssetLines(d.mapPlan)
-      if(mlines.length){mlines.slice(0,20).forEach(function(line){add('map',line,'mapPlan','','moyenne','Plan cartographique')})}
-      else add('map','Carte principale du jeu','mapPlan','','haute','Carte maître')
-    }
-    if(d.prodAutoBadges!==false){
-      var badges=splitAssetLines(d.playerBadgeCatalog)
-      if(badges.length){badges.slice(0,30).forEach(function(line){add('badge',line,'playerBadgeCatalog','','moyenne','Badge joueur')})}
-      else add('badge','Jeu initial de badges','playerBadgeCatalog','','moyenne','Badges de progression')
-    }
-    if(String(d.playerMaterials||'').trim())add('document','Documents joueurs','playerMaterials','','haute','Briefings, fiches, aides')
-    if(String(d.hostMaterials||'').trim())add('document','Dossier animateur / MJ','hostMaterials','','haute','Conducteur complet')
+  function parseAssetBriefRows(raw,kind,field){
+    var out=[],seen={},lines=splitAssetLines(raw)
+    lines.forEach(function(line){
+      var cells=line.indexOf('|')>=0?line.replace(/^\|/,'').replace(/\|$/,'').split('|').map(function(x){return x.trim()}):[line]
+      var first=String(cells[0]||'').replace(/^[*\s\-\d.)]+/,'').trim()
+      var code=assetCodeFromTitle(first)
+      if(!code||seen[code])return
+      // A chapter such as "TOK-01 à TOK-10" is a group brief: keep it as ONE group, not ten paid requests.
+      var title=first.replace(/\*\*/g,'').replace(/`/g,'').trim()
+      if(title.length>190)title=title.slice(0,190)
+      var pr=String(cells[cells.length-1]||'').match(/\bP[0-3]\b/i)
+      var priority=pr?pr[0].toUpperCase():'P2'
+      var notes=cells.length>2?cells.slice(1,-1).join(' — ').slice(0,1100):''
+      var derived=kind
+      if(kind==='image'&&/^MAP-/.test(code))derived='map'
+      if(kind==='image'&&/^TOK-|^UI-/.test(code))derived='image'
+      seen[code]=true
+      out.push({id:'asset-'+code,code:code,kind:derived,title:title,status:'à produire',sourceField:field,scene:cells[2]||'',priority:priority,notes:notes})
+    })
     return out
   }
-  function rebuildProductionAssets(){
+  function buildDefaultProductionAssets(d){
+    var all=[];
+    [['image','imageBriefs'],['audio','audioPlan'],['video','videoPlan'],['map','mapPlan']].forEach(function(p){
+      all=all.concat(parseAssetBriefRows(d[p[1]],p[0],p[1]))
+    })
+    var seen={}
+    return all.filter(function(a){if(seen[a.code])return false;seen[a.code]=true;return true})
+  }
+  function rebuildProductionAssets(silent){
     if(!currentProject)return
-    var d=currentProject.data||{},assets=buildDefaultProductionAssets(d)
-    d.productionAssetsJson=JSON.stringify(assets,null,2)
-    d.productionLog=(String(d.productionLog||'').trim()?String(d.productionLog).trim()+'\n':'')+'['+(new Date()).toLocaleString('fr-CA')+'] Registre des assets reconstruit ('+assets.length+' éléments).'
-    markDirty();renderGame();toast('📁 Registre des assets généré / mis à jour ✓')
+    var d=currentProject.data||{},old=parseProductionAssets(d.productionAssetsJson),next=buildDefaultProductionAssets(d)
+    if(!next.length){alert('Aucun asset identifiable par un code (KV-01, CH-01, OBJ-02…). Le registre existant est conservé.');return}
+    var kept=0
+    next.forEach(function(a){
+      var m=old.find(function(x){return (x.code||assetCodeFromTitle(x.title))===a.code && x.kind===a.kind && (x.url||x.localMediaId)})
+      if(m){['status','url','localMediaId','userMediaId','source','credit','license','sourceUrl','generatedAt'].forEach(function(k){if(m[k]!==undefined)a[k]=m[k]});kept++}
+    })
+    var orphan=old.filter(function(x){return (x.url||x.localMediaId)&&!next.some(function(y){return y.code===(x.code||assetCodeFromTitle(x.title)) && y.kind===x.kind})})
+    if(!silent&&!confirm('Réparer le registre : '+next.length+' vrais assets, '+kept+' médias conservés et '+orphan.length+' anciens médias hors registre sauvegardés séparément ? Aucun appel IA.'))return
+    d.legacyProducedAssets=(d.legacyProducedAssets||[]).concat(orphan)
+    d.productionAssetsJson=JSON.stringify(next,null,2)
+    d.productionLog=(String(d.productionLog||'').trim()+'\nRegistre réparé : '+next.length+' lignes réellement identifiées ; '+kept+' médias conservés ; '+orphan.length+' anciens médias archivés.').trim()
+    markDirty();renderGame();toast('Registre réparé : '+next.length+' vrais assets · 0 $')
   }
   function resetProductionPlan(){
     if(!currentProject)return
@@ -1545,7 +1376,7 @@
       var assets=buildDefaultProductionAssets(d)
       d.productionAssetsJson=JSON.stringify(assets,null,2)
       stamp('Registre des assets prêt ('+assets.length+' éléments).')
-      stamp('Plans de production préparés. Tu peux maintenant cliquer sur « ✨ PRODUIRE TOUS LES MÉDIAS DU JEU ».')
+      stamp('Plans préparés. Va dans Médias pour importer et associer tes fichiers sans appel payant.')
       markDirty();await saveCurrent();renderGame();toast('Plans de production préparés ✓')
     }catch(e){
       stamp('Échec : '+e.message)
@@ -1572,27 +1403,44 @@
       zip.file('08-medias.md',mdSection('Images',d.imageBriefs)+'\n'+mdSection('Audio',d.audioPlan)+'\n'+mdSection('Vidéo',d.videoPlan)+'\n'+mdSection('Cartes',d.mapPlan))
       zip.file('08b-production-assets.json',String(d.productionAssetsJson||'[]'))
       zip.file('08c-production-log.md',mdSection('Journal de production',d.productionLog)+'\n'+mdSection('Journal médias réels',d.mediaProductionLog))
-      var produced=parseProductionAssets(d.productionAssetsJson).filter(function(a){return a.status==='produit'&&a.url})
-      if(produced.length){
-        var af=zip.folder('assets')
-        af.file('index.json',JSON.stringify(produced,null,2))
-        for(var ai=0;ai<produced.length;ai++){
-          var aa=produced[ai]
+      var mediaList=parseProductionAssets(d.productionAssetsJson),embeds=[],missing=[],af=zip.folder('assets')
+      for(var ai=0;ai<mediaList.length;ai++){
+        var aa=mediaList[ai],isMedia=['image','badge','map','audio','video'].indexOf(aa.kind)>=0
+        if(!isMedia)continue
+        var blob=null,filename=''
+        if(aa.localMediaId){
+          var user=(d.userMediaAssets||[]).find(function(m){return m.id===aa.localMediaId})
+          if(user){
+            if(user.storage==='local-browser')blob=await getLocalMedia(currentProject.id+':'+user.id)
+            else if(user.url){try{var ur=await fetch(user.url);if(ur.ok)blob=await ur.blob()}catch(e){}}
+            filename=user.name||''
+          }
+        }else if(aa.status==='produit'&&aa.url){
           try{
-            var ar=await fetch(aa.url)
-            if(ar.ok){
-              var ab=await ar.blob()
-              var ext=aa.kind==='audio'?'mp3':(aa.kind==='video'?'mp4':'png')
-              var ct=String(ab.type||'')
-              if(/jpeg/i.test(ct))ext='jpg';else if(/webp/i.test(ct))ext='webp';else if(/png/i.test(ct))ext='png';else if(/mpeg/i.test(ct)&&aa.kind==='audio')ext='mp3';else if(/wav/i.test(ct))ext='wav';else if(/mp4/i.test(ct))ext='mp4'
-              af.file(String(ai+1).padStart(3,'0')+'-'+safeName(aa.title||aa.kind)+'.'+ext,ab)
-            }
-          }catch(assetErr){console.warn('Asset non embarqué, URL conservée dans index.json',aa.url,assetErr)}
+            var remote=await fetch(aa.url)
+            if(remote.ok&&!(String(remote.headers.get('content-type')||'').includes('text/html')))blob=await remote.blob()
+          }catch(e){}
         }
+        if(!blob||!blob.size){missing.push(aa.title||aa.code||aa.id);continue}
+        var ext=(filename.split('.').pop()||'').toLowerCase()
+        if(!/^(png|jpe?g|webp|gif|svg|mp3|wav|ogg|m4a|aac|flac|mp4|webm|mov|m4v)$/.test(ext)){
+          ext=aa.kind==='video'?(/webm/.test(blob.type)?'webm':/quicktime/.test(blob.type)?'mov':'mp4'):aa.kind==='audio'?(/wav/.test(blob.type)?'wav':/ogg/.test(blob.type)?'ogg':/mp4|m4a/.test(blob.type)?'m4a':'mp3'):(/jpeg/.test(blob.type)?'jpg':/webp/.test(blob.type)?'webp':/svg/.test(blob.type)?'svg':'png')
+        }
+        var path='assets/'+String(ai+1).padStart(3,'0')+'-'+safeName(aa.code||aa.title||aa.kind)+'.'+ext
+        zip.file(path,await blob.arrayBuffer())
+        embeds.push(Object.assign({},aa,{path:path,embedded:true}))
       }
+      var draft=missing.length>0
+      if(draft&&!confirm('ATTENTION : '+missing.length+' média(s) sur '+mediaList.length+' manquent.\n\nLe fichier sera nommé BROUILLON et NE constitue PAS un produit client fini.\n\nExporter quand même les '+embeds.length+' vrais médias disponibles ?'))return
+      af.file('index.json',JSON.stringify(embeds,null,2))
+      zip.file('08b-production-assets.json',JSON.stringify(mediaList,null,2))
+      manifest.media={expected:mediaList.length,embedded:embeds.length,missing:missing.length,complete:!draft}
+      manifest.readyForSale=false // Un ZIP de production seul ne prouve pas la diffusion dans le portail acheteur.
+      zip.file('manifest.json',JSON.stringify(manifest,null,2))
+      zip.file('assets/verification.json',JSON.stringify({kind:draft?'BROUILLON':'FICHIERS_PRÉSENTS',embedded:embeds.map(function(a){return {title:a.title,path:a.path}}),missing:missing,clientRuntimeVerified:false,checkedAt:new Date().toISOString()},null,2))
       zip.file('09-live.md',mdSection('Plan Live',d.livePlan));zip.file('10-controle.md',mdSection('NyXia Contrôle',d.controlReport));zip.file('11-publication.md',mdSection('Publication',d.packageNotes))
       if(d.cartography&&d.cartography.files){var folder=zip.folder('cartographie');for(var k of ['map','json','svg','png']){var f=d.cartography.files[k];if(!f)continue;try{var r=await fetch('/api/atelier/cartography'+f.path,{headers:h()});if(r.ok)folder.file(f.name||('carte.'+k),await r.blob())}catch(e){console.warn('Carte '+k+' non jointe',e)}}}
-      var blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=safeName(currentProject.title)+'.nyxgame';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},2500);toast('Package NyXia Game créé ✓')
+      var blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(draft?'BROUILLON-':'PRODUCTION-')+safeName(currentProject.title)+'.nyxgame';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},2500);toast(draft?'BROUILLON exporté · médias manquants : '+missing.length:'Fichiers intégrés : '+embeds.length+' · test client requis')
     }catch(e){alert('Package impossible : '+e.message)}
   }
   function gamePdfLines(doc,title,text,y){if(!String(text||'').trim())return y;doc.setFont(undefined,'bold');doc.setFontSize(13);if(y>270){doc.addPage();y=20}doc.text(title,18,y);y+=7;doc.setFont(undefined,'normal');doc.setFontSize(10);var lines=doc.splitTextToSize(String(text),175);lines.forEach(function(line){if(y>282){doc.addPage();y=20}doc.text(line,18,y);y+=5});return y+5}
