@@ -1,94 +1,137 @@
 /*
- * NyXiaLabo — adaptateur de compatibilité Google TTS.
- * Ne remplace PAS labo-router.js : toutes les routes sont déléguées.
- * N'expose jamais le contenu des secrets.
+ * NyXiaLabo — raccordement TTS coté serveur, sans exposer les secrets.
+ * Ne remplace pas labo-router.js et protège toutes les routes diagnostiques.
  */
 import router from '../labo-router.js'
 
-const legacyName = 'GoogleText-to-Speech_'
-const JSON_NAMES = ['GOOGLE_TTS_SERVICE_ACCOUNT_JSON','GOOGLE_SERVICE_ACCOUNT_JSON']
-const HAS_SPLIT = env => Boolean((env.GOOGLE_TTS_CLIENT_EMAIL || env.GOOGLE_SERVICE_ACCOUNT_EMAIL) &&
-  (env.GOOGLE_TTS_PRIVATE_KEY || env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY))
-const hasAccessToken = env => Boolean(env.GOOGLE_TTS_ACCESS_TOKEN)
+const NAMES = [
+  'GOOGLE_TTS_SERVICE_ACCOUNT_JSON', 'GOOGLE_SERVICE_ACCOUNT_JSON',
+  'GOOGLE_TTS_CLIENT_EMAIL', 'GOOGLE_SERVICE_ACCOUNT_EMAIL',
+  'GOOGLE_TTS_PRIVATE_KEY', 'GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY',
+  'GOOGLE_TTS_ACCESS_TOKEN',
+  'GOOGLE_TTS_API_KEY', 'GOOGLE_CLOUD_TTS_API_KEY', 'GOOGLE_TEXT_TO_SPEECH_API_KEY',
+  'GoogleText-to-Speech_', 'GoogleText-to-Speech', 'GOOGLE_TEXT_TO_SPEECH'
+]
+const KEY_RE = /^AIza[A-Za-z0-9_-]{20,}$/
+const relevant = k => /google.*(?:tts|text.?to.?speech)|tts.*google/i.test(k)
+const present = v => typeof v === 'string' ? !!v.trim() : v != null
+const safeName = k => String(k).slice(0, 100)
+const response = (body, status=200) => new Response(JSON.stringify(body), {status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}})
+const asText = v => typeof v === 'string' ? v.trim() : v == null ? '' : String(v)
+const isAccount = v => !!(v && typeof v === 'object' && typeof v.client_email === 'string' && typeof v.private_key === 'string' && v.client_email && v.private_key.includes('PRIVATE KEY'))
 
 function classify(env) {
-  // Respecter d'abord les identifiants modernes existants.
-  for (const key of JSON_NAMES) {
-    const raw = env[key]
-    if (!raw) continue
+  // Priorité à une authentification OAuth configurée explicitement : on ne la remplace pas.
+  for (const name of ['GOOGLE_TTS_SERVICE_ACCOUNT_JSON','GOOGLE_SERVICE_ACCOUNT_JSON']) {
+    const value=env[name]
+    if (!present(value)) continue
     try {
-      const json = typeof raw === 'string' ? JSON.parse(raw) : raw
-      if (json?.client_email && json?.private_key) {
-        return {env, ready:true, code:'account', message:'Compte de service Google reconnu ; vérification de connexion requise.'}
-      }
+      const parsed=typeof value==='string'?JSON.parse(value):value
+      if (isAccount(parsed)) return {env,ready:true,kind:'oauth',code:'service-account',name,message:`Compte de service détecté dans ${name} ; test Google requis.`}
     } catch(_) {}
+    return {env,ready:false,kind:'none',code:'account-json-invalid',name,message:`${name} est présent mais n'est pas un JSON de compte de service utilisable (client_email et private_key).`}
   }
-  if (HAS_SPLIT(env)) return {env, ready:true, code:'account', message:'Champs du compte de service reconnus ; vérification requise.'}
-  if (hasAccessToken(env)) return {env, ready:true, code:'temporary', message:'Jeton temporaire repéré ; il peut expirer. Test requis.'}
+  const email=asText(env.GOOGLE_TTS_CLIENT_EMAIL||env.GOOGLE_SERVICE_ACCOUNT_EMAIL)
+  const privateKey=asText(env.GOOGLE_TTS_PRIVATE_KEY||env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY)
+  if (email && privateKey) return {env,ready:true,kind:'oauth',code:'service-fields',name:'GOOGLE_TTS_CLIENT_EMAIL + GOOGLE_TTS_PRIVATE_KEY',message:'Compte de service détecté en champs séparés ; test Google requis.'}
+  if (email || privateKey) return {env,ready:false,kind:'none',code:'service-fields-incomplete',name:'champs de compte de service',message:'Compte de service incomplet : il faut le courriel ET la clé privée dans les secrets du Worker nyxialabo.'}
+  if (present(env.GOOGLE_TTS_ACCESS_TOKEN)) return {env,ready:true,kind:'oauth',code:'access-token',name:'GOOGLE_TTS_ACCESS_TOKEN',message:'Jeton Google présent (temporaire) ; test requis.'}
 
-  const raw = env[legacyName]
-  if (raw == null || String(raw).trim() === '') {
-    return {env, ready:false, code:'missing', message:'Aucun compte de service Google reconnu dans les secrets de ce Worker.'}
+  // Chercher les noms explicitement pris en charge, puis une seule variante non ambiguë.
+  const keys=['GOOGLE_TTS_API_KEY','GOOGLE_CLOUD_TTS_API_KEY','GOOGLE_TEXT_TO_SPEECH_API_KEY','GoogleText-to-Speech_','GoogleText-to-Speech','GOOGLE_TEXT_TO_SPEECH']
+  const discovered=Object.keys(env).filter(relevant).filter(k=>present(env[k]))
+  for (const k of discovered) if (!keys.includes(k) && !NAMES.includes(k)) keys.push(k)
+  const matches=keys.filter(k=>present(env[k]))
+  if (!matches.length) return {env,ready:false,kind:'none',code:'secret-absent',name:'',message:'Aucun secret TTS reconnu dans le Worker nyxialabo. Le compte Google peut exister sans que ce Worker ait accès à sa clé.'}
+  if (matches.length>1) {
+    const valid=matches.filter(k=>KEY_RE.test(asText(env[k])) || /^ya29\./.test(asText(env[k])))
+    if (valid.length!==1) return {env,ready:false,kind:'none',code:'secrets-ambigus',name:'',message:`Plusieurs noms TTS sont présents (${matches.map(safeName).join(', ')}). Le code n'en choisit aucun au hasard.`}
+    matches.splice(0,matches.length,valid[0])
   }
-  const value=String(raw).trim()
-  if (value.includes('.apps.googleusercontent.com') && !value.startsWith('{')) {
-    return {env, ready:false, code:'oauth-client-id', message:'GoogleText-to-Speech_ contient un ID client OAuth : ce n’est pas un compte de service et il ne suffit pas pour le TTS.'}
-  }
-  if (/^AIza[A-Za-z0-9_-]+$/.test(value)) {
-    return {env, ready:false, code:'api-key', message:'GoogleText-to-Speech_ contient une clé API. Le routeur actuel attend un compte de service OAuth, pas cette clé.'}
-  }
-  if (/^ya29\./.test(value)) {
-    return {env:{...env,GOOGLE_TTS_ACCESS_TOKEN:value}, ready:true, code:'temporary', message:'Jeton temporaire reconnu dans GoogleText-to-Speech_ ; test requis et expiration possible.'}
-  }
+  const name=matches[0], value=asText(env[name])
+  if (KEY_RE.test(value)) return {env,ready:true,kind:'api-key',code:'api-key-detected',name,key:value,message:`Clé API Google détectée dans ${safeName(name)}. Le test appellera uniquement la liste des voix.`}
+  if (/^ya29\./.test(value)) return {env:{...env,GOOGLE_TTS_ACCESS_TOKEN:value},ready:true,kind:'oauth',code:'legacy-access-token',name,message:`Jeton temporaire reconnu dans ${safeName(name)} ; test requis.`}
+  let obj
+  try {obj=JSON.parse(value)} catch (_) {obj=null}
+  if (isAccount(obj)) return {env:{...env,GOOGLE_TTS_SERVICE_ACCOUNT_JSON:value},ready:true,kind:'oauth',code:'legacy-service-account',name,message:`Compte de service détecté dans ${safeName(name)} ; test requis.`}
+  if (value.includes('.apps.googleusercontent.com') || obj?.client_id || obj?.web?.client_id || obj?.installed?.client_id) return {env,ready:false,kind:'none',code:'oauth-client-id',name,message:`${safeName(name)} contient un ID client OAuth, insuffisant seul pour une requête serveur. La création du compte Google ne fournit pas automatiquement le jeton nécessaire.`}
+  return {env,ready:false,kind:'none',code:'secret-format-inconnu',name,message:`Un secret nommé ${safeName(name)} est présent, mais son format ne correspond ni à une clé API Google, ni à un compte de service, ni à un jeton d'accès.`}
+}
+
+function authenticatedGet(request,path) {
+  return new Request(new URL(path,request.url),{method:'GET',headers:request.headers})
+}
+async function authorize(request,env,ctx) {
+  const res=await router.fetch(authenticatedGet(request,'/api/atelier/health'),env,ctx)
+  return res.ok
+}
+function googleIssue(status) {
+  if(status===400) return 'Google refuse la requête (400). Vérifier les paramètres de la voix.'
+  if(status===401) return 'Google refuse les identifiants (401).'
+  if(status===403) return 'Google refuse l’accès (403) : restriction de clé, API non activée, droits ou facturation à examiner dans le projet Google.'
+  if(status===429) return 'Google indique une limite de requêtes (429).'
+  return `Réponse de Google : HTTP ${status}.`
+}
+async function voicesWithKey(key, languageCode='fr-FR') {
+  const url=new URL('https://texttospeech.googleapis.com/v1/voices')
+  url.searchParams.set('languageCode',languageCode.slice(0,20))
+  let google
+  try {google=await fetch(url,{headers:{'x-goog-api-key':key}})}
+  catch (_) {return response({error:'Impossible de joindre Google TTS ; vérifier le réseau du Worker.'},503)}
+  if (!google.ok) return response({error:googleIssue(google.status)},google.status)
+  const body=await google.json().catch(()=>({}))
+  const voices=(Array.isArray(body.voices)?body.voices:[])
+    .filter(v=>Array.isArray(v.languageCodes)&&v.languageCodes.some(c=>c.toLowerCase().startsWith('fr')))
+    .map(v=>({name:v.name,languageCodes:v.languageCodes,ssmlGender:v.ssmlGender,naturalSampleRateHertz:v.naturalSampleRateHertz}))
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name),'fr'))
+  return response({voices})
+}
+async function synthesizeWithKey(key,body) {
+  const text=String(body?.text||'')
+  if(!text.trim()) return response({error:'Texte requis'},400)
+  const bytes=new TextEncoder().encode(text).byteLength
+  if(bytes>4500) return response({error:`Texte trop long (${bytes} octets ; limite 4500).`},413)
+  const languageCode=asText(body.languageCode||'fr-FR').slice(0,20)||'fr-FR'
+  const name=asText(body.voiceName).slice(0,120)
+  const speed=Math.max(.25,Math.min(4,Number(body.speakingRate)||1))
+  const pitch=Math.max(-20,Math.min(20,Number(body.pitch)||0))
+  let google
   try {
-    const parsed=JSON.parse(value)
-    if (parsed?.client_email && parsed?.private_key) {
-      return {env:{...env,GOOGLE_TTS_SERVICE_ACCOUNT_JSON:value}, ready:true, code:'legacy-account',message:'Compte de service dans GoogleText-to-Speech_ reconnu ; test de connexion requis.'}
-    }
-    if (parsed?.web?.client_id || parsed?.installed?.client_id || parsed?.client_id) {
-      return {env,ready:false,code:'oauth-client-json',message:'GoogleText-to-Speech_ contient des identifiants de client OAuth, pas un compte de service. Il faut un JSON avec client_email et private_key.'}
-    }
-    return {env,ready:false,code:'invalid-json',message:'Le JSON GoogleText-to-Speech_ ne contient pas client_email et private_key.'}
-  } catch(_) {
-    return {env,ready:false,code:'invalid-value',message:'Le secret GoogleText-to-Speech_ n’est pas un JSON de compte de service valide.'}
-  }
-}
-
-function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}})}
-
-function protectedRequest(request,path){
-  const url=new URL(path,request.url)
-  return new Request(url.toString(),{method:'GET',headers:request.headers})
-}
-
-function googleFailure(http){
-  if(http===401) return 'Google refuse l’authentification : identifiants invalides ou expirés.'
-  if(http===403) return 'Google refuse l’accès : vérifier que Text-to-Speech est activé et que le compte est autorisé.'
-  if(http===429) return 'Google signale une limite/quota de requêtes.'
-  if(http===503) return 'Connexion Google TTS indisponible ou identifiants mal formés : vérifier le compte de service.'
-  return 'Test Google TTS échoué (HTTP '+http+'). Vérifier les identifiants et la configuration du projet.'
+    google=await fetch('https://texttospeech.googleapis.com/v1/text:synthesize',{
+      method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json; charset=utf-8'},
+      body:JSON.stringify({input:{text},voice:name?{languageCode,name}:{languageCode},audioConfig:{audioEncoding:'MP3',speakingRate:speed,pitch}})
+    })
+  } catch(_) {return response({error:'Impossible de joindre Google TTS ; vérifier le réseau du Worker.'},503)}
+  if(!google.ok) return response({error:googleIssue(google.status)},google.status)
+  const result=await google.json().catch(()=>({}))
+  if (!result.audioContent) return response({error:'Réponse Google sans audio.'},502)
+  return response({audioContent:result.audioContent,mimeType:'audio/mpeg',voiceName:name||null,languageCode,speakingRate:speed,pitch})
 }
 
 export default {
-  async fetch(request,env,ctx){
-    const url=new URL(request.url)
+  async fetch(request,env,ctx) {
+    const path=new URL(request.url).pathname
+    if(!path.startsWith('/api/atelier/')) return router.fetch(request,env,ctx)
     const cfg=classify(env)
-    if(request.method==='GET' && url.pathname==='/api/atelier/health'){
+    if(request.method==='GET' && path==='/api/atelier/health') {
       const original=await router.fetch(request,cfg.env,ctx)
       if(!original.ok) return original
-      const body=await original.json().catch(()=>({ok:true}))
-      return json({...body,googleTts:cfg.ready,ttsCredentialType:cfg.code,ttsMessage:cfg.message,ttsVerified:false})
+      const data=await original.json().catch(()=>({}))
+      return response({...data,googleTts:cfg.ready,ttsCredentialType:cfg.code,ttsCredentialName:cfg.name,ttsMessage:cfg.message,ttsVerified:false})
     }
-    if(request.method==='GET' && url.pathname==='/api/atelier/tts/diagnostic'){
-      // Authentification identique au routeur principal : aucun diagnostic public.
-      const auth=await router.fetch(protectedRequest(request,'/api/atelier/health'),cfg.env,ctx)
-      if(!auth.ok) return json({error:'Non autorisé'},auth.status)
-      if(!cfg.ready) return json({connected:false,code:cfg.code,message:cfg.message})
-      const voices=await router.fetch(protectedRequest(request,'/api/atelier/tts/voices?languageCode=fr-FR'),cfg.env,ctx)
-      if(!voices.ok) return json({connected:false,code:'google-http-'+voices.status,message:googleFailure(voices.status)})
-      const data=await voices.json().catch(()=>({}))
-      if(!Array.isArray(data.voices)||!data.voices.length) return json({connected:false,code:'no-french-voices',message:'Google a répondu, mais aucune voix française n’a été trouvée.'})
-      return json({connected:true,code:'verified',voiceCount:data.voices.length,message:'Connexion Google TTS confirmée : '+data.voices.length+' voix françaises disponibles.'})
+    if(request.method==='GET' && path==='/api/atelier/tts/diagnostic') {
+      if(!(await authorize(request,cfg.env,ctx))) return response({error:'Non autorisé'},401)
+      if(!cfg.ready) return response({connected:false,code:cfg.code,message:cfg.message})
+      const test=cfg.kind==='api-key'?await voicesWithKey(cfg.key):await router.fetch(authenticatedGet(request,'/api/atelier/tts/voices?languageCode=fr-FR'),cfg.env,ctx)
+      if(!test.ok) return response({connected:false,code:`google-http-${test.status}`,message:googleIssue(test.status)+' '+cfg.message})
+      const data=await test.json().catch(()=>({}))
+      if(!Array.isArray(data.voices)||!data.voices.length) return response({connected:false,code:'no-french-voices',message:'Google a répondu, mais aucune voix française n’a été trouvée.'})
+      return response({connected:true,code:'verified',voiceCount:data.voices.length,message:`Connexion Google TTS confirmée : ${data.voices.length} voix françaises disponibles. Source : ${safeName(cfg.name)}.`})
+    }
+    if(cfg.kind==='api-key' && ((request.method==='GET' && path==='/api/atelier/tts/voices') || (request.method==='POST' && path==='/api/atelier/tts'))) {
+      if(!(await authorize(request,cfg.env,ctx))) return response({error:'Non autorisé'},401)
+      if(request.method==='GET') return voicesWithKey(cfg.key,new URL(request.url).searchParams.get('languageCode')||'fr-FR')
+      return synthesizeWithKey(cfg.key,await request.json().catch(()=>({})))
     }
     return router.fetch(request,cfg.env,ctx)
   }
