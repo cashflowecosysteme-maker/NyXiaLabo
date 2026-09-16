@@ -24,3 +24,7 @@ bucket_name = "nyxia-cartographie"
 
 # Aucun secret ajouté ou modifié.
 # Le préfixe nyxia-game/media/ isole les fichiers du jeu dans le R2 existant.
+
+# Génération locale sur le même Worker, aucun nouvel endpoint public.
+[ai]
+binding = "AI"
