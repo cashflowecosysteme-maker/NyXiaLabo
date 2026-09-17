@@ -121,6 +121,14 @@
   var saveTimer = null
   var audioUrls = []
   var selectedChapter = 0
+  var audioMode = "chapitres"
+  var dialogueFocusActor = ""
+  var dialogueFocusAct = ""
+  var dialogueBusy = false
+  var dialogueMp3 = Object.create(null) // URLs temporaires, MP3 à télécharger
+  var dialogueProposals = Object.create(null) // suggestions IA, jamais appliquées sans validation
+  var dialogueAnalysisBusy = false
+  var dialogueImportStatus = ""
   var pendingMysteryProposal = null
   var cartoJob = null
   var cartoPreviewUrl = ''
@@ -2941,7 +2949,197 @@
     var m=map[action];await runAI('Tu es l’assistant de production GhostWriting de l’équipe humaine NyXiaLabo. L’humain garde la direction éditoriale. Tu ne changes JAMAIS un fait verrouillé. Si une amélioration exige de modifier un fait verrouillé, tu le signales comme proposition séparée.','Voici le dossier complet :\n\n'+ghostContext()+'\n\nTÂCHE : '+m[0],m[1])
   }
 
-  function renderAudio(){var host=document.getElementById('view-audio');var ok=currentProject&&currentProject.kind==='audiobook';host.innerHTML=projectSelector('audiobook','chooseAudio')+(ok?audioWorkspace():'<div class="hero"><div class="badge">SERVICE ÉQUIPE</div><h3>Studio Livre Audio</h3><p>Aperçu gratuit par la voix du navigateur. Production réelle par Google Cloud Text-to-Speech. Le service appartient à l’équipe; Alex peut seulement y orienter les clients.</p><div class="tools-line" style="margin-top:16px"><a class="btn gold" href="/audiobook-studio.html">🧹 Préparer le manuscrit et calculer mes coûts</a></div></div>');if(ok)loadVoices()}
+  function renderAudio(){var host=document.getElementById('view-audio');var ok=currentProject&&currentProject.kind==='audiobook';host.innerHTML=projectSelector('audiobook','chooseAudio')+(ok?'<div class="game-tabs"><button class="game-tab '+(audioMode==='chapitres'?'active':'')+'" onclick="setAudioMode(\'chapitres\')">🎧 Narration · chapitres</button><button class="game-tab '+(audioMode==='dialogues'?'active':'')+'" onclick="setAudioMode(\'dialogues\')">🎭 Dialogues · répliques</button></div>'+(audioMode==='dialogues'?dialogueWorkspace():audioWorkspace()):'<div class="hero"><div class="badge">SERVICE ÉQUIPE</div><h3>Studio Livre Audio</h3><p>Aperçu gratuit par la voix du navigateur. Production réelle par Google Cloud Text-to-Speech. Le service appartient à l’équipe; Alex peut seulement y orienter les clients.</p><div class="tools-line" style="margin-top:16px"><a class="btn gold" href="/audiobook-studio.html">🧹 Préparer le manuscrit et calculer mes coûts</a></div></div>');if(ok){if(audioMode==='chapitres')loadVoices();else loadDialogueVoices()}}
+  function setAudioMode(mode){
+    if(mode!=='dialogues'&&mode!=='chapitres')return
+    audioMode=mode;renderAudio()
+  }
+  function dialogueList(){return Array.isArray(currentProject.data.dialogueReplicas)?currentProject.data.dialogueReplicas:[]}
+  function dialogueActorNames(){return Array.from(new Set(dialogueList().map(function(r){return r.character||''}).filter(Boolean))).sort(function(a,b){return a.localeCompare(b,'fr')})}
+  function dialogueWorkspace(){
+    var d=currentProject.data||{},rows=dialogueList(),actors=dialogueActorNames(),acts=Array.from(new Set(rows.map(function(r){return r.act||''}).filter(Boolean)))
+    var visible=rows.filter(function(r){return (!dialogueFocusActor||r.character===dialogueFocusActor)&&(!dialogueFocusAct||r.act===dialogueFocusAct)})
+    var selector=function(arr,value,handler){return '<select onchange="'+handler+'(this.value)"><option value="">Tous</option>'+arr.map(function(v){return '<option value="'+classementAttr(v)+'"'+(value===v?' selected':'')+'>'+esc(v)+'</option>'}).join('')+'</select>'}
+    return '<div class="panel"><h4>🎭 Dialogues — une réplique = un MP3</h4><p class="muted">La narration par chapitres reste intacte. Ici, tu prépares chaque voix séparément : aucun Google TTS n’est appelé avant ton clic sur une réplique.</p>'+ 
+      '<div class="panel" style="margin-bottom:16px;border-color:rgba(167,139,250,.38)"><h4>📖 Extraire les dialogues de ton manuscrit</h4><p class="tiny">Charge le .md ou .txt complet : le Labo relève les répliques introduites par un tiret de dialogue ou par des guillemets ouvrants en début de paragraphe, conserve le texte source et sa ligne, et les classe par acte. Les cas ambigus restent à vérifier : l’extraction n’invente pas de personnage et ne lance jamais Google TTS.</p><div class="tools-line"><button class="btn primary" onclick="document.getElementById(\'dialogue-source-file\').click()">📄 Importer mon manuscrit (.md / .txt)</button><input id="dialogue-source-file" style="display:none" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" onchange="importDialogueManuscript(this.files);this.value=\'\'"><button class="btn" '+(dialogueAnalysisBusy?'disabled ':'')+'onclick="analyzeDialogueWithNyxia()">💜 NyXia : identifier les voix et isoler les paroles</button>'+(Object.keys(dialogueProposals).length?'<button class="btn gold" onclick="acceptAllDialogueProposals()">✓ Accepter les '+Object.keys(dialogueProposals).length+' suggestions après examen</button>':'')+'</div><p class="tiny">'+esc(dialogueImportStatus||'Les répliques déjà saisies sont conservées. Réimporter le même fichier ne crée pas de doublons.')+'</p></div>'+ 
+      '<div class="row"><div class="field"><label>Personnage (ex. Kira)</label><input id="dialogue-new-actor" list="dialogue-actors" placeholder="Nom du personnage"><datalist id="dialogue-actors">'+actors.map(function(a){return '<option value="'+classementAttr(a)+'"></option>'}).join('')+'</datalist></div><div class="field"><label>Acte (ex. Acte I)</label><input id="dialogue-new-act" placeholder="Acte I"></div></div>'+ 
+      '<div class="field"><label>Copier-coller les répliques de ce personnage et de cet acte</label><textarea id="dialogue-import-text" rows="6" placeholder="Une réplique par ligne.\n— Tu sens ça aussi, n’est-ce pas ?\n— Quelque chose ne va pas."></textarea><div class="tiny">Chaque ligne non vide devient une réplique distincte. Vérifie les répliques extraites du manuscrit avant de les coller : ce formulaire ne devine pas leur personnage.</div></div>'+ 
+      '<div class="tools-line"><button class="btn primary" onclick="addDialogueReplicas()">+ Ajouter une réplique / importer les lignes</button><button class="btn" onclick="exportDialogueDocument()">⬇ Document par personnage et par acte</button></div></div>'+ 
+      '<div class="panel" style="margin-top:16px"><h4>🎙️ Une voix Google par personnage</h4><p class="tiny">Choisis une voix pour chaque personnage; la liste vient de ton Google TTS. Une génération produit uniquement la réplique demandée.</p><div id="dialogue-voice-profiles">'+(actors.length?actors.map(function(actor){return '<div class="field"><label>'+esc(actor)+'</label><select class="dialogue-voice" data-character="'+esc(actor)+'" onchange="setDialogueVoice(this.dataset.character,this.value)"><option value="">Chargement des voix…</option></select></div>'}).join(''):'<p class="muted">Ajoute d’abord une réplique pour afficher son personnage.</p>')+'</div></div>'+ 
+      '<div class="panel" style="margin-top:16px"><h4>📋 Répliques enregistrées : '+rows.length+'</h4><div class="row"><div class="field"><label>Personnage</label>'+selector(actors,dialogueFocusActor,'setDialogueActorFilter')+'</div><div class="field"><label>Acte</label>'+selector(acts,dialogueFocusAct,'setDialogueActFilter')+'</div></div><p class="tiny">'+visible.length+' réplique(s) affichée(s). Le texte est sauvegardé dans ce projet; les MP3 restent à télécharger après chaque génération.</p>'+ 
+      '<div id="dialogue-list">'+(visible.length?visible.map(function(r){var i=rows.indexOf(r),code=String(i+1).padStart(3,'0'),file=safeName(r.act||'acte')+'-'+safeName(r.character||'personnage')+'-'+code+'.mp3',result=dialogueMp3[r.id],proposal=dialogueProposals[r.id];return '<div class="chapter"><div class="chapter-head"><span class="badge">'+code+'</span><b>'+esc(r.act||'Sans acte')+' · '+esc(r.character||'À attribuer')+'</b><button class="btn danger" onclick="deleteDialogueReplica('+i+')">✕</button></div>'+(r.sourceText?'<p class="tiny">📄 '+esc(r.sourceFile||'Manuscrit')+' · ligne '+r.sourceLine+' · '+esc(r.sourceChapter||'')+(r.needsReview?' · ⚠ À vérifier':' · ✓ Vérifiée')+'</p><details><summary>Voir le paragraphe original et son contexte</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc([r.contextBefore||'',r.sourceText||'',r.contextAfter||''].filter(Boolean).join('\n\n'))+'</pre></details><div class="field"><label>Qui parle ? (modifiable)</label><input list="dialogue-actors" value="'+classementAttr(r.character||'')+'" placeholder="À attribuer" onchange="assignDialogueReplica('+i+',this.value)"></div>':'')+'<textarea aria-label="Réplique '+code+'" oninput="editDialogueReplica('+i+',this.value)">'+esc(r.text||'')+'</textarea>'+(proposal?'<div class="panel" style="margin:8px 0;padding:12px"><b>💜 Proposition de NyXia : '+esc(proposal.character||'À attribuer')+'</b><p style="white-space:pre-wrap">'+esc(proposal.text)+'</p><button class="btn gold" onclick="acceptDialogueProposal('+i+')">✓ Appliquer cette proposition</button></div>':'')+'<div class="tools-line" style="margin-top:8px">'+(r.sourceText&&r.needsReview?'<button class="btn gold" onclick="approveDialogueReplica('+i+')">✓ Confirmer cette réplique</button>':'')+'<button class="btn primary" '+(dialogueBusy||r.needsReview||!r.character?'disabled ':'')+'onclick="generateDialogueReplica('+i+')">🎙️ Générer cette réplique</button>'+(result?'<a class="btn gold" download="'+esc(file)+'" href="'+result+'">⬇ MP3</a>':'')+'</div>'+(result?'<audio controls src="'+result+'"></audio>':'')+'</div>'}).join(''):'<p class="muted">Aucune réplique dans ce filtre.</p>')+'</div><div id="dialogue-status" role="status" aria-live="polite" class="tiny"></div></div>'
+  }
+  // Import sans appel IA/TTS : inventaire conservateur des passages qui commencent
+  // par une réplique (tiret cadratin/demi-cadratin ou guillemet français).
+  // Le bloc original est conservé pour éviter de perdre une phrase lors du nettoyage.
+  function dialogueExtractManuscript(source,filename){
+    var lines=String(source||'').replace(/\r\n?/g,'\n').split('\n'),out=[],act='Sans acte',chapter='',ambiguousQuotes=0
+    var cleanTitle=function(line){return line.replace(/^\s*\\?#{1,6}\s*/,'').replace(/\\([#*_-])/g,'$1').trim()}
+    var isOpening=function(line){return /^\s*(?:[—–]\s*\S|«\s*\S)/.test(line)}
+    for(var i=0;i<lines.length;i++){
+      var line=lines[i],heading=cleanTitle(line),isHeading=/^\s*\\?#{1,6}\s*/.test(line)
+      if(isHeading){if(/^acte\b/i.test(heading))act=heading;if(/^chapitre\b/i.test(heading))chapter=heading;continue}
+      if(!isOpening(line)){
+        // Ces guillemets enchâssés peuvent être des dialogues ou de simples citations.
+        if(/«[^»\n]+»/.test(line))ambiguousQuotes++
+        continue
+      }
+      var first=i,parts=[line],j=i+1
+      while(j<lines.length&&lines[j].trim()&&!/^\s*\\?#{1,6}\s*/.test(lines[j])&&!isOpening(lines[j])){parts.push(lines[j]);j++}
+      var original=parts.join('\n').trim()
+      var spoken=original.replace(/^\s*[—–]\s*/,'').replace(/^\s*«\s*/,'').replace(/\s*»\s*$/,'').trim()
+      var contextBefore=lines.slice(Math.max(0,first-4),first).filter(function(x){return x.trim()}).join(' ').slice(-700)
+      var contextAfter=lines.slice(j,Math.min(lines.length,j+4)).filter(function(x){return x.trim()}).join(' ').slice(0,700)
+      // Seule une attribution explicite par nom est acceptée d'emblée;
+      // « dit-il/elle » reste inconnu jusqu'à examen humain/IA.
+      var speech=original.match(/\b(?:dit|répondit|demanda|murmura|souffla|lança|s'exclama|s’écria|s'écria|confirma|compléta|continua|coupa|corrigea|chuchota|ajouta|ordonna|déclara|annonça|insista|répliqua|protesta|intervint)\s+([A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÿ'’-]*(?:\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÿ'’-]*)?)/u)
+      var character=speech?speech[1]:''
+      // Ces expressions sont des descriptions, pas des noms de personnages.
+      if(/^(?:Une|Un|La|Le|Les|Sa|Son|Ses|Des|Ce|Cette|Il|Elle|C'était)$/i.test(character))character=''
+      out.push({id:crypto.randomUUID(),character:character,act:act,chapter:chapter,text:spoken,sourceText:original,sourceFile:filename,sourceLine:first+1,sourceKey:filename+'|'+(first+1)+'|'+original,sourceChapter:chapter,contextBefore:contextBefore,contextAfter:contextAfter,needsReview:true})
+      i=j-1
+    }
+    return {entries:out,inlineQuotes:ambiguousQuotes}
+  }
+  async function importDialogueManuscript(files){
+    if(!currentProject||currentProject.kind!=='audiobook'||!files||!files.length)return
+    var file=files[0],projectId=currentProject.id
+    if(!/\.(md|markdown|txt)$/i.test(file.name)){alert('Choisis un manuscrit Markdown (.md) ou texte (.txt).');return}
+    if(file.size>3*1024*1024){alert('Manuscrit supérieur à 3 Mo : divise-le en actes pour l’import.');return}
+    try{
+      var raw=await file.text()
+      if(!currentProject||currentProject.id!==projectId)return
+      var parsed=dialogueExtractManuscript(raw,file.name),rows=currentProject.data.dialogueReplicas=currentProject.data.dialogueReplicas||[]
+      var known=new Set(rows.map(function(r){return r.sourceKey}).filter(Boolean)),added=0
+      parsed.entries.forEach(function(r){if(!known.has(r.sourceKey)){rows.push(r);known.add(r.sourceKey);added++}})
+      dialogueFocusActor='';dialogueFocusAct=''
+      dialogueImportStatus=added+' réplique(s) relevée(s) · '+(parsed.entries.length-added)+' doublon(s) évité(s) · '+parsed.inlineQuotes+' citation(s) intégrée(s) à la narration à inspecter séparément. Chaque réplique extraite doit être confirmée avant synthèse.'
+      if(added)markDirty()
+      renderAudio();toast('Manuscrit analysé : '+added+' nouvelles répliques')
+    }catch(e){alert('Extraction impossible : '+e.message)}
+  }
+  function assignDialogueReplica(index,name){var r=dialogueList()[index];if(!r)return;r.character=String(name||'').trim();if(r.sourceText)r.needsReview=true;markDirty();renderAudio()}
+  function approveDialogueReplica(index){
+    var r=dialogueList()[index];if(!r)return
+    if(!r.character||!String(r.text||'').trim()){alert('Renseigne le personnage et le texte avant de confirmer.');return}
+    if(new TextEncoder().encode(r.text).length>=4300){alert('Réplique trop longue pour un seul MP3 : divise-la avant de valider.');return}
+    if(!confirm('Confirmer que ce texte contient seulement les paroles de '+r.character+' ?'))return
+    r.needsReview=false;markDirty();renderAudio()
+  }
+  function dialogueWords(str){return String(str||'').toLowerCase().normalize('NFC').match(/[\p{L}\p{N}]+/gu)||[]}
+  function dialogueFaithful(source,spoken){
+    var a=dialogueWords(source),b=dialogueWords(spoken),i=0
+    if(!b.length)return false
+    for(var j=0;j<a.length&&i<b.length;j++)if(a[j]===b[i])i++
+    return i===b.length
+  }
+  function parseDialogueAiJson(response){
+    var raw=String(response||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/```\s*$/,'').trim()
+    return JSON.parse(raw)
+  }
+  async function analyzeDialogueWithNyxia(){
+    if(dialogueAnalysisBusy||!currentProject)return
+    var items=dialogueList().filter(function(r){return r.sourceText&&r.needsReview})
+    if(!items.length){alert('Aucune réplique extraite en attente d’analyse. Importe le manuscrit ou confirme les fiches.');return}
+    if(!confirm('NyXia va analyser '+items.length+' répliques par petites séries, via le modèle IA sélectionné. Cela peut entraîner des frais IA, mais aucun Google TTS ne sera lancé. Continuer ?'))return
+    var projectId=currentProject.id,done=0,accepted=0,flagged=0
+    dialogueAnalysisBusy=true;dialogueImportStatus='Analyse de NyXia en cours…';renderAudio()
+    try{
+      for(var offset=0;offset<items.length;offset+=10){
+        if(!currentProject||currentProject.id!==projectId)throw new Error('Le projet a changé; analyse interrompue.')
+        var batch=items.slice(offset,offset+10),names=dialogueActorNames()
+        var packet=batch.map(function(r){return {id:r.id,act:r.act,chapter:r.chapter,original:r.sourceText,before:r.contextBefore,after:r.contextAfter,actorHint:r.character||''}})
+        dialogueImportStatus='NyXia analyse '+(offset+1)+'–'+Math.min(offset+10,items.length)+' / '+items.length+' répliques…'
+        var answer=await runAIText('Tu es NyXia, assistante éditoriale de production audio. Réponds seulement en JSON valide {"entries":[{"id":"identifiant donné","character":"nom exact ou chaîne vide si doute","spokenText":"UNIQUEMENT paroles prononcées"}]}. Traite CHAQUE identifiant UNE FOIS. Respecte absolument l’ordre des mots du paragraphe original; enlève les incises et la narration sans inventer ni reformuler. Si tu ne peux pas isoler les paroles avec certitude, renvoie spokenText identique au texte initial sans le tiret, et character vide si incertain. Identifie le locuteur à partir du contexte; ne déduis jamais une identité à partir du personnage interpellé. Aucun texte supplémentaire.', 'Personnages déjà connus : '+JSON.stringify(names)+'\n\nRépliques et contexte : '+JSON.stringify(packet))
+        var parsed=parseDialogueAiJson(answer),proposals=Array.isArray(parsed.entries)?parsed.entries:[],seen=new Set()
+        proposals.forEach(function(p){
+          if(!p||seen.has(p.id))return
+          var row=batch.find(function(x){return x.id===p.id});if(!row)return
+          seen.add(p.id)
+          var txt=String(p.spokenText||'').trim(),who=String(p.character||'').trim()
+          var context=[row.sourceText,row.contextBefore,row.contextAfter,names.join(' ')].join(' ')
+          var hasName=who&&(context.toLocaleLowerCase('fr').indexOf(who.toLocaleLowerCase('fr'))>=0||row.character===who)
+          if(!txt||!dialogueFaithful(row.sourceText,txt)||new TextEncoder().encode(txt).length>=4300){flagged++;return}
+          if(who&&!hasName)who=''
+          dialogueProposals[row.id]={character:who,text:txt};accepted++
+        })
+        done+=batch.length;flagged+=batch.length-seen.size
+      }
+      dialogueImportStatus='NyXia : '+done+' réplique(s) parcourue(s), '+accepted+' proposition(s) à examiner, '+flagged+' entrée(s) non résolue(s). Les textes originaux et les répliques du projet n’ont pas été remplacés.'
+    }catch(e){dialogueImportStatus='Analyse interrompue après '+done+'/'+items.length+' répliques : '+e.message+'. Les propositions déjà reçues restent consultables.'}
+    finally{dialogueAnalysisBusy=false;if(currentProject&&currentProject.id===projectId)renderAudio()}
+  }
+  function acceptDialogueProposal(index){
+    var r=dialogueList()[index],p=r&&dialogueProposals[r.id];if(!p)return
+    if(!p.character){alert('NyXia n’a pas identifié ce personnage : indique son nom avant de confirmer.');return}
+    r.text=p.text;r.character=p.character;r.needsReview=false;delete dialogueProposals[r.id];markDirty();renderAudio()
+  }
+  function acceptAllDialogueProposals(){
+    var accepted=0,unknown=0
+    if(!confirm('Appliquer les propositions de NyXia avec personnage identifié ? Tu peux toujours comparer chaque original avant de confirmer.'))return
+    dialogueList().forEach(function(r){var p=dialogueProposals[r.id];if(!p)return;if(!p.character){unknown++;return}r.text=p.text;r.character=p.character;r.needsReview=false;delete dialogueProposals[r.id];accepted++})
+    if(accepted)markDirty();dialogueImportStatus=accepted+' proposition(s) acceptée(s), '+unknown+' sans locuteur encore à vérifier.';renderAudio()
+  }
+
+  function setDialogueActorFilter(value){dialogueFocusActor=value;renderAudio()}
+  function setDialogueActFilter(value){dialogueFocusAct=value;renderAudio()}
+  function addDialogueReplicas(){
+    var name=document.getElementById('dialogue-new-actor').value.trim(),act=document.getElementById('dialogue-new-act').value.trim()
+    if(!name||!act){alert('Indique le personnage et l’acte avant d’ajouter les répliques.');return}
+    var source=document.getElementById('dialogue-import-text').value,lines=source.split(/\r?\n/).map(function(line){return line.trim().replace(/^[—–-]\s*/,'')}).filter(Boolean)
+    if(!lines.length)lines=[''] // Une carte vierge quand on clique sur « Ajouter une réplique ».
+    var list=currentProject.data.dialogueReplicas=currentProject.data.dialogueReplicas||[]
+    lines.forEach(function(line){list.push({id:crypto.randomUUID(),character:name,act:act,text:line})})
+    dialogueFocusActor=name;dialogueFocusAct=act;markDirty();renderAudio();toast(lines.length+' réplique(s) ajoutée(s)')
+  }
+  function editDialogueReplica(index,text){var r=dialogueList()[index];if(!r)return;r.text=text;if(r.sourceText)r.needsReview=true;markDirty()}
+  function deleteDialogueReplica(index){var r=dialogueList()[index];if(!r||!confirm('Supprimer cette réplique uniquement ?'))return;dialogueList().splice(index,1);markDirty();renderAudio()}
+  function setDialogueVoice(character,voice){
+    var d=currentProject.data;d.dialogueVoices=d.dialogueVoices||{};d.dialogueVoices[character]=voice;markDirty()
+  }
+  async function loadDialogueVoices(){
+    var selects=document.querySelectorAll('.dialogue-voice');if(!selects.length)return
+    var id=currentProject.id
+    try{
+      var response=await api('/api/atelier/tts/voices?languageCode=fr-FR')
+      if(!currentProject||currentProject.id!==id||audioMode!=='dialogues')return
+      document.querySelectorAll('.dialogue-voice').forEach(function(sel){
+        var current=(currentProject.data.dialogueVoices||{})[sel.dataset.character]||''
+        sel.innerHTML='<option value="">— Choisir une voix Google —</option>'+response.voices.map(function(v){return '<option value="'+classementAttr(v.name)+'"'+(current===v.name?' selected':'')+'>'+esc(v.name)+' · '+esc(v.ssmlGender||'')+'</option>'}).join('')
+      })
+    }catch(e){document.querySelectorAll('.dialogue-voice').forEach(function(sel){sel.innerHTML='<option value="">'+esc(e.message)+'</option>'})}
+  }
+  async function generateDialogueReplica(index){
+    var r=dialogueList()[index];if(!r||dialogueBusy)return
+    var text=String(r.text||'').trim(),voice=(currentProject.data.dialogueVoices||{})[r.character]
+    if(!text){alert('La réplique est vide.');return}
+    if(r.needsReview||!r.character){alert('Confirme d’abord le texte et le personnage de cette réplique extraite du manuscrit.');return}
+    if(!voice){alert('Choisis d’abord la voix Google de '+r.character+'.');return}
+    if(new TextEncoder().encode(text).length>=4300){alert('Cette réplique dépasse la limite de synthèse. Divise-la en deux répliques avant de générer.');return}
+    if(!confirm('Générer cette seule réplique avec Google TTS ? Cette action peut être facturée.'))return
+    var projectId=currentProject.id,status=document.getElementById('dialogue-status')
+    dialogueBusy=true;if(status)status.textContent='Génération de la réplique en cours…'
+    try{
+      var response=await api('/api/atelier/tts',{method:'POST',body:JSON.stringify({text:text,voiceName:voice,languageCode:'fr-FR',speakingRate:currentProject.data.speakingRate||1,pitch:currentProject.data.pitch||0})})
+      if(!response.audioContent)throw new Error('Google TTS n’a pas retourné de fichier audio.')
+      var blob=base64Blob(response.audioContent),url=URL.createObjectURL(blob)
+      if(dialogueMp3[r.id])URL.revokeObjectURL(dialogueMp3[r.id])
+      dialogueMp3[r.id]=url;audioUrls.push(url)
+      if(!currentProject||currentProject.id!==projectId)return
+      renderAudio();toast('MP3 prêt : télécharge cette réplique')
+    }catch(e){alert('Erreur TTS : '+e.message)}
+    finally{dialogueBusy=false;if(currentProject&&currentProject.id===projectId&&document.getElementById('dialogue-list'))renderAudio()}
+  }
+  function exportDialogueDocument(){
+    var rows=dialogueList();if(!rows.length){alert('Aucune réplique à exporter.');return}
+    var groups=Object.create(null),names=[]
+    rows.forEach(function(r,i){var actor=r.character||'À attribuer',act=r.act||'Sans acte';if(!groups[actor]){groups[actor]=Object.create(null);names.push(actor)}if(!groups[actor][act])groups[actor][act]=[];groups[actor][act].push({number:i+1,text:r.text||'',sourceLine:r.sourceLine||0,sourceFile:r.sourceFile||'',review:r.needsReview})})
+    var md='# '+currentProject.title+' — Dialogues de production\n\nRépliques regroupées par personnage puis par acte. Les répliques extraites portent leur provenance (fichier et ligne). Vérifier celles marquées À VÉRIFIER avant Google TTS.\n\n'
+    names.sort(function(a,b){return a.localeCompare(b,'fr')}).forEach(function(actor){md+='## '+actor+'\n\n';Object.keys(groups[actor]).forEach(function(act){md+='### '+act+'\n\n';groups[actor][act].forEach(function(r){md+='**Réplique '+String(r.number).padStart(3,'0')+'**'+(r.sourceLine?' · '+r.sourceFile+' ligne '+r.sourceLine:'')+(r.review?' · À VÉRIFIER':'')+'\n\n'+r.text+'\n\n'})})})
+    var url=URL.createObjectURL(new Blob([md],{type:'text/markdown;charset=utf-8'}));audioUrls.push(url)
+    var a=document.createElement('a');a.href=url;a.download=safeName(currentProject.title)+'-dialogues-par-personnage.md';document.body.appendChild(a);a.click();a.remove()
+  }
+
   function audioWorkspace(){var d=currentProject.data||{},chs=d.chapters||[];return '<div class="workspace"><div class="panel"><h4>🎧 Livre & chapitres</h4><div class="row"><div class="field"><label>Titre</label><input value="'+esc(currentProject.title)+'" oninput="setRoot(\'title\',this.value)"></div><div class="field"><label>Auteur</label><input value="'+esc(d.author||'')+'" oninput="setData(\'author\',this.value)"></div></div><div class="field"><label>Direction de narration</label><textarea oninput="setData(\'notes\',this.value)">'+esc(d.notes||'')+'</textarea></div><div class="divider"></div><div class="tools-line"><button class="btn primary" onclick="addChapter()">+ Ajouter un chapitre</button><span class="tiny">Le contenu texte est sauvegardé dans le projet. Les MP3 restent des fichiers de production à télécharger.</span></div><div id="chapters" style="margin-top:12px">'+chs.map(renderChapter).join('')+'</div></div>'+audioControlPanel()+'</div>'}
   function renderChapter(c,i){return '<div class="chapter '+(i===selectedChapter?'selected':'')+'"><div class="chapter-head"><button class="btn" onclick="selectChapter('+i+')">'+(i===selectedChapter?'●':'○')+'</button><input value="'+esc(c.title||('Chapitre '+(i+1)))+'" oninput="updateChapter('+i+',\'title\',this.value)"><button class="btn danger" onclick="removeChapter('+i+')">✕</button></div><textarea oninput="updateChapter('+i+',\'text\',this.value)">'+esc(c.text||'')+'</textarea></div>'}
   function audioControlPanel(){var d=currentProject.data||{};return '<div class="panel"><h4>🎙️ Production audio</h4><div class="tools-line" style="margin:0 0 16px"><a class="btn gold" href="/audiobook-studio.html">🧹 Préparer le manuscrit et calculer mes coûts</a></div><div class="field"><label>Voix française Google Cloud</label><select id="voice-select" onchange="setData(\'voiceName\',this.value)"><option value="">Chargement des voix…</option></select></div><div class="row"><div class="field"><label>Vitesse</label><input type="number" min="0.25" max="4" step="0.05" value="'+(d.speakingRate||1)+'" oninput="setData(\'speakingRate\',Number(this.value))"></div><div class="field"><label>Hauteur</label><input type="number" min="-20" max="20" step="1" value="'+(d.pitch||0)+'" oninput="setData(\'pitch\',Number(this.value))"></div></div><div class="tools-line"><button class="btn" onclick="browserPreview()">🔊 Aperçu gratuit</button><button class="btn primary" onclick="generateSelectedAudio()">🎧 Générer le chapitre</button><button class="btn gold" onclick="generateBookZip()">⬇ Livre complet en ZIP</button></div><p class="tiny">Les longs chapitres sont découpés automatiquement en segments MP3 pour respecter la limite Google.</p><div id="audio-results"></div></div>'}
@@ -2970,7 +3168,10 @@
   async function createMysteryVariant(){var players=prompt('Nombre de joueurs pour la variante :',String(currentProject.data.playerCount||8));if(!players)return;var duration=prompt('Durée :',currentProject.data.duration||'2 h 30')||currentProject.data.duration;var era=prompt('Époque :',currentProject.data.era||'Contemporain')||currentProject.data.era;var place=prompt('Lieu :',currentProject.data.place||'')||currentProject.data.place;try{var dup=await api('/api/atelier/projects/'+currentProject.id+'/duplicate',{method:'POST',body:JSON.stringify({title:currentProject.title+' — variante '+players+' joueurs',dataPatch:{playerCount:Number(players),duration:duration,era:era,place:place,locked:false}})});currentProject=dup.project;await reloadIndex();renderMystery();toast('Variante créée — Bible déverrouillée pour adaptation')}catch(e){alert(e.message)}}
 
   function cartoProjectOptions(){
-    var eligible=allProjects.filter(function(p){return p.kind==='mystery'||p.kind==='ghostwriting'})
+    // La cartographie est une ressource commune : romans, Meurtre & Mystère ET NyXia Game / RPG.
+    var eligible=allProjects.filter(function(p){
+      return !isClassementArchived(p)&&(p.kind==='mystery'||p.kind==='ghostwriting'||p.kind==='nyxia-game')
+    })
     return '<option value="">— Aucun projet lié —</option>'+eligible.map(function(p){return '<option value="'+p.id+'"'+(currentProject&&currentProject.id===p.id?' selected':'')+'>'+kindIcon(p.kind)+' '+esc(p.title)+'</option>'}).join('')
   }
   async function chooseCartoProject(id){
@@ -2985,7 +3186,7 @@
     var w=saved&&saved.width?saved.width:1600,h=saved&&saved.height?saved.height:1000
     var locked=!!(saved&&saved.locked)
     document.getElementById('view-maps').innerHTML=''+
-      '<div class="hero"><div class="badge">AZGAAR · VÉRITÉ GÉOGRAPHIQUE</div><h3>Cartographie & Mondes</h3><p>NyXia génère un monde structuré et reproductible, pas seulement une image. La seed, les dimensions, les couches et la version du moteur restent enregistrées avec le projet. Les exports servent ensuite aux romans, Meurtres & Mystères, jeux de rôle et expériences.</p></div>'+
+      '<div class="hero"><div class="badge">AZGAAR · VÉRITÉ GÉOGRAPHIQUE</div><h3>Cartographie & Mondes</h3><p>NyXia génère un monde structuré et reproductible, pas seulement une image. La seed, les dimensions, les couches et la version du moteur restent enregistrées avec le projet. Les exports servent ensuite aux romans, Meurtres & Mystères et <b>NyXia Game / RPG</b>. Une carte liée au RPG reste attachée à ce projet et est reconnue dans son package.</p></div>'+
       '<div class="workspace" style="margin-top:18px"><div class="panel"><h4>🗺️ Générer avec Azgaar</h4>'+
         '<div class="field"><label>Relier à un projet</label><select onchange="chooseCartoProject(this.value)">'+cartoProjectOptions()+'</select></div>'+
         '<div class="row"><div class="field"><label>Titre de la carte</label><input id="map-title" value="'+esc(currentProject?currentProject.title:(saved&&saved.title)||'Carte NyXia')+'"></div><div class="field"><label>Seed</label><div style="display:flex;gap:7px"><input id="map-seed" value="'+esc(seed)+'" placeholder="vide = seed aléatoire" '+(locked?'disabled':'')+'><button class="btn" onclick="newMapSeed()" '+(locked?'disabled':'')+'>🎲</button></div></div></div>'+
