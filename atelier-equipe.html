@@ -1338,13 +1338,13 @@
         a.localMediaId=mediaId;a.userMediaId=mediaId;a.status='local-assigné';a.editorialApproved=false;a.url='';delete a.mediaVerifiedAt;delete a.generatedPreviewUrl
         currentProject.data.productionAssetsJson=JSON.stringify(parseProductionAssets(d.productionAssetsJson).map(function(x){return x.id===a.id?a:x}),null,2)
         await persistMediaProject();renderGame()
-        alert('UNE image produite et conservée localement. Clique « 👁 Aperçu » puis « ✓ Approuver » avant la publication R2. Aucune autre génération automatique.')
+        alert('UNE image produite et conservée localement. Clique « 👁 Aperçu » puis « ✓ Approuver » avant la publication R2. Cette action ne génère aucun autre média automatiquement.')
       }else{
         if(!/^https:\/\//i.test(output))throw Error('Le moteur a retourné un format média non pris en charge')
         a.generatedPreviewUrl=output;a.status='à valider'
         currentProject.data.productionAssetsJson=JSON.stringify(parseProductionAssets(currentProject.data.productionAssetsJson).map(function(x){return x.id===a.id?a:x}),null,2)
         await persistMediaProject();renderGame()
-        alert('UN média généré. Prévisualise le résultat, puis enregistre et importe le fichier dans cette fiche pour le publier en privé sur R2. Aucun autre appel payant.')
+        alert('UN média généré. Prévisualise le résultat, puis enregistre et importe le fichier dans cette fiche pour le publier en privé sur R2. Les autres fiches du jeu restent disponibles séparément.')
       }
     }catch(e){alert('Génération échouée : '+e.message+' — vérifie la consommation du fournisseur avant de relancer. Aucun nouvel appel automatique.')}
     finally{mediaGenerationBusy.delete(assetId)}
@@ -1642,6 +1642,8 @@
     throw new Error('Temps d’attente dépassé pour '+kind)
   }
   function mediaAssetPrompt(asset,d){
+    // Images : transmettre le prompt de LA fiche, sans ajouter toute la Bible une seconde fois.
+    if(mediaSceneKind(asset)==='image')return cloudflareMediaPrompt(asset,d)
     var title=String(asset.title||'').trim(),notes=String(asset.notes||'').trim(),scene=String(asset.scene||'').trim()
     var base='PROJET ACTUEL UNIQUEMENT : '+(currentProject.title||'NyXia Game')+'\nGenre : '+(d.genre||'')+'\nTon : '+(d.tone||'')+'\n'
     var single='UN SEUL MÉDIA : '+(asset.code||asset.id||'')+'\nDescription exacte : '+title+'\nDirectives propres à CE média : '+notes+'\nScène : '+scene+'\n'
@@ -1658,18 +1660,29 @@
     if(!direction)throw Error('Direction artistique du jeu absente de son plan visuel. Complète le brief existant avant de payer une image.')
     return base+'DIRECTION ARTISTIQUE IMPÉRATIVE, ISSUE DU PLAN VALIDÉ DE CE JEU :\n'+direction+'\n'+single+instruction
   }
+  // Prompt de génération = uniquement le texte de la fiche choisie.
+  // Le cahier et son original restent intacts, même si la version d’envoi est raccourcie.
+  function mediaShortImagePrompt(raw){
+    var text=String(raw||'').replace(/\r\n?/g,'\n').trim()
+    if(text.length<=1800)return text
+    // Retirer les introductions répétitives héritées des anciens cahiers, sans inventer de contenu.
+    text=text.replace(/^(?:ŒUVRE|PROJET ACTUEL UNIQUEMENT|MÉDIA|SCÈNE|IMAGE À PRODUIRE|PROMPT APPROUVÉ POUR CETTE SCÈNE|CHARTE VISUELLE IMPÉRATIVE|DIRECTION ARTISTIQUE IMPÉRATIVE)[^\n]*:\s*/gim,'')
+    var lines=text.split(/\n+/).map(function(line){return line.trim()}).filter(Boolean)
+    var unique=[],seen=new Set()
+    for(var line of lines){var key=line.toLowerCase();if(!seen.has(key)){unique.push(line);seen.add(key)}}
+    text=unique.join(' ').replace(/\s+/g,' ').trim()
+    if(text.length<=1800)return text
+    // Si l’ancien prompt déborde encore, faire une PROPOSITION visible et soumise à confirmation.
+    // Couper sur une frontière de mot; ne jamais modifier le cahier source.
+    var part=text.slice(0,1800),boundary=part.lastIndexOf(' ')
+    return (boundary>1550?part.slice(0,boundary):part).trim()
+  }
   function cloudflareMediaPrompt(asset,d){
-    var style=mediaNotebookStyle(d)||visualDirectionFromCurrentGame(d)
-    if(!style)throw Error('Charte visuelle absente : Cloudflare n’a reçu aucun prompt.')
-    var subject=String(asset.imagePrompt||asset.notes||asset.title||'').trim()
-    // The cahier prompt normally reproduces the charter already: avoid repeating it unnecessarily.
-    var charterRepeated=subject.includes(style.slice(0,Math.min(70,style.length)))
-    var parts=['ŒUVRE : '+(currentProject?.title||'NyXia Game'),'MÉDIA : '+(asset.code||asset.id)]
-    if(!charterRepeated)parts.push('CHARTE VISUELLE IMPÉRATIVE : '+style)
-    parts.push('SCÈNE : '+(asset.sceneTitle||asset.scene||''),'IMAGE À PRODUIRE : '+subject,'Un seul visuel. Aucun élément étranger au récit ni autre univers.')
-    var prompt=parts.join('\n')
-    if(prompt.length>2048)throw Error('Le prompt dépasse 2 048 caractères (limite Cloudflare). Réduis le brief de CE média sans perdre la charte et les descriptions des personnages, ou choisis Flux AIMLAPI. Aucun appel lancé.')
-    if(!subject)throw Error('Cette image n’a pas de brief : complète sa fiche avant de générer.')
+    var original=String(asset.imagePrompt||asset.notes||asset.title||'').trim()
+    var edited=String(asset.cloudflarePromptOverride||'').trim()
+    var prompt=edited||mediaShortImagePrompt(original)
+    if(!prompt)throw Error('Prompt image absent pour cette fiche.')
+    if(prompt.length>2048)throw Error('La version d’envoi dépasse 2 048 caractères. Aucune génération lancée.')
     return prompt
   }
   async function generateGameImageAsset(asset,tool,d){
@@ -1861,8 +1874,8 @@
         if(JSON.stringify(context).length>95000)throw Error('Bible / fiches Personnages trop volumineuses pour un contrôle sûr : réduis leur longueur avant de poursuivre. Aucun texte modifié.')
         mediaNotebookProgress('Cahier Média : scène '+(index+1)+' / '+scenes.length+' — '+scene.title+' · analyse texte seulement…')
         var sys='Tu es le Directeur Artistique et Régisseur Média de CETTE œuvre uniquement. Convertis UNE scène en fiche technique JSON. Le Canon, la Bible, la charte visuelle et les fiches Personnages sont impératifs. Recopie exactement l’apparence de tout personnage présent ; n’invente ni visage ni vêtement ni accessoire, ni présence non explicitement établie. Si une information manque, ajoute-la à warnings et laisse le champ concerné vide. Pour chaque champ, base-toi uniquement sur la scène et le dossier fournis. N’ajoute pas de média inutile. Un bruit de pluie ne nécessite pas de création payante. Une vidéo est facultative et videoNeeded ne vaut true que si la scène exige réellement un mouvement distinct. Les résultats des banques sont uniquement des PROPOSITIONS, jamais des images validées. Une image de personne fictive ou d’objet unique ne sera jamais automatiquement acceptée à partir d’une banque de stock. N’utilise aucun univers extérieur au projet. Retourne UNIQUEMENT un objet JSON, sans markdown ni commentaire.'
-        var schema='{"characters":[{"name":"nom exact","appearance":"description physique exacte issue des fiches ou vide"}],"place":"lieu attesté","action":"action de la scène","freeImageQuery":"mots-clés anglais précis ou vide","freeSoundQuery":"mots-clés anglais du bruitage ou vide","freeVideoQuery":"mots-clés anglais ou vide","imageNeeded":false,"audioNeeded":false,"videoNeeded":false,"imageBrief":"sujet exact, décor, composition, époque","audioBrief":"bruit ou ambiance utile","videoBrief":"mouvement requis ou vide","imagePrompt":"prompt de CETTE image, avec charte visuelle complète et apparences exactes, ou vide","videoMovement":"mouvement souhaité, ou vide","warnings":[]}'
-        var prompt='Cahier Média technique pour UNE scène. Le texte source fait autorité. Produis UNIQUEMENT le JSON conforme au schéma suivant, avec des booléens réels : '+schema+'\n\nRÈGLES : imageNeeded/audioNeeded/videoNeeded = true uniquement si nécessaire. Pas de génération média. Mots-clés gratuits simples. Le prompt image doit reprendre charte + apparences exactes. Aucun changement de texte, aucune invention. Si information insuffisante, noter warnings et ne pas prétendre la vérifier.\n\nDOSSIER ET SCÈNE :\n'+JSON.stringify(context)
+        var schema='{"characters":[{"name":"nom exact","appearance":"description physique exacte issue des fiches ou vide"}],"place":"lieu attesté","action":"action de la scène","freeImageQuery":"mots-clés anglais précis ou vide","freeSoundQuery":"mots-clés anglais du bruitage ou vide","freeVideoQuery":"mots-clés anglais ou vide","imageNeeded":false,"audioNeeded":false,"videoNeeded":false,"imageBrief":"sujet exact, décor, composition, époque","audioBrief":"bruit ou ambiance utile","videoBrief":"mouvement requis ou vide","imagePrompt":"prompt court (1200 caractères maximum) de CETTE image : sujet, apparences pertinentes, style concis ; ou vide","videoMovement":"mouvement souhaité, ou vide","warnings":[]}'
+        var prompt='Cahier Média technique pour UNE scène. Le texte source fait autorité. Produis UNIQUEMENT le JSON conforme au schéma suivant, avec des booléens réels : '+schema+'\n\nRÈGLES : imageNeeded/audioNeeded/videoNeeded = true uniquement si nécessaire. Pas de génération média. Mots-clés gratuits simples. Le champ imagePrompt doit tenir en 1 200 caractères MAXIMUM : sujet, apparences exactes des personnages présents, décor, action et style en quelques mots ; PAS de copie intégrale de la Bible ni de répétitions. Aucun changement de texte, aucune invention. Si information insuffisante, noter warnings et ne pas prétendre la vérifier.\n\nDOSSIER ET SCÈNE :\n'+JSON.stringify(context)
         var answer=await api('/api/chat',{method:'POST',body:JSON.stringify({providerId:tool.providerId,model:tool.model,system_prompt:sys,max_tokens:2600,temperature:0.1,messages:[{role:'user',content:prompt}]})})
         if(!currentProject||currentProject.id!==projectId)throw Error('Le projet ouvert a changé ; aucun autre projet modifié.')
         var output
@@ -2051,6 +2064,21 @@
   async function simpleCreateImage(){
     var a=simpleMediaAsset();if(!a||mediaSceneKind(a)!=='image')return alert('Sélectionne une fiche IMAGE pour créer une image.')
     var selected=document.getElementById('select-modele-image')?.value||''
+    // Une version courte distincte : jamais de remplacement du prompt original du cahier.
+    var edited=document.getElementById('simple-media-image-prompt')?.value.trim()
+    if(!edited)return alert('Le prompt image est vide. Aucun appel lancé.')
+    if(edited.length>2048)return alert('Prompt de '+edited.length+' caractères : 2 048 maximum. Raccourcis la version d’envoi ci-dessus ; aucun appel lancé.')
+    var original=String(a.imagePrompt||a.notes||a.title||'').trim()
+    if(original.length>2048&&!a.cloudflarePromptOverride&&!confirm('Cet ancien prompt dépasse 2 048 caractères. Une version courte est affichée dans le champ de cette fiche. As-tu relu et approuvé cette version avant de créer CETTE image ?'))return
+    if(edited!==original&&edited!==String(a.cloudflarePromptOverride||'').trim()){
+      var records=parseProductionAssets(currentProject.data.productionAssetsJson)
+      var target=records.find(function(x){return x.id===a.id})
+      if(!target)return alert('Fiche introuvable : aucun appel lancé.')
+      target.cloudflarePromptOverride=edited
+      currentProject.data.productionAssetsJson=JSON.stringify(records,null,2)
+      try{await persistMediaProject()}catch(e){return alert('Prompt court non sauvegardé : '+e.message+' ; aucun appel lancé.')}
+      a=target
+    }
     if(selected==='pollinations')return simplePollinationsPreview(a)
     if(!ECON_IMAGE_MODELS.some(function(t){return t.id===selected}))return alert('Modèle image non relié. Aucun appel effectué.')
     await selectAssetMediaTool(a.id,selected)
@@ -2071,7 +2099,7 @@
   function simplePollinationsPreview(a){
     if(a.localMediaId||gameMediaReady(a)||a.generatedPreviewUrl)return alert('Un média est déjà lié à cette fiche. Examine-le ou retire-le avant une autre création.')
     var brief
-    try{brief=mediaAssetPrompt(a,currentProject.data)}catch(e){return alert('Brief artistique incomplet : '+e.message)}
+    try{brief=cloudflareMediaPrompt(a,currentProject.data)}catch(e){return alert('Prompt image invalide : '+e.message)}
     if(brief.length>1500)return alert('Prompt trop long pour le lien Pollinations existant. Utilise Cloudflare ou AIMLAPI, sans couper tes consignes artistiques.')
     if(!confirm('Essayer UNE image sur Pollinations.ai avec le brief de cette scène ? Le prompt sera transmis au service externe. Aperçu seulement : tu pourras ensuite enregistrer le fichier et le téléverser dans cette fiche.'))return
     var seed=Math.floor(Math.random()*999999999),url='https://image.pollinations.ai/prompt/'+encodeURIComponent(brief)+'?width=768&height=768&model=flux&seed='+seed+'&private=true'
@@ -2148,7 +2176,7 @@
     if(asset)setTimeout(function(){simpleHydratePreview(currentProject?.id,asset.id)},0)
     return mediaNotebookHtml(d)+
       '<div id="media-manager-root" style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:#0f1117;color:#f0f4f8;padding:20px;border-radius:12px;max-width:1100px;margin:0 auto">'+
-      '<div style="border-bottom:2px solid #2d3748;padding-bottom:14px;margin-bottom:16px"><h3 style="margin:0;color:#e2e8f0">Studio Média & Scènes</h3><p class="tiny" style="margin:6px 0 0">Gestion simplifiée des images, vidéos et ambiances sonores.</p></div>'+
+      '<div style="border-bottom:2px solid #2d3748;padding-bottom:14px;margin-bottom:16px"><h3 style="margin:0;color:#e2e8f0">Studio Média & Scènes</h3><p class="tiny" style="margin:6px 0 0">Ce jeu contient '+assets.length+' fiches médias ('+assets.filter(function(a){return mediaSceneKind(a)==='image'}).length+' images, '+assets.filter(function(a){return mediaSceneKind(a)==='video'}).length+' vidéos, '+assets.filter(function(a){return mediaSceneKind(a)==='audio'}).length+' sons). Pour une histoire de 2 à 3 h : environ 30 à 50 médias selon ses besoins. Une création par clic pour maîtriser le coût, PAS un média par jeu.</p></div>'+
       '<label for="media-scene-select" class="tiny" style="display:block;margin-bottom:6px">Scène et média à traiter</label><select id="media-scene-select" onchange="simpleChooseMedia(this.value)" style="width:100%;max-width:740px;background:#1a202c;color:#fff;border:1px solid #4a5568;border-radius:7px;padding:11px;margin-bottom:16px" '+(!assets.length?'disabled':'')+'>'+(choices||'<option>Compile le cahier pour obtenir les fiches</option>')+'</select>'+
       '<div style="background:#1a202c;border:1px solid #2d3748;border-radius:8px;padding:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px">'+
       '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">'+simpleMediaSourceMenu(asset)+'<button class="btn" onclick="simpleSearchMedia()">🔍 Rechercher Média</button></div>'+
@@ -2157,6 +2185,7 @@
       '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">'+simpleMediaModelsVideo(asset)+'<button class="btn" onclick="simpleCreateVideo()">🎬 Créer une vidéo</button></div></div>'+
       '<div id="game-media-search-status" role="status" aria-live="polite" class="tiny" style="margin-bottom:12px">'+esc(d.mediaProductionLog||'Sélectionne une fiche, puis choisis une action.')+'</div>'+
       (asset?'<details style="margin-bottom:10px"><summary class="btn" style="cursor:pointer">📋 Brief de cette scène</summary><div class="game-note" style="white-space:pre-wrap">'+esc(asset.notes||asset.imagePrompt||asset.videoMovement||'Consulte le Cahier Média.')+'</div></details>':'')+
+      (asset&&mediaSceneKind(asset)==='image'?'<details '+(String(asset.imagePrompt||asset.notes||asset.title||'').length>2048?'open':'')+' style="margin-bottom:10px"><summary class="btn" style="cursor:pointer">✏️ Prompt image à envoyer (max. 2 048 caractères)</summary><p class="tiny">'+(String(asset.imagePrompt||asset.notes||asset.title||'').length>2048?'Ancien prompt trop long : voici une proposition courte à relire avant de créer. L’original reste dans le cahier. ':'')+'Tu peux remplacer cette version par ton prompt Studio Prompt. Aucun ajout automatique de Bible ou de texte narratif.</p><textarea id="simple-media-image-prompt" rows="5" style="width:100%;background:#141824;color:#fff;border:1px solid #4a5568;border-radius:6px;padding:10px" oninput="document.getElementById(\'simple-media-prompt-count\').textContent=this.value.length+\' / 2 048 caractères\'">'+esc(asset.cloudflarePromptOverride||mediaShortImagePrompt(asset.imagePrompt||asset.notes||asset.title||''))+'</textarea><div id="simple-media-prompt-count" class="tiny">'+String((asset.cloudflarePromptOverride||mediaShortImagePrompt(asset.imagePrompt||asset.notes||asset.title||'')).length)+' / 2 048 caractères</div></details>':'')+
       '<div id="media-viewport" style="background:#141824;border:2px dashed #4a5568;border-radius:8px;min-height:280px;padding:20px;text-align:center">'+simpleMediaViewport(asset)+'</div>'+
       simpleMediaGallery(d,assets)+(asset?'<div id="media-free-results">'+freeSuggestionsHtml(asset)+'</div>':'')+'</div>'+
       '<div class="panel" style="margin-top:15px"><h4>4 · Contrôler la diffusion</h4><p class="muted">'+done+' / '+assets.length+' médias vérifiés et hébergés. Les fichiers locaux doivent être publiés avant le package.</p><div class="tools-line"><button class="btn primary" onclick="automateGameMediaDelivery()">☁️ Publier mes médias approuvés</button><button class="btn gold" onclick="setGameTab(\'package\')">📦 Vérifier le package et le parcours acheteur</button></div></div>'
