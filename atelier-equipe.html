@@ -1059,71 +1059,73 @@
     var x=String(value||'').toLowerCase()
     return /creativecommons\.org\/(?:publicdomain\/zero\/|licenses\/by\/)/.test(x)&&!/licenses\/by-(?:nc|nd)/.test(x)
   }
-  async function suggestFreeGameMedia(assetId,silent){
+  async function suggestFreeGameMedia(assetId,silent,sourceChoice){
     if(!currentProject)return []
     var d=currentProject.data||{},a=parseProductionAssets(d.productionAssetsJson).find(function(x){return x.id===assetId})
     if(!a)return []
     var key=mediaFreeKey(assetId),kind=mediaSceneKind(a),q=mediaBankQuery(a)
-    var own=findUserProvidedAsset(a,d)
-    if(own){gameFreeSuggestions[key]=[{ownId:own.id,source:'Mes fichiers',label:own.name,url:'',kind:kind}];if(!silent)renderGame();return gameFreeSuggestions[key]}
-    if(a.kind==='map'){gameFreeSuggestions[key]=[];if(!silent){renderGame();alert('Une carte du jeu ne sera pas remplacée par une photo : importe ta carte ou ouvre Azgaar.')}return []}
-    if(kind==='image'&&!visualDirectionFromCurrentGame(d)){
-      gameFreeSearchErrors[key]='Direction artistique absente du plan visuel de CE jeu : aucune recherche d’images génériques lancée.'
-      gameFreeSuggestions[key]=[];if(!silent)renderGame();return []
-    }
-    if(!q||q.length<7||(/^l[’']?[eé]cho de la lune$/i).test(q)){
-      gameFreeSearchErrors[key]='Description trop vague : précise le sujet concret de CE média avec « Affiner la recherche ».'
+    // La source choisie par Diane fait autorité : aucun fournisseur caché n'est interrogé.
+    var sources=kind==='image'?['pexels','pixabay','unsplash']:kind==='video'?['pexels','pixabay']:kind==='audio'?['freesound']:[]
+    var source=sourceChoice||'all'
+    if(source!=='all'&&!sources.includes(source))throw Error('Cette banque ne propose pas ce type de média : '+source)
+    var label={all:'Toutes les banques compatibles',pexels:'Pexels',pixabay:'Pixabay',unsplash:'Unsplash',freesound:'Freesound'}[source]||source
+    if(a.kind==='map'){gameFreeSuggestions[key]=[];gameFreeSearchErrors[key]='Pour une carte, téléverse ton fichier ou utilise l’outil cartographie.';if(!silent)renderGame();return []}
+    // Un prompt importé ou un cahier existant suffit pour chercher une proposition de stock.
+    // Ne jamais exiger de modifier l'onglet Images ou la Bible pour utiliser une banque.
+    if(!q||q.length<3){
+      gameFreeSearchErrors[key]='Prompt ou mots-clés absents pour ce média.'
       gameFreeSuggestions[key]=[];if(!silent)renderGame();return []
     }
     var results=[],errors=[],rejected=new Set(a.rejectedFreeUrls||[]),working=0
+    function use(bank){return source==='all'||source===bank}
     try{
       if(kind==='image'){
-        try{
-          var photos=await api('/api/pexels-search?q='+encodeURIComponent(q))
-          working++
+        if(use('pexels'))try{
+          var photos=await api('/api/pexels-search?q='+encodeURIComponent(q));working++
           results=results.concat((photos.photos||[]).map(function(r){return {url:r.full,preview:r.thumb||r.full,source:'Pexels',sourceUrl:r.url||'',credit:r.photographer||'',license:'Pexels License',kind:'image',label:q}}))
         }catch(e){errors.push('Pexels : '+e.message)}
-        try{
+        if(use('pixabay'))try{
           var pix=await api('/api/game/media/pixabay-search?kind=image&q='+encodeURIComponent(q));working++
           results=results.concat((pix.photos||[]).map(function(r){return {url:r.full,preview:r.thumb||r.full,source:'Pixabay',sourceUrl:r.url||'',credit:r.photographer||'',license:'Pixabay Content License',kind:'image',label:q}}))
         }catch(e){errors.push('Pixabay : '+e.message)}
-        // Un 403 Unsplash est une panne de configuration du service, pas une faute
-        // de l'illustration : n'envoyer qu'une tentative par session.
-        if(!gameUnsplashUnavailable){
-          try{
-            var other=await api('/api/unsplash-search?q='+encodeURIComponent(q))
-            working++
+        if(use('unsplash')){
+          // Un choix explicite permet de retester Unsplash après un ancien 403.
+          if(gameUnsplashUnavailable&&source==='all')errors.push('Unsplash : indisponible lors d’un essai précédent ; sélectionne Unsplash pour réessayer.')
+          else try{
+            var other=await api('/api/unsplash-search?q='+encodeURIComponent(q));working++;gameUnsplashUnavailable=false
             results=results.concat((other.results||[]).map(function(r){return {url:r.full,preview:r.thumb||r.full,source:'Unsplash',sourceUrl:r.link||'',credit:r.photographer||'',license:'Unsplash License',kind:'image',label:q}}))
-          }catch(e){
-            errors.push('Unsplash : '+e.message)
-            if(/403|401|Cl[eé] manquante|access denied/i.test(String(e.message)))gameUnsplashUnavailable=true
-          }
+          }catch(e){errors.push('Unsplash : '+e.message);if(/403|401|cl[eé] manquante|access denied/i.test(String(e.message)))gameUnsplashUnavailable=true}
         }
       }else if(kind==='audio'){
-        var sounds=await api('/api/freesound-search?q='+encodeURIComponent(q));working++
-        results=(sounds.results||[]).filter(function(r){return r.preview&&mediaFreeAllowedLicense(r.license)}).map(function(r){return {url:r.preview,preview:r.preview,source:'Freesound',sourceUrl:'https://freesound.org/s/'+r.id+'/',credit:r.username||'',license:r.license||'',kind:'audio',label:r.name||q}})
+        if(use('freesound'))try{
+          var sounds=await api('/api/freesound-search?q='+encodeURIComponent(q));working++
+          results=results.concat((sounds.results||[]).filter(function(r){return r.preview&&mediaFreeAllowedLicense(r.license)}).map(function(r){return {url:r.preview,preview:r.preview,source:'Freesound',sourceUrl:'https://freesound.org/s/'+r.id+'/',credit:r.username||'',license:r.license||'',kind:'audio',label:r.name||q}}))
+        }catch(e){errors.push('Freesound : '+e.message)}
       }else if(kind==='video'){
-        var videos=await api('/api/pexels-video-search?q='+encodeURIComponent(q));working++
-        results=(videos.videos||[]).filter(function(r){return r.full||r.preview}).map(function(r){return {url:r.full||r.preview,preview:r.preview||r.full,source:'Pexels',sourceUrl:r.url||'',credit:r.photographer||'',license:'Pexels License',kind:'video',label:q}})
-        try{var pv=await api('/api/game/media/pixabay-search?kind=video&q='+encodeURIComponent(q));working++
+        if(use('pexels'))try{
+          var videos=await api('/api/pexels-video-search?q='+encodeURIComponent(q));working++
+          results=results.concat((videos.videos||[]).filter(function(r){return r.full||r.preview}).map(function(r){return {url:r.full||r.preview,preview:r.preview||r.full,source:'Pexels',sourceUrl:r.url||'',credit:r.photographer||'',license:'Pexels License',kind:'video',label:q}}))
+        }catch(e){errors.push('Pexels : '+e.message)}
+        if(use('pixabay'))try{
+          var pv=await api('/api/game/media/pixabay-search?kind=video&q='+encodeURIComponent(q));working++
           results=results.concat((pv.videos||[]).map(function(r){return {url:r.full,preview:r.preview||r.full,source:'Pixabay',sourceUrl:r.url||'',credit:r.photographer||'',license:'Pixabay Content License',kind:'video',label:q}}))
         }catch(e){errors.push('Pixabay : '+e.message)}
       }
     }catch(e){errors.push(e.message)}
-    // Show Pixabay even when Pexels already returned several results: two per source,
-    // maximum six proposals in total, each requiring the user's approval.
+    // Échantillon visible, deux propositions au plus par banque ; aucune acceptation automatique.
     var groups={},order=[]
     results.filter(function(x){try{var u=new URL(x.url);return u.protocol==='https:'&&!rejected.has(x.url)}catch(_){return false}}).forEach(function(x){if(!groups[x.source]){groups[x.source]=[];order.push(x.source)}groups[x.source].push(x)})
     var balanced=[]
-    for(var position=0;position<2;position++){order.forEach(function(source){if(balanced.length<6&&groups[source][position])balanced.push(groups[source][position])})}
+    for(var position=0;position<2;position++){order.forEach(function(bank){if(balanced.length<6&&groups[bank][position])balanced.push(groups[bank][position])})}
     results=balanced
     gameFreeSuggestions[key]=results
     if(errors.length)gameFreeSearchErrors[key]=errors.join(' | ')
     else delete gameFreeSearchErrors[key]
-    // La recherche a bien répondu sur une banque : un 403 sur une autre ne
-    // rend pas ces propositions inutilisables. Jamais d'approbation automatique.
     if(working>0||results.length)delete gameFreeRejected[key]
-    if(!silent){renderGame();mediaProgress(results.length?results.length+' proposition(s) À EXAMINER pour '+(a.code||a.title)+'. Aucune n’est validée automatiquement.':'Aucune proposition disponible : '+(gameFreeSearchErrors[key]||'affine la description de la scène.'))}
+    if(!silent){
+      renderGame()
+      mediaProgress(label+' : '+(results.length?results.length+' proposition(s) à examiner ; aucune validation automatique.':errors.length?'recherche échouée · '+errors.join(' | '):'aucun résultat compatible. Essaie une autre banque ou ajuste les mots-clés.'))
+    }
     return results
   }
   var freeSearchRunning=false,freeSearchStop=false
@@ -1728,7 +1730,10 @@
       if(i>start&&/^#{1,5}\s/.test(lines[i]))break
       extracted.push(lines[i])
     }}
-    return [approved,extracted.join('\n').trim()].filter(Boolean).join('\n\n').slice(0,3400)
+    // La Bible déjà remplie est une source valable même sans titre « charte visuelle ».
+    // Aucun champ dans les autres onglets n'est créé ni modifié ici.
+    var bibleFallback=!approved&&!extracted.length?bible.trim().slice(0,3400):''
+    return [approved,extracted.join('\n').trim(),bibleFallback].filter(Boolean).join('\n\n').slice(0,3400)
   }
   function mediaNotebookScenes(d){
     var raw=String(d.scenesQuests||'').trim(),structured
@@ -1751,6 +1756,36 @@
       var lines=text.split(/\r?\n/),starts=[]
       lines.forEach(function(line,i){if(/^\s*(?:#{1,5}\s*)?(?:\*\*)?\s*(?:sc[eè]ne|s[eé]quence)\s*(?:n\s*[°o.]?\s*)?\d+\b/i.test(line))starts.push(i)})
       if(starts.length)return starts.map(function(start,i){return {id:'scene-'+String(i+1).padStart(3,'0'),title:lines[start].replace(/^[#*\s]+|\*+$/g,'').trim(),text:lines.slice(start,starts[i+1]===undefined?lines.length:starts[i+1]).join('\n').trim()}})
+    }
+    // Les onglets peuvent contenir une histoire complète sans titres « Scène 1 ».
+    // La reprendre sans exiger une réécriture ni changer ces onglets.
+    var rawStory=String(d.scenesQuests||d.storyStructure||d.sourceDocuments||'').trim()
+    if(rawStory){
+      // Conserver l'ordre original et utiliser les parties explicites si elles existent.
+      var lines=rawStory.split(/\r?\n/),breaks=[]
+      lines.forEach(function(line,i){
+        if(/^\s*(?:#{1,5}\s*)?(?:\*\*)?\s*(?:acte|phase|partie|chapitre|[eé]pisode|[eé]tape|s[eé]quence)\s*(?:n\s*[°o.]?\s*)?\d+\b/i.test(line))breaks.push(i)
+      })
+      if(breaks.length){
+        return breaks.map(function(start,i){
+          var end=breaks[i+1]===undefined?lines.length:breaks[i+1]
+          return {id:'extrait-'+String(i+1).padStart(3,'0'),title:lines[start].replace(/^[#*\s]+|\*+$/g,'').trim(),text:lines.slice(start,end).join('\n').trim()}
+        }).filter(function(x){return !!x.text})
+      }
+      // Sans délimitation, préparer des extraits chronologiques du texte existant.
+      // Ce ne sont pas de nouvelles scènes inventées ; l'IA analyse l'extrait tel quel.
+      var paragraphs=rawStory.split(/\n\s*\n/),chunks=[],buffer=''
+      paragraphs.forEach(function(part){
+        if(buffer&&buffer.length+part.length+2>14000){chunks.push(buffer);buffer=''}
+        if(part.length>18000){
+          if(buffer){chunks.push(buffer);buffer=''}
+          for(var j=0;j<part.length;j+=14000)chunks.push(part.slice(j,j+14000))
+        }else{buffer+=(buffer?'\n\n':'')+part}
+      })
+      if(buffer)chunks.push(buffer)
+      return chunks.filter(Boolean).slice(0,250).map(function(text,i){
+        return {id:'extrait-'+String(i+1).padStart(3,'0'),title:'Histoire existante · extrait '+(i+1),text:text}
+      })
     }
     return []
   }
@@ -1800,8 +1835,10 @@
     var imported=String(d.mediaImportedNotebookText||'').trim()
     var existingCahier=mediaNotebookRead(d)
     if(existingCahier?.scenes?.length&&existingCahier.fingerprint===fingerprint&&existingCahier.nextIndex>=existingCahier.total){mediaNotebookProgress('Cahier déjà disponible : '+existingCahier.scenes.length+' fiches. Aucune requête lancée.');return}
-    if(!scenes.length){var prior=mediaNotebookRead(d);if(prior?.scenes?.length){mediaNotebookProgress('Cahier importé déjà disponible : '+prior.scenes.length+' fiche(s).');return}return alert('Aucune scène identifiable dans ce projet. Importe ton cahier existant, ou indique des titres « Scène 1 », « Scène 2 » dans Histoire. Aucun contenu effacé.')}
-    if(!style)return alert('Aucune charte visuelle identifiée dans la Bible ou les directives Images existantes. Précise la palette, l’époque et le style avant de compiler : NyXia ne doit pas les inventer.')
+    if(!scenes.length){var prior=mediaNotebookRead(d);if(prior?.scenes?.length){mediaNotebookProgress('Cahier importé déjà disponible : '+prior.scenes.length+' fiche(s).');return}return alert('Aucun texte d’histoire trouvé dans le projet ouvert. Les autres onglets ne seront pas modifiés ; importe ton cahier de prompts si tu en as déjà un.')}
+    // Ne pas bloquer le travail existant pour une dénomination précise de charte.
+    // La Bible remplie sert de référence ; si le style manque vraiment, l'IA doit le signaler.
+
     if(scenes.length>250)return alert('Plus de 250 scènes détectées : vérifier le découpage. Aucun appel lancé.')
     var book=mediaNotebookRead(d),changed=book&&book.fingerprint!==fingerprint
     if(changed&&!confirm('La Bible, les personnages, l’histoire ou le brief artistique ont changé depuis ce cahier. Recommencer son analyse ? Les médias déjà choisis resteront dans leur registre et ne seront pas effacés.'))return
@@ -1856,6 +1893,28 @@
     a.href=url;a.download='cahier-media-'+safeName(currentProject.title)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},2500)
   }
   function mediaNotebookImportTable(text){
+    // Cahier Studio Prompt simple : sections IMAGES / SONS / VIDÉOS et tableau « Scène | Prompt ».
+    // Une ligne = UNE fiche et son prompt original ; aucune scène numérotée n'est exigée.
+    var simple=[],category='',inside=false
+    String(text||'').split(/\r?\n/).forEach(function(line){
+      var heading=line.match(/^\s*#{1,5}\s+(.+?)\s*$/)
+      if(heading){
+        var headingName=heading[1].replace(/[\*`]/g,'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+        category=/^images?\b/.test(headingName)?'image':/^(sons?|audio|bruitages?)\b/.test(headingName)?'audio':/^(videos?|clips?)\b/.test(headingName)?'video':''
+        inside=false;return
+      }
+      if(!category||!/^\s*\|.*\|\s*$/.test(line))return
+      var cells=line.trim().replace(/^\||\|$/g,'').split(/(?<!\\)\|/).map(function(cell){return cell.trim().replace(/\\\|/g,'|').replace(/<br\s*\/?\s*>/gi,'\n')})
+      if(cells.length!==2)return
+      if(/^(sc[eè]ne|m[eé]dia|nom|titre)$/i.test(cells[0].replace(/[\*`]/g,'').trim())&&/^prompt$/i.test(cells[1].replace(/[\*`]/g,'').trim())){inside=true;return}
+      if(!inside||cells.every(function(c){return /^[-:\s]*$/.test(c)}))return
+      var label=cells[0].replace(/^\*\*(.*?)\*\*$/,'$1').trim()
+      var prompt=cells[1].replace(/^`([\s\S]*)`$/,'$1').trim()
+      if(!label||!prompt)return
+      var n=simple.length+1,id='media-'+String(n).padStart(3,'0')
+      simple.push({id:id,title:label,number:n,characters:[],place:'',action:'',freeImageQuery:category==='image'?prompt.slice(0,160):'',freeSoundQuery:category==='audio'?prompt.slice(0,160):'',freeVideoQuery:category==='video'?prompt.slice(0,160):'',imageBrief:category==='image'?prompt:'',audioBrief:category==='audio'?prompt:'',videoBrief:category==='video'?prompt:'',imagePrompt:category==='image'?prompt:'',videoMovement:category==='video'?prompt:'',imageNeeded:category==='image',audioNeeded:category==='audio',videoNeeded:category==='video',warnings:[],reviewed:false})
+    })
+    if(simple.length)return simple
     var rows=String(text||'').split(/\r?\n/).filter(function(line){return /^\s*\|.*\|\s*$/.test(line)})
       .map(function(line){return line.trim().replace(/^\||\|$/g,'').split(/(?<!\\)\|/).map(function(cell){return cell.replace(/\\\|/g,'|').replace(/<br\s*\/?\s*>/gi,'\n').replace(/[`*]/g,'').trim()})})
     var header=rows.findIndex(function(row){return row.length>=5&&/sc[eè]ne/i.test(row[0])&&/personnage/i.test(row[1])})
@@ -1967,10 +2026,22 @@
     var selected=asset?.selectedToolId||''
     return '<select id="select-modele-video" aria-label="Modèle vidéo" style="background:#2d3748;color:#edf2f7;border:1px solid #4a5568;padding:9px;border-radius:6px;max-width:100%">'+simpleVideoOptions().map(function(x){return '<option value="'+esc(x.id)+'"'+(x.id===selected?' selected':'')+'>'+esc(x.name)+'</option>'}).join('')+'</select>'
   }
+  var simpleMediaSearchChoices={}
+  function simpleMediaSourceMenu(asset){
+    if(!asset)return ''
+    var kind=mediaSceneKind(asset),options=kind==='image'?
+      [['all','Toutes les banques image'],['pexels','Pexels'],['pixabay','Pixabay'],['unsplash','Unsplash']]:kind==='video'?
+      [['all','Toutes les banques vidéo'],['pexels','Pexels'],['pixabay','Pixabay']]:
+      [['all','Toutes les banques son'],['freesound','Freesound']]
+    var selected=simpleMediaSearchChoices[mediaFreeKey(asset.id)]||'all'
+    return '<label for="media-search-source" class="tiny">Où rechercher ?</label><select id="media-search-source" aria-label="Choisir une banque de médias" onchange="simpleMediaSearchChoices[mediaFreeKey(simpleMediaAsset().id)]=this.value" style="background:#2d3748;color:#edf2f7;border:1px solid #4a5568;padding:9px;border-radius:6px;max-width:100%">'+options.map(function(item){return '<option value="'+item[0]+'"'+(selected===item[0]?' selected':'')+'>'+item[1]+'</option>'}).join('')+'</select>'
+  }
   async function simpleSearchMedia(){
-    var a=simpleMediaAsset();if(!a)return alert('Compile le cahier média pour obtenir les fiches de scènes.')
-    mediaProgress('Recherche gratuite pour '+(a.title||a.code)+'…')
-    return suggestFreeGameMedia(a.id,false)
+    var a=simpleMediaAsset();if(!a)return alert('Compile ou importe le Cahier Média pour obtenir les fiches.')
+    var source=document.getElementById('media-search-source')?.value||simpleMediaSearchChoices[mediaFreeKey(a.id)]||'all'
+    simpleMediaSearchChoices[mediaFreeKey(a.id)]=source
+    mediaProgress('Recherche dans '+(source==='all'?'les banques compatibles':source)+' pour '+(a.title||a.code)+'…')
+    return suggestFreeGameMedia(a.id,false,source)
   }
   async function simpleUploadMedia(files){
     var a=simpleMediaAsset();if(!a)return alert('Sélectionne une fiche média après avoir compilé le cahier.')
@@ -2080,7 +2151,7 @@
       '<div style="border-bottom:2px solid #2d3748;padding-bottom:14px;margin-bottom:16px"><h3 style="margin:0;color:#e2e8f0">Studio Média & Scènes</h3><p class="tiny" style="margin:6px 0 0">Gestion simplifiée des images, vidéos et ambiances sonores.</p></div>'+
       '<label for="media-scene-select" class="tiny" style="display:block;margin-bottom:6px">Scène et média à traiter</label><select id="media-scene-select" onchange="simpleChooseMedia(this.value)" style="width:100%;max-width:740px;background:#1a202c;color:#fff;border:1px solid #4a5568;border-radius:7px;padding:11px;margin-bottom:16px" '+(!assets.length?'disabled':'')+'>'+(choices||'<option>Compile le cahier pour obtenir les fiches</option>')+'</select>'+
       '<div style="background:#1a202c;border:1px solid #2d3748;border-radius:8px;padding:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px">'+
-      '<button class="btn" onclick="simpleSearchMedia()">🔍 Rechercher Média</button>'+
+      '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">'+simpleMediaSourceMenu(asset)+'<button class="btn" onclick="simpleSearchMedia()">🔍 Rechercher Média</button></div>'+
       '<label class="btn primary" style="cursor:pointer">📁 Téléverser un média<input id="media-upload-input" type="file" accept="image/*,video/*,audio/*" style="display:none" onchange="simpleUploadMedia(this.files);this.value=\'\'"></label>'+
       '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">'+simpleMediaModelsImage(asset)+'<button class="btn gold" onclick="simpleCreateImage()">⚡ Créer une image</button></div>'+
       '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">'+simpleMediaModelsVideo(asset)+'<button class="btn" onclick="simpleCreateVideo()">🎬 Créer une vidéo</button></div></div>'+
