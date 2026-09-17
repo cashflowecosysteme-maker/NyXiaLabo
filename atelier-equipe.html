@@ -263,12 +263,12 @@
   function setGameTab(v){gameTab=v;renderGame()}
   function renderGame(){
     var host=document.getElementById('view-game'),ok=currentProject&&currentProject.kind==='nyxia-game'
-    host.innerHTML=projectSelector('nyxia-game','chooseGame')+(ok?gameWorkspace():'<div class="hero"><div class="badge">NYXIA GAME · STUDIO DE PRODUCTION 16+</div><h3>De ton idée au jeu réellement animable.</h3><p>Toi et ton équipe gardez la direction créative. NyXia construit la matière : univers, personnages, structure jouable, règles, documents joueurs, plans médias, conducteur live, contrôle et package final.</p><div class="card-actions"><button class="btn primary" onclick="newProject(\'nyxia-game\')">🎮 Créer mon premier projet</button></div></div>')
+    host.innerHTML=projectSelector('nyxia-game','chooseGame')+(ok?gameWorkspace():'<div class="hero"><div class="badge">NYXIA GAME · STUDIO DE PRODUCTION</div><h3>De ton idée au jeu réellement animable.</h3><p>Toi et ton équipe gardez la direction créative. NyXia construit la matière : univers, personnages, structure jouable, règles, documents joueurs, plans médias, conducteur live, contrôle et package final.</p><div class="card-actions"><button class="btn primary" onclick="newProject(\'nyxia-game\')">🎮 Créer mon premier projet</button></div></div>')
   }
   function gameWorkspace(){
     var d=currentProject.data||{}
     var tabs='<div class="game-tabs">'+gameTabBtn('concept','✨ Concept')+gameTabBtn('bible','🌍 Bible')+gameTabBtn('story','📖 Histoire')+gameTabBtn('cast','🧙 Personnages')+gameTabBtn('players','🎭 Joueurs')+gameTabBtn('npcai','🧠 PNJ IA')+gameTabBtn('rules','⚔️ Règles')+gameTabBtn('materials','🖨️ Matériel')+gameTabBtn('media','🎬 Médias')+gameTabBtn('live','🎥 Live')+gameTabBtn('control','🧠 Contrôle')+gameTabBtn('package','📦 Package')+'</div>'
-    return '<div class="hero" style="margin-bottom:16px"><div class="badge">ARCHITECTE NYXIA GAME · 16+ PAR DÉFAUT</div><h3>'+esc(currentProject.title)+'</h3><p>Studio commun pour RPG, ACE, Meurtre & Mystère, soirées immersives et histoires interactives. Les propositions IA ne remplacent jamais silencieusement tes choix.</p></div>'+tabs+(gameTab==='media'?'<div class="workspace" style="display:block"><div class="panel">'+gameMainPanel(d)+'</div></div>':'<div class="workspace"><div class="panel">'+gameMainPanel(d)+'</div>'+gameSidePanel(d)+'</div>')
+    return '<div class="hero" style="margin-bottom:16px"><div class="badge">ARCHITECTE NYXIA GAME</div><h3>'+esc(currentProject.title)+'</h3><p>Studio commun pour RPG, ACE, Meurtre & Mystère, soirées immersives et histoires interactives. Les propositions IA ne remplacent jamais silencieusement tes choix.</p></div>'+tabs+(gameTab==='media'?'<div class="workspace" style="display:block"><div class="panel">'+gameMainPanel(d)+'</div></div>':'<div class="workspace"><div class="panel">'+gameMainPanel(d)+'</div>'+gameSidePanel(d)+'</div>')
   }
   function gameMainPanel(d){
     if(gameTab==='concept')return gameConcept(d)
@@ -292,7 +292,134 @@
   function gameSelect(label,field,value,options){return '<div class="field"><label>'+label+'</label><select onchange="setData(\''+field+'\',this.value)">'+options.map(function(x){return '<option'+(value===x?' selected':'')+'>'+x+'</option>'}).join('')+'</select></div>'}
   function gameArea(label,field,value,rows){return '<div class="field"><label>'+label+'</label><textarea rows="'+(rows||7)+'" oninput="setData(\''+field+'\',this.value)">'+esc(value||'')+'</textarea></div>'}
   function gameMeter(label,field,value){var n=Number(value)||0;return '<div class="game-meter"><span>'+label+'</span><input type="range" min="0" max="5" step="1" value="'+n+'" oninput="setData(\''+field+'\',Number(this.value));this.nextElementSibling.textContent=this.value"><b>'+n+'</b></div>'}
-  function gameConcept(d){return '<h4>✨ Identité du jeu</h4><div class="game-note">NyXia Game vise un public <b>16+</b> par défaut : expériences matures, immersives et non infantilisées. L’intensité se règle selon chaque création.</div><div class="row"><div class="field"><label>Titre</label><input value="'+esc(currentProject.title)+'" oninput="setRoot(\'title\',this.value)"></div><div class="field"><label>Client / collection</label><input value="'+esc(currentProject.client||'')+'" oninput="setRoot(\'client\',this.value)"></div></div><div class="row three"><div class="field"><label>Type</label><select onchange="setData(\'gameType\',this.value)">'+gameTypeOptions(d.gameType)+'</select></div>'+gameSelect('Mode','playMode',d.playMode,['Présentiel','À distance','Hybride'])+gameSelect('Public','audience',d.audience,['16+','18+'])+'</div><div class="row three"><div class="field"><label>Joueurs</label><input type="number" min="1" value="'+(d.playerCount||8)+'" oninput="setData(\'playerCount\',Number(this.value))"></div><div class="field"><label>Durée</label><input value="'+esc(d.duration||'')+'" oninput="setData(\'duration\',this.value)"></div>'+gameSelect('Difficulté','difficulty',d.difficulty,['Accessible','Intermédiaire','Difficile','Expert'])+'</div><div class="row"><div class="field"><label>Genre / univers</label><input value="'+esc(d.genre||'')+'" oninput="setData(\'genre\',this.value)"></div><div class="field"><label>Ton</label><input value="'+esc(d.tone||'')+'" oninput="setData(\'tone\',this.value)"></div></div>'+gameArea('Ton idée brute','idea',d.idea,7)+gameArea('Intention créative — ce que les joueurs doivent vivre / ressentir','creatorIntent',d.creatorIntent,5)+'<div class="divider"></div><div class="game-kicker">Intensité créative 0–5</div>'+gameMeter('Horreur','horror',d.horror)+gameMeter('Violence','violence',d.violence)+gameMeter('Sensualité','sensuality',d.sensuality)+gameMeter('Romance','romance',d.romance)+gameMeter('Langage adulte','language',d.language)+gameMeter('Tension psychologique','psychological',d.psychological)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'concept\')">🧠 Structurer mon concept</button><button class="btn" onclick="gameAI(\'pitch\')">Créer le pitch</button></div>'}
+  function gameConcept(d){return '<h4>✨ Identité du jeu</h4><div class="game-note">Choisis l’âge du public : de <b>5 ans à 18 ans et plus</b>. L’histoire et son intensité doivent respecter ton choix.</div><div class="row"><div class="field"><label>Titre</label><input value="'+esc(currentProject.title)+'" oninput="setRoot(\'title\',this.value)"></div><div class="field"><label>Client / collection</label><input value="'+esc(currentProject.client||'')+'" oninput="setRoot(\'client\',this.value)"></div></div><div class="row three"><div class="field"><label>Type</label><select onchange="setData(\'gameType\',this.value)">'+gameTypeOptions(d.gameType)+'</select></div>'+gameSelect('Mode','playMode',d.playMode,['Présentiel','À distance','Hybride'])+gameSelect('Public','audience',d.audience,['5+','6+','7+','8+','9+','10+','11+','12+','13+','14+','15+','16+','17+','18+'])+'</div><div class="row three"><div class="field"><label>Joueurs</label><input type="number" min="1" value="'+(d.playerCount||8)+'" oninput="setData(\'playerCount\',Number(this.value))"></div><div class="field"><label>Durée</label><input value="'+esc(d.duration||'')+'" oninput="setData(\'duration\',this.value)"></div>'+gameSelect('Difficulté','difficulty',d.difficulty,['Accessible','Intermédiaire','Difficile','Expert'])+'</div><div class="row"><div class="field"><label>Genre / univers</label><input value="'+esc(d.genre||'')+'" oninput="setData(\'genre\',this.value)"></div><div class="field"><label>Ton</label><input value="'+esc(d.tone||'')+'" oninput="setData(\'tone\',this.value)"></div></div>'+bookConceptPanel()+gameArea('Ton idée brute','idea',d.idea,7)+gameArea('Intention créative — ce que les joueurs doivent vivre / ressentir','creatorIntent',d.creatorIntent,5)+'<div class="divider"></div><div class="game-kicker">Intensité créative 0–5</div>'+gameMeter('Horreur','horror',d.horror)+gameMeter('Violence','violence',d.violence)+gameMeter('Sensualité','sensuality',d.sensuality)+gameMeter('Romance','romance',d.romance)+gameMeter('Langage adulte','language',d.language)+gameMeter('Tension psychologique','psychological',d.psychological)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'concept\')">🧠 Structurer mon concept</button><button class="btn" onclick="gameAI(\'pitch\')">Créer le pitch</button></div>'}
+  // Import de livre dans Concept : l'original reste intact, les cases sont remplies seulement après validation.
+  var conceptBook=null;
+  function bookConceptPanel(){
+    var b=conceptBook&&currentProject&&conceptBook.projectId===currentProject.id?conceptBook:null;
+    return '<div class="divider"></div><h4>📚 Transformer un livre en jeu</h4>'+
+      '<p class="muted">PDF texte, DOCX, Markdown ou TXT → Markdown fidèle → adaptation proposée. Tu vérifies avant de remplir les autres onglets.</p>'+
+      '<div class="tools-line"><button class="btn gold" onclick="document.getElementById(\'concept-book-file\').click()">📂 Importer mon livre</button>'+
+      '<input id="concept-book-file" type="file" accept=".pdf,.md,.markdown,.txt,.docx,application/pdf" style="display:none" onchange="importConceptBook(this.files);this.value=\'\'">'+
+      (b?'<button class="btn" onclick="downloadConceptBookMarkdown()">⬇ Télécharger le Markdown</button><button class="btn primary" onclick="adaptConceptBook()"'+(b.busy?' disabled':'')+'>✨ Adapter ce livre en jeu</button>':'')+'</div>'+
+      '<div id="concept-book-status" role="status" aria-live="polite" class="game-note" style="margin-top:10px">'+esc(b?b.status:'Aucun livre importé. Les autres onglets restent inchangés.')+'</div>'+
+      (b?'<details><summary class="btn" style="cursor:pointer">📖 Vérifier un extrait du Markdown ('+b.markdown.length.toLocaleString('fr-CA')+' caractères)</summary><pre style="white-space:pre-wrap;overflow:auto;max-height:260px">'+esc(b.markdown.slice(0,4500))+'</pre><p class="tiny">Extrait seulement ; le téléchargement contient le Markdown complet.</p></details>':'')+
+      (b&&b.proposal?'<details open><summary class="btn" style="cursor:pointer">👁 Vérifier les propositions pour les autres onglets</summary>'+Object.keys(b.proposal).map(function(k){return '<div class="field"><label>'+esc(BOOK_GAME_FIELDS[k]||k)+'</label><pre style="white-space:pre-wrap;max-height:170px;overflow:auto">'+esc(b.proposal[k])+'</pre></div>'}).join('')+'</details>'+
+      '<label class="muted" style="display:block;margin:10px 0"><input type="checkbox" id="concept-book-replace"> Autoriser le remplacement des cases déjà remplies (sinon, seulement les cases vides)</label>'+
+      '<button class="btn gold" onclick="applyConceptBook()">✓ Valider et classer dans les onglets</button>':'')+'<div class="divider"></div>';
+  }
+  var BOOK_GAME_FIELDS={idea:'Concept · idée',creatorIntent:'Concept · intention',lockedCanon:'Bible · canon',worldBible:'Bible · monde',storyStructure:'Histoire · structure jouable',scenesQuests:'Histoire · scènes',endings:'Histoire · fins',characters:'Personnages',factionsCreatures:'Personnages · factions / créatures',itemsRewards:'Personnages · objets / indices',mechanics:'Règles',playerMaterials:'Matériel joueurs',hostMaterials:'Matériel animateur',livePlan:'Live'};
+  function bookStatus(message){
+    if(conceptBook)conceptBook.status=message;
+    var e=document.getElementById('concept-book-status');if(e)e.textContent=message;
+  }
+  function bookMarkdownChunk(text,size){
+    var result=[],rest=String(text||'').trim(),limit=size||8500;
+    while(rest.length){
+      if(rest.length<=limit){result.push(rest);break}
+      var cut=rest.lastIndexOf('\n',limit);
+      if(cut<limit/2)cut=limit;
+      result.push(rest.slice(0,cut).trim());rest=rest.slice(cut).trimStart();
+    }
+    return result;
+  }
+  async function conceptPdfMarkdown(file){
+    if(!window.pdfjsLib){
+      await new Promise(function(resolve,reject){
+        var sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+        sc.onload=resolve;sc.onerror=function(){reject(Error('Bibliothèque PDF indisponible. Essaie un DOCX ou un Markdown.'))};document.head.appendChild(sc);
+      });
+    }
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    var pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise,pages=[];
+    for(var n=1;n<=pdf.numPages;n++){
+      bookStatus('Lecture du PDF : page '+n+' / '+pdf.numPages+'…');
+      var pg=await pdf.getPage(n),items=(await pg.getTextContent()).items,lines=[],line='',prev=null;
+      for(var it of items){
+        if(!it.str)continue;
+        var y=it.transform&&it.transform[5],x=it.transform&&it.transform[4];
+        if(prev&&(Math.abs((y||0)-(prev.y||0))>2.6||(x!=null&&prev.x!=null&&x<prev.x-5))){if(line.trim())lines.push(line.trim());line=''}
+        if(line&&!(line.endsWith(' ')||it.str.startsWith(' ')))line+=' ';
+        line+=it.str;
+        prev={y:y,x:x};
+        if(it.hasEOL){if(line.trim())lines.push(line.trim());line='';prev=null}
+      }
+      if(line.trim())lines.push(line.trim());
+      var body=lines.join('\n').replace(/[ \t]+\n/g,'\n').trim();
+      pages.push('<!-- Page '+n+' -->\n\n'+body);
+    }
+    var markdown=pages.join('\n\n').trim();
+    if(markdown.replace(/<!--[^>]*-->/g,'').trim().length<80)throw Error('Ce PDF semble scanné ou sans texte sélectionnable. Aucun texte n’a été inventé : utilise une version avec texte ou DOCX.');
+    return markdown;
+  }
+  async function importConceptBook(files){
+    if(!currentProject||!files||!files.length)return;
+    var file=files[0],id=currentProject.id;
+    conceptBook={projectId:id,fileName:file.name,markdown:'',proposal:null,busy:true,status:'Lecture de '+file.name+'…'};
+    renderGame();
+    try{
+      var md=file.name.toLowerCase().endsWith('.pdf')?await conceptPdfMarkdown(file):await gameReadImportFile(file);
+      if(!String(md||'').trim())throw Error('Le livre ne contient pas de texte exploitable.');
+      if(!currentProject||currentProject.id!==id)return;
+      conceptBook.markdown=String(md).replace(/\r\n?/g,'\n').trim();conceptBook.busy=false;
+      conceptBook.status='Livre lu : '+conceptBook.markdown.length.toLocaleString('fr-CA')+' caractères. Markdown disponible. Aucune case modifiée.';
+      renderGame();
+    }catch(e){conceptBook=null;renderGame();alert('Import du livre : '+e.message)}
+  }
+  function downloadConceptBookMarkdown(){
+    if(!conceptBook||!currentProject||conceptBook.projectId!==currentProject.id)return;
+    var blob=new Blob([conceptBook.markdown],{type:'text/markdown;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=safeName(conceptBook.fileName.replace(/\.[^.]+$/,''))+'.md';a.click();setTimeout(function(){URL.revokeObjectURL(url)},1000);
+  }
+  async function conceptBookAI(tool,system,question,maxTokens){
+    var res=await api('/api/chat',{method:'POST',body:JSON.stringify({providerId:tool.providerId,model:tool.model,system_prompt:system,max_tokens:maxTokens,temperature:0.2,messages:[{role:'user',content:question}]})});
+    if(!String(res.text||'').trim())throw Error('Réponse IA vide');return res.text;
+  }
+  async function adaptConceptBook(){
+    var b=conceptBook;if(!b||b.busy||!currentProject||b.projectId!==currentProject.id||!b.markdown)return;
+    var tool=currentAiTool();if(!tool)return alert('Choisis un modèle dans la Table de travail IA à droite.');
+    var pieces=bookMarkdownChunk(b.markdown,8500),groups=Math.ceil(pieces.length/8),calls=pieces.length+(groups>1?groups:0)+1;
+    if(!confirm('Adapter « '+b.fileName+' » avec '+tool.name+' : environ '+calls+' appels TEXTE susceptibles d’être facturés. Le Markdown original et les cases actuelles restent intacts jusqu’à ta validation. Continuer ?'))return;
+    b.busy=true;b.proposal=null;bookStatus('Adaptation : préparation des '+pieces.length+' passages…');
+    var projectId=b.projectId,system='Tu adaptes un livre en soirée de jeu. Aucun changement à la trame, aux noms, événements, lieux ni motivations. Distingue FAITS DU LIVRE et PROPOSITIONS DE JEU. Ne fabrique ni scène originale ni fin du roman. Réponds dans la langue du livre.';
+    try{
+      var notes=[];
+      for(var i=0;i<pieces.length;i++){
+        if(!currentProject||currentProject.id!==projectId)throw Error('Projet modifié pendant la préparation.');
+        bookStatus('Lecture narrative : passage '+(i+1)+' / '+pieces.length+'…');
+        notes.push(await conceptBookAI(tool,system,'Extrait '+(i+1)+'/'+pieces.length+'. Retiens les faits, personnages, lieux, scènes dans l’ordre et sources (numéro du passage). Aucun ajout inventé. Notes structurées et concises.\n\n'+pieces[i],2200));
+      }
+      while(notes.length>8){
+        var digests=[];
+        for(var j=0;j<notes.length;j+=8){bookStatus('Consolidation : groupe '+(Math.floor(j/8)+1)+' / '+Math.ceil(notes.length/8)+'…');digests.push(await conceptBookAI(tool,system,'Fusionne ces notes factuelles de passages dans leur ordre, sans supprimer les personnages ni les événements ou en créer. Conserve les références des passages.\n\n'+notes.slice(j,j+8).join('\n\n---\n\n'),3400))}
+        notes=digests;
+      }
+      var keys=Object.keys(BOOK_GAME_FIELDS),d=currentProject.data||{};
+      bookStatus('Préparation des fiches des onglets…');
+      var final=await conceptBookAI(tool,system,'Adapte en jeu le livre ci-dessous pour le public '+(d.audience||'choisi')+', '+(d.duration||'durée au choix')+', mode '+(d.playMode||'au choix')+'. Réponds UNIQUEMENT par un objet JSON avec ces clés (valeurs en texte Markdown ; chaîne vide si le livre ne permet pas de renseigner la clé) : '+keys.join(', ')+'. Fais des scènes jouables suivant l’ordre du roman, sans modifier son histoire ; différencie les propositions ludiques des faits ; ne prétends pas que des embranchements inventés sont dans le livre. Aucun média créé.\n\nNOTES SOURCÉES :\n'+notes.join('\n\n---\n\n'),8500);
+      var parsed;try{parsed=JSON.parse(final.replace(/^```(?:json)?\s*/i,'').replace(/```\s*$/,'').trim())}catch(e){var start=final.indexOf('{'),end=final.lastIndexOf('}');if(start<0||end<start)throw Error('La réponse finale n’est pas un JSON valide. Aucune case modifiée.');parsed=JSON.parse(final.slice(start,end+1))}
+      var proposal={};keys.forEach(function(k){if(typeof parsed[k]==='string'&&parsed[k].trim())proposal[k]=parsed[k].trim()});
+      if(!Object.keys(proposal).length)throw Error('Aucune fiche structurée exploitable. Aucune case modifiée.');
+      b.proposal=proposal;b.status=Object.keys(proposal).length+' fiches proposées. Vérifie-les puis valide le classement.';
+    }catch(e){b.status='Adaptation interrompue : '+e.message+'. Aucun champ du projet modifié.';alert(b.status)}
+    finally{b.busy=false;if(currentProject&&currentProject.id===projectId)renderGame()}
+  }
+  async function applyConceptBook(){
+    var b=conceptBook;if(!b||!b.proposal||!currentProject||b.projectId!==currentProject.id)return;
+    var overwrite=!!document.getElementById('concept-book-replace')?.checked,d=currentProject.data||{},applied=[],skipped=[];
+    for(var k of Object.keys(b.proposal)){if(String(d[k]||'').trim()&&!overwrite)skipped.push(k);else applied.push(k)}
+    if(!confirm('Valider le livre et classer '+applied.length+' fiche(s) dans leurs onglets ? '+skipped.length+' case(s) déjà remplies seront conservées.'+(overwrite?' ATTENTION : remplacement autorisé pour les cases existantes.':'')))return;
+    var original=JSON.stringify(d);
+    try{
+      if(!String(d.sourceDocuments||'').includes('## SOURCE — '+b.fileName+'\n'))d.sourceDocuments=gameImportAppend(d.sourceDocuments,b.fileName,b.markdown);
+      applied.forEach(function(k){d[k]=b.proposal[k]});
+      var names=String(d.importedSourceNames||'').split(' · ').filter(Boolean);if(!names.includes(b.fileName))names.push(b.fileName);d.importedSourceNames=names.join(' · ');
+      currentProject.data=d;currentProject=(await api('/api/atelier/projects/'+currentProject.id,{method:'PUT',body:JSON.stringify(currentProject)})).project;await reloadIndex();
+      b.status=applied.length+' fiches classées, '+skipped.length+' champs existants conservés. Original Markdown sauvegardé dans les sources.';
+      renderGame();toast('Adaptation enregistrée ✓');
+    }catch(e){currentProject.data=JSON.parse(original);b.status='Enregistrement impossible : '+e.message+'. Réessaie sans fermer la page.';renderGame();alert(b.status)}
+  }
+
   function gameBible(d){return '<h4>🌍 Bible du monde</h4><div class="game-note">La Bible sert de vérité du projet : monde, époque, factions, magie/technologie, chronologie et faits qui ne doivent pas changer au hasard.</div>'+gameArea('🔒 Canon verrouillé / faits intouchables','lockedCanon',d.lockedCanon,6)+gameArea('Bible du monde','worldBible',d.worldBible,15)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'bible\')">🌍 Construire / enrichir la Bible</button><button class="btn gold" onclick="showView(\'maps\')">🗺️ Créer la carte Azgaar</button></div>'}
   function gameStory(d){
     var imported=(d.importedSourceNames||'').trim()
@@ -2336,7 +2463,7 @@
     var d=currentProject.data||{}
     return {title:currentProject.title,client:currentProject.client||'',gameType:d.gameType,audience:d.audience,playMode:d.playMode,playerCount:d.playerCount,duration:d.duration,genre:d.genre,tone:d.tone,difficulty:d.difficulty,intensity:{horror:d.horror,violence:d.violence,sensuality:d.sensuality,romance:d.romance,language:d.language,psychological:d.psychological},idea:d.idea,creatorIntent:d.creatorIntent,lockedCanon:d.lockedCanon,worldBible:d.worldBible,storyStructure:d.storyStructure,scenesQuests:d.scenesQuests,endings:d.endings,characters:d.characters,playerPrologue:d.playerPrologue,playerCreationInstructions:d.playerCreationInstructions,playerArchetypes:d.playerArchetypes,playerFactions:d.playerFactions,playerStartingReputation:d.playerStartingReputation,playerReputationRules:d.playerReputationRules,playerBadgeCatalog:d.playerBadgeCatalog,npcIntelligence:d.npcIntelligence,npcMemoryRules:d.npcMemoryRules,npcRelationshipRules:d.npcRelationshipRules,npcAutonomyRules:d.npcAutonomyRules,npcVoicePlan:d.npcVoicePlan,npcTestName:d.npcTestName,npcRuntimeJson:d.npcRuntimeJson,npcModel:d.npcModel,factionsCreatures:d.factionsCreatures,itemsRewards:d.itemsRewards,mechanics:d.mechanics,combatRules:d.combatRules,progression:d.progression,playerMaterials:d.playerMaterials,hostMaterials:d.hostMaterials,livePlan:d.livePlan,imageBriefs:d.imageBriefs,audioPlan:d.audioPlan,videoPlan:d.videoPlan,mapPlan:d.mapPlan,controlReport:d.controlReport,sourceDocuments:d.sourceDocuments||'',guidedScenesJson:d.guidedScenesJson||''}
   }
-  function gamePromptBase(){return 'Tu travailles dans NyXiaLabo avec une équipe humaine qui garde la direction créative. Le projet est 16+ par défaut : mature, immersif, jamais infantilisant. Respecte exactement les niveaux d’intensité demandés. La sensualité peut être forte et romantique sans devenir pornographique explicite. L’horreur peut être sombre et dérangeante selon le niveau choisi. Ne modifie jamais les faits du CANON VERROUILLÉ. Pour les PNJ IA, la Bible + le Canon + l’état du moteur sont l’autorité de vérité : un PNJ peut mentir en personnage mais ne peut pas inventer un nouveau fait canonique, accéder à une connaissance interdite ni modifier l’état du jeu. Ton travail doit produire du matériel réellement jouable et exploitable, pas seulement une belle histoire. Quand une information manque, propose une solution éditoriale au lieu de bloquer.'}
+  function gamePromptBase(){return 'Tu travailles dans NyXiaLabo avec une équipe humaine qui garde la direction créative. Adapte le jeu à l’âge choisi dans le Concept (de 5 ans à 18 ans et plus). Respecte les niveaux d’intensité demandés et n’ajoute aucun contenu inadapté au public sélectionné. La sensualité peut être forte et romantique sans devenir pornographique explicite. L’horreur peut être sombre et dérangeante selon le niveau choisi. Ne modifie jamais les faits du CANON VERROUILLÉ. Pour les PNJ IA, la Bible + le Canon + l’état du moteur sont l’autorité de vérité : un PNJ peut mentir en personnage mais ne peut pas inventer un nouveau fait canonique, accéder à une connaissance interdite ni modifier l’état du jeu. Ton travail doit produire du matériel réellement jouable et exploitable, pas seulement une belle histoire. Quand une information manque, propose une solution éditoriale au lieu de bloquer.'}
   async function gameAI(mode){
     if(!currentProject)return
     var c=gameContext(),ctx=JSON.stringify(c,null,2),sys=gamePromptBase(),prompt='',target=''
@@ -2369,7 +2496,7 @@
     else if(mode==='live'){prompt='Transforme ce jeu en soirée live complète (présentiel, Zoom ou hybride selon le dossier). Donne minute par minute : accueil, briefing, équipes, phases, Breakout Rooms, retours, décisions, jets, révélations, pauses et final.\n\nDOSSIER:\n'+ctx;target='livePlan'}
     else if(mode==='breakouts'){prompt='Conçois précisément les Breakout Rooms : groupes, objectif de chaque salle, informations exclusives, durée, livrable attendu, ce que l’animateur surveille et conditions de retour en salle principale.\n\nDOSSIER:\n'+ctx;target='livePlan'}
     else if(mode==='invites'){prompt='Rédige le briefing avant partie et la structure des invitations : ce que les joueurs doivent savoir, préparer, ne pas savoir, règles techniques et mise en ambiance.\n\nDOSSIER:\n'+ctx;target='playerMaterials'}
-    else if(mode==='control'){prompt='Agis comme NyXia Contrôle. Audite le projet de bout en bout : cohérence, trous logiques, solvabilité si enquête, progression si RPG, connaissances des personnages, garde-fous des PNJ IA (omniscience, mémoire, secrets, autonomie), embranchements, durée, rythme, équilibre, matériel manquant, sécurité de contenu 16+ et risques de blocage. Termine par GO / À CORRIGER / BLOQUANT et une liste priorisée.\n\nDOSSIER:\n'+ctx;target='controlReport'}
+    else if(mode==='control'){prompt='Agis comme NyXia Contrôle. Audite le projet de bout en bout : cohérence, trous logiques, solvabilité si enquête, progression si RPG, connaissances des personnages, garde-fous des PNJ IA (omniscience, mémoire, secrets, autonomie), embranchements, durée, rythme, équilibre, matériel manquant, adéquation au public choisi et risques de blocage. Termine par GO / À CORRIGER / BLOQUANT et une liste priorisée.\n\nDOSSIER:\n'+ctx;target='controlReport'}
     else if(mode==='playtest'){prompt='Simule un playtest avec des joueurs aux comportements différents (prudent, impulsif, analytique, social). Parcours le jeu, repère les points de confusion/blocage, estime le temps et propose les corrections.\n\nDOSSIER:\n'+ctx;target='controlReport'}
     else if(mode==='store'){prompt='Prépare une fiche produit Boutique NyXia Game : titre, sous-titre, accroche, description, public, nombre joueurs, durée, mode, contenu de la box numérique, expérience promise, tags et 5 points forts.\n\nDOSSIER:\n'+ctx;target='packageNotes'}
     else {prompt='Analyse l’avancement de ce projet et indique les 3 prochaines choses les plus importantes à produire pour pouvoir réellement le jouer.\n\nDOSSIER:\n'+ctx;target=''}
