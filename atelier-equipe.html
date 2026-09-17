@@ -46,6 +46,26 @@
     .map-preview{margin-top:14px;border:1px solid var(--line);border-radius:16px;padding:10px;background:rgba(6,10,24,.48);min-height:180px;display:grid;place-items:center;overflow:auto}.map-preview img{max-width:100%;height:auto;border-radius:10px;display:block}.file-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}.file-btn{padding:10px;border:1px solid var(--line);border-radius:11px;background:rgba(123,92,255,.07);color:#fff;cursor:pointer;text-align:center;font-size:12px}.file-btn:hover{background:rgba(123,92,255,.16)}@media(max-width:850px){.file-grid{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:1050px){.grid{grid-template-columns:repeat(2,1fr)}.workspace{grid-template-columns:1fr}.shell{grid-template-columns:220px 1fr}.row.three{grid-template-columns:1fr 1fr}}
     @media(max-width:720px){.topbar{height:auto;min-height:66px;gap:10px;flex-wrap:wrap;padding:10px 16px}.tts-tools{flex-wrap:wrap}.shell{display:block}aside{position:relative;width:100%;height:auto}.grid{grid-template-columns:1fr}.content{padding:16px}.topbar{padding:0 16px}.row,.row.three{grid-template-columns:1fr}.tool-list{grid-template-columns:1fr}}
+
+    /* Classement des projets — données conservées dans les routes Atelier existantes. */
+    .game-tab.concept-complete{border-color:rgba(53,214,154,.55);color:#9bf0d0;background:rgba(53,214,154,.09)}
+    .concept-approved{border:1px solid rgba(53,214,154,.4);color:#b9f6df;background:rgba(53,214,154,.08);padding:12px;border-radius:12px;margin:12px 0}
+    .classement-trigger{border-color:rgba(244,197,106,.48);color:#ffe5ac;background:rgba(244,197,106,.12);white-space:nowrap}
+    .classement-controls{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:16px}
+    .classement-controls .field{flex:1 1 215px;margin-bottom:0}
+    .classement-controls input,.classement-controls select,.classement-edit input,.classement-edit select{width:100%;background:rgba(6,10,24,.7);border:1px solid var(--line);border-radius:10px;color:#fff;padding:10px}
+    .classement-table-wrap{overflow-x:auto}
+    .classement-table{width:100%;border-collapse:collapse;min-width:820px}
+    .classement-table th,.classement-table td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:middle;font-size:12px}
+    .classement-table th{color:var(--lav);font-size:11px;white-space:nowrap}
+    .classement-name{border:0;background:transparent;color:#fff;text-align:left;font-weight:700;font-size:13px;cursor:pointer;overflow-wrap:anywhere;padding:0}
+    .classement-name:hover{text-decoration:underline;color:var(--gold)}
+    .classement-actions{display:flex;gap:5px;flex-wrap:wrap;min-width:295px}
+    .classement-actions .btn{padding:7px 9px}
+    .classement-edit{border:1px solid rgba(244,197,106,.38);border-radius:15px;padding:16px;margin:0 0 18px;background:rgba(244,197,106,.04)}
+    .classement-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .classement-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:15px}
+    @media(max-width:720px){.classement-edit-grid{grid-template-columns:1fr}.classement-trigger{order:-1}.classement-actions{min-width:285px}}
   </style>
 </head>
 <body>
@@ -66,9 +86,10 @@
   </aside>
 
   <main>
-    <div class="topbar"><h2 id="top-title">Atelier Équipe</h2><div class="tts-tools"><div id="health" class="status">Connexion…</div><button type="button" class="btn" onclick="testGoogleTts()">🔎 Tester Google TTS</button></div></div><div id="tts-diagnostic" role="status" aria-live="polite" style="display:none;padding:12px 24px;border-bottom:1px solid rgba(167,139,250,.2);font-size:12px;line-height:1.5"></div>
+    <div class="topbar"><h2 id="top-title">Atelier Équipe</h2><div class="tts-tools"><div id="health" class="status">Connexion…</div><button type="button" class="btn" onclick="testGoogleTts()">🔎 Tester Google TTS</button><button type="button" class="btn classement-trigger" onclick="openClassement()">🗂️ Classement</button></div></div><div id="tts-diagnostic" role="status" aria-live="polite" style="display:none;padding:12px 24px;border-bottom:1px solid rgba(167,139,250,.2);font-size:12px;line-height:1.5"></div>
     <div class="content">
       <section id="view-home" class="view"></section>
+      <section id="view-classement" class="view hidden"></section>
       <section id="view-ghost" class="view hidden"></section>
       <section id="view-audio" class="view hidden"></section>
       <section id="view-game" class="view hidden"></section>
@@ -85,6 +106,13 @@
 <script>
   var token = sessionStorage.getItem('sandbox_token') || ''
   var allProjects = []
+  var classementQuery = ''
+  var classementFilter = 'tous'
+  var classementPage = 0
+  var classementPerPage = 25
+  var classementCache = Object.create(null)
+  var classementBatchBusy = false
+  var classementEditId = ''
   var currentProject = null
   var tools = []
   var aiTools = []
@@ -154,12 +182,12 @@
     document.querySelectorAll('.view').forEach(function(x){x.classList.add('hidden')})
     document.getElementById('view-'+v).classList.remove('hidden')
     document.querySelectorAll('.nav-btn[data-view]').forEach(function(b){b.classList.toggle('active',b.dataset.view===v)})
-    document.getElementById('top-title').textContent=({home:'Atelier Équipe',ghost:'Atelier GhostWriting',audio:'Studio Livre Audio',game:'Architecte NyXia Game',mystery:'Meurtre & Mystère',maps:'Cartographie & Mondes',visual:'Création visuelle',video:'Vidéo',models:'Modèles & API'})[v]
-    if(v==='home')renderHome(); if(v==='game')renderGame(); if(v==='ghost')renderGhost(); if(v==='audio')renderAudio(); if(v==='mystery')renderMystery(); if(v==='maps')renderMaps(); if(v==='visual')renderVisual(); if(v==='video')renderVideo(); if(v==='models')renderModels()
+    document.getElementById('top-title').textContent=({home:'Atelier Équipe',ghost:'Atelier GhostWriting',audio:'Studio Livre Audio',game:'Architecte NyXia Game',mystery:'Meurtre & Mystère',maps:'Cartographie & Mondes',visual:'Création visuelle',video:'Vidéo',models:'Modèles & API',classement:'Classement des projets'})[v]
+    if(v==='home')renderHome(); if(v==='game')renderGame(); if(v==='ghost')renderGhost(); if(v==='audio')renderAudio(); if(v==='mystery')renderMystery(); if(v==='maps')renderMaps(); if(v==='visual')renderVisual(); if(v==='video')renderVideo(); if(v==='models')renderModels(); if(v==='classement')renderClassement()
   }
 
   function renderHome(){
-    var recent=(allProjects||[]).slice(0,8).map(function(p){return '<tr><td>'+kindIcon(p.kind)+' <span class="kind">'+esc(kindLabel(p.kind))+'</span></td><td><b>'+esc(p.title)+'</b><div class="tiny">'+esc(p.client||'')+'</div></td><td>'+new Date(p.updatedAt).toLocaleDateString('fr-CA')+'</td><td><button class="btn" onclick="openProject(\''+p.id+'\')">Ouvrir</button></td></tr>'}).join('')
+    var recent=(allProjects||[]).filter(function(p){return !isClassementArchived(p)}).slice(0,8).map(function(p){return '<tr><td>'+kindIcon(p.kind)+' <span class="kind">'+esc(kindLabel(p.kind))+'</span></td><td><b>'+esc(p.title)+'</b><div class="tiny">'+esc(p.client||'')+'</div></td><td>'+new Date(p.updatedAt).toLocaleDateString('fr-CA')+'</td><td><button class="btn" onclick="openProject(\''+p.id+'\')">Ouvrir</button></td></tr>'}).join('')
     document.getElementById('view-home').innerHTML=''+
       '<div class="hero"><div class="badge">ATELIER INTERNE · ÉQUIPE HUMAINE + IA</div><h3>Créer plus vite sans céder la direction créative.</h3><p>Le Labo reste ton atelier. Les modèles servent à produire, tester, comparer et contrôler. Les faits verrouillés, les décisions éditoriales et la relation client restent entre les mains de l’équipe humaine.</p></div>'+
       '<div class="grid">'+
@@ -175,6 +203,162 @@
       '<div class="section-title"><div><h3>Projets récents</h3><p>Stockés dans HUB_CONFIG, donc disponibles à l’équipe sur le Labo.</p></div></div>'+
       '<div class="card">'+(recent?'<table class="recent"><tr><th>Atelier</th><th>Projet</th><th>Modifié</th><th></th></tr>'+recent+'</table>':'<p>Aucun projet Atelier pour l’instant.</p>')+'</div>'
   }
+  // CLASSEMENT : page transversale, sans nouveaux endpoints ni copie du projet en localStorage.
+  function isClassementArchived(p){return /^(archive|archivé|archived)$/i.test(String(p&&p.status||''))}
+  function classementAttr(value){return String(value==null?'':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+  async function openClassement(){
+    // Conserver les changements en cours avant de changer de vue.
+    if(saveTimer){clearTimeout(saveTimer);saveTimer=null;if(!(await saveCurrent()))return alert('Enregistre le projet en cours avant de quitter cette page.')}
+    try{await reloadIndex();showView('classement')}catch(e){alert('Impossible de charger les projets : '+e.message)}
+  }
+  function classementMeta(p){
+    var cache=classementCache[p.id]
+    if(!cache||cache.updatedAt!==p.updatedAt)return null
+    return cache
+  }
+  function classementMode(p){
+    if(p.kind!=='nyxia-game')return '—'
+    var detail=classementMeta(p)
+    return detail?(detail.error?'Indisponible':detail.mode||'Non défini'):'Chargement…'
+  }
+  function classementType(p){
+    if(p.kind!=='nyxia-game')return kindLabel(p.kind)
+    var detail=classementMeta(p)
+    return detail?(detail.error?'Indisponible':detail.type||'Non défini'):'Chargement…'
+  }
+  function setClassementQuery(value){var pos=null;try{pos=document.activeElement&&document.activeElement.id==='classement-search'?document.activeElement.selectionStart:null}catch(_){}classementQuery=String(value||'');classementPage=0;renderClassement();var input=document.getElementById('classement-search');if(input){input.focus();if(pos!=null)try{input.setSelectionRange(pos,pos)}catch(_){}}}
+  function setClassementFilter(value){classementFilter=value;classementPage=0;renderClassement()}
+  function setClassementPage(value){classementPage=Math.max(0,Number(value)||0);renderClassement()}
+  function renderClassement(){
+    var host=document.getElementById('view-classement');if(!host)return
+    var existingEditor=classementEditId&&host.querySelector('#classement-editor .classement-edit')
+    var term=classementQuery.trim().toLocaleLowerCase('fr')
+    var filtered=(allProjects||[]).filter(function(p){
+      if(classementFilter==='actifs'&&isClassementArchived(p))return false
+      if(classementFilter==='archives'&&!isClassementArchived(p))return false
+      var detail=classementMeta(p)
+      return !term||[p.title,p.client,kindLabel(p.kind),detail&&detail.mode,detail&&detail.type].join(' ').toLocaleLowerCase('fr').includes(term)
+    })
+    var totalPages=Math.max(1,Math.ceil(filtered.length/classementPerPage))
+    classementPage=Math.min(classementPage,totalPages-1)
+    var shown=filtered.slice(classementPage*classementPerPage,(classementPage+1)*classementPerPage)
+    var archivedCount=(allProjects||[]).filter(isClassementArchived).length
+    var rows=shown.map(function(p){
+      var id=classementAttr(p.id),archived=isClassementArchived(p)
+      return '<tr><td><button class="classement-name" data-id="'+id+'" onclick="openClassementProject(this.dataset.id)">'+esc(p.title||'Sans titre')+'</button>'+
+        '<div class="tiny">'+kindIcon(p.kind)+' '+esc(kindLabel(p.kind))+' · '+(archived?'📦 Archivé':'En cours')+' · '+(p.updatedAt?esc(new Date(p.updatedAt).toLocaleDateString('fr-CA')):'—')+'</div></td>'+
+        '<td>'+esc(classementMode(p))+'</td><td>'+esc(classementType(p))+'</td><td>'+esc(p.client||'—')+'</td>'+
+        '<td><div class="classement-actions">'+
+        '<button class="btn" data-id="'+id+'" onclick="duplicateClassement(this.dataset.id)">Dupliquer</button>'+
+        '<button class="btn" data-id="'+id+'" onclick="editClassement(this.dataset.id)">Modifier</button>'+
+        '<button class="btn danger" data-id="'+id+'" onclick="deleteClassement(this.dataset.id)">Supprimer</button>'+
+        '<button class="btn gold" data-id="'+id+'" onclick="archiveClassement(this.dataset.id)">'+(archived?'Restaurer':'Archiver')+'</button>'+
+        '</div></td></tr>'
+    }).join('')
+    host.innerHTML='<div class="hero" style="margin-bottom:18px"><div class="badge">GESTION DES PROJETS</div><h3>🗂️ Classement</h3><p>Retrouve tous les projets du Labo, ouvre-les ou classe-les sans toucher à leur contenu. Archiver est réversible; supprimer est définitif.</p></div>'+
+      '<div class="classement-controls">'+
+      '<div class="field"><label for="classement-search">Rechercher un projet ou un auteur</label><input id="classement-search" type="search" placeholder="Nom du projet, auteur…" value="'+classementAttr(classementQuery)+'" oninput="setClassementQuery(this.value)"></div>'+
+      '<div class="field" style="max-width:220px"><label for="classement-status">Afficher</label><select id="classement-status" onchange="setClassementFilter(this.value)"><option value="tous"'+(classementFilter==='tous'?' selected':'')+'>Tous les projets</option><option value="actifs"'+(classementFilter==='actifs'?' selected':'')+'>Projets actifs</option><option value="archives"'+(classementFilter==='archives'?' selected':'')+'>Archives</option></select></div>'+
+      '<span class="muted">'+allProjects.length+' projets · '+archivedCount+' archivés</span></div>'+
+      '<div id="classement-editor"></div>'+
+      '<div class="card classement-table-wrap">'+(rows?'<table class="classement-table"><thead><tr><th>Nom du projet</th><th>Mode</th><th>Type</th><th>Client (nom auteur)</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody></table>':'<p>Aucun projet ne correspond à ce filtre.</p>')+'</div>'+
+      '<div class="classement-pagination"><span class="muted">'+filtered.length+' résultat(s) · page '+(classementPage+1)+' sur '+totalPages+'</span><div class="tools-line"><button class="btn"'+(classementPage===0?' disabled':'')+' onclick="setClassementPage(classementPage-1)">← Précédent</button><button class="btn"'+(classementPage>=totalPages-1?' disabled':'')+' onclick="setClassementPage(classementPage+1)">Suivant →</button></div></div>'
+    if(existingEditor){var editorSlot=host.querySelector('#classement-editor');if(editorSlot)editorSlot.appendChild(existingEditor)}
+    // L'index KV est léger. Charger seulement les détails de la page affichée, au maximum 4 à la fois.
+    var missing=shown.filter(function(p){return p.kind==='nyxia-game'&&!classementMeta(p)})
+    if(missing.length&&!classementBatchBusy)hydrateClassement(missing)
+  }
+  async function hydrateClassement(list){
+    classementBatchBusy=true
+    var cursor=0
+    async function one(){
+      while(cursor<list.length){
+        var p=list[cursor++]
+        try{var response=await api('/api/atelier/projects/'+encodeURIComponent(p.id)),project=response.project||{}
+          classementCache[p.id]={updatedAt:p.updatedAt,mode:String(project.data?.playMode||''),type:String(project.data?.gameType||''),error:false}
+        }catch(e){classementCache[p.id]={updatedAt:p.updatedAt,mode:'',type:'',error:true};console.warn('Classement : détails indisponibles pour un projet',e)}
+      }
+    }
+    try{await Promise.all(Array.from({length:Math.min(4,list.length)},one))}
+    finally{classementBatchBusy=false;if(currentView==='classement')renderClassement()}
+  }
+  async function classementFlushSelected(id){
+    if(currentProject&&currentProject.id===id&&saveTimer){
+      clearTimeout(saveTimer);saveTimer=null
+      if(!(await saveCurrent()))throw new Error('Le projet contient des modifications non enregistrées. Action annulée.')
+    }
+  }
+  async function classementLoad(id){
+    await classementFlushSelected(id)
+    return (await api('/api/atelier/projects/'+encodeURIComponent(id))).project
+  }
+  function classementAfterChange(id){delete classementCache[id];classementEditId='';renderClassement()}
+  async function openClassementProject(id){
+    try{await classementFlushSelected(id);await openProject(id)}catch(e){alert(e.message)}
+  }
+  async function duplicateClassement(id){
+    try{
+      await classementFlushSelected(id)
+      var result=await api('/api/atelier/projects/'+encodeURIComponent(id)+'/duplicate',{method:'POST',body:JSON.stringify({})})
+      await reloadIndex();classementPage=0;classementAfterChange(result.project.id);toast('Projet dupliqué — original conservé')
+    }catch(e){alert('Duplication impossible : '+e.message)}
+  }
+  async function archiveClassement(id){
+    try{
+      var project=await classementLoad(id),wasArchived=isClassementArchived(project)
+      var message=wasArchived?'Restaurer « '+project.title+' » dans les projets actifs ?':'Archiver « '+project.title+' » ? Il ne sera plus dans les listes de travail, mais restera accessible ici.'
+      if(!confirm(message))return
+      if(wasArchived){project.status=project.classementPreviousStatus||'brouillon';delete project.classementPreviousStatus;delete project.classementArchivedAt}
+      else{project.classementPreviousStatus=project.status||'brouillon';project.classementArchivedAt=new Date().toISOString();project.status='archivé'}
+      var saved=(await api('/api/atelier/projects/'+encodeURIComponent(id),{method:'PUT',body:JSON.stringify(project)})).project
+      if(currentProject&&currentProject.id===id)currentProject=saved
+      await reloadIndex();classementAfterChange(id);toast(wasArchived?'Projet restauré':'Projet archivé — aucune donnée supprimée')
+    }catch(e){alert('Classement impossible : '+e.message)}
+  }
+  async function deleteClassement(id){
+    try{
+      var project=await classementLoad(id)
+      var validation=prompt('Suppression définitive de « '+project.title+' » et de ses données Atelier. Écris exactement le titre du projet pour confirmer :','')
+      if(validation!==project.title)return
+      await api('/api/atelier/projects/'+encodeURIComponent(id),{method:'DELETE'})
+      if(currentProject&&currentProject.id===id){clearTimeout(saveTimer);saveTimer=null;currentProject=null}
+      await reloadIndex();classementAfterChange(id);toast('Projet supprimé définitivement')
+    }catch(e){alert('Suppression impossible : '+e.message)}
+  }
+  async function editClassement(id){
+    try{
+      var project=await classementLoad(id);classementEditId=id
+      var game=project.kind==='nyxia-game',d=project.data||{},mode=d.playMode||'',type=d.gameType||''
+      var modes=['Présentiel','À distance','Hybride'];if(mode&&!modes.includes(mode))modes.unshift(mode)
+      var types=['RPG & Aventure','ACE — Académie des Cadets Enquêteurs','Meurtre & Mystère','Soirée immersive','Histoire interactive'];if(type&&!types.includes(type))types.unshift(type)
+      function options(arr,v){return arr.map(function(x){return '<option value="'+classementAttr(x)+'"'+(x===v?' selected':'')+'>'+esc(x)+'</option>'}).join('')}
+      var host=document.getElementById('classement-editor')
+      host.innerHTML='<form class="classement-edit" onsubmit="saveClassementEdit(event)"><h4>Modifier le classement — '+esc(project.title)+'</h4><p class="muted">Modifie seulement l’identité du projet. L’histoire, les médias et les autres contenus restent intacts.</p><div class="classement-edit-grid">'+
+        '<div class="field"><label for="classement-edit-name">Nom du projet</label><input id="classement-edit-name" maxlength="180" required value="'+classementAttr(project.title)+'"></div>'+
+        '<div class="field"><label for="classement-edit-client">Client (nom auteur)</label><input id="classement-edit-client" maxlength="180" value="'+classementAttr(project.client||'')+'"></div>'+
+        (game?'<div class="field"><label for="classement-edit-mode">Mode</label><select id="classement-edit-mode">'+options(modes,mode)+'</select></div><div class="field"><label for="classement-edit-type">Type de jeu</label><select id="classement-edit-type">'+options(types,type)+'</select></div>':'<div class="field"><label>Type d’atelier</label><div class="muted">'+esc(kindLabel(project.kind))+' — le type d’atelier ne peut pas être converti ici.</div></div>')+
+        '</div><div class="tools-line"><button class="btn primary" type="submit">Enregistrer</button><button class="btn" type="button" data-id="'+classementAttr(id)+'" onclick="openClassementProject(this.dataset.id)">Ouvrir dans l’atelier</button><button class="btn" type="button" onclick="classementEditId=\'\';renderClassement()">Annuler</button></div></form>'
+      host.scrollIntoView({block:'nearest',behavior:'smooth'})
+    }catch(e){alert('Modification impossible : '+e.message)}
+  }
+  async function saveClassementEdit(event){
+    event.preventDefault()
+    var id=classementEditId;if(!id)return
+    var name=document.getElementById('classement-edit-name').value.trim(),client=document.getElementById('classement-edit-client').value.trim()
+    if(!name)return alert('Indique le nom du projet.')
+    try{
+      var project=await classementLoad(id);project.title=name;project.client=client
+      if(project.kind==='nyxia-game'){
+        project.data=project.data||{}
+        project.data.playMode=document.getElementById('classement-edit-mode').value
+        project.data.gameType=document.getElementById('classement-edit-type').value
+      }
+      var saved=(await api('/api/atelier/projects/'+encodeURIComponent(id),{method:'PUT',body:JSON.stringify(project)})).project
+      if(currentProject&&currentProject.id===id)currentProject=saved
+      await reloadIndex();classementAfterChange(id);toast('Classement enregistré')
+    }catch(e){alert('Enregistrement impossible : '+e.message)}
+  }
+
   function homeCard(i,t,p,v,b){return '<div class="card"><div class="bigico">'+i+'</div><h4>'+t+'</h4><p>'+p+'</p><div class="card-actions"><button class="btn primary" onclick="showView(\''+v+'\')">'+b+'</button></div></div>'}
 
   async function openProject(id){
@@ -182,7 +366,7 @@
   }
 
   function projectSelector(kind,onchangeName){
-    var list=allProjects.filter(function(p){return p.kind===kind})
+    var list=allProjects.filter(function(p){return p.kind===kind&&!isClassementArchived(p)})
     var opts='<option value="">— Choisir un projet —</option>'+list.map(function(p){return '<option value="'+p.id+'"'+(currentProject&&currentProject.id===p.id?' selected':'')+'>'+esc(p.title)+'</option>'}).join('')
     return '<div class="projectbar"><select onchange="'+onchangeName+'(this.value)">'+opts+'</select><button class="btn primary" onclick="newProject(\''+kind+'\')">+ Nouveau</button>'+(currentProject&&currentProject.kind===kind?'<button class="btn" onclick="duplicateCurrent()">Dupliquer</button><button class="btn danger" onclick="deleteCurrent()">Supprimer</button><span id="save-state" class="save-state">Enregistré</span>':'')+'</div>'
   }
@@ -203,9 +387,58 @@
   async function deleteCurrent(){if(!currentProject||!confirm('Supprimer ce projet Atelier ?'))return;try{await api('/api/atelier/projects/'+currentProject.id,{method:'DELETE'});currentProject=null;await reloadIndex();showView(currentView);toast('Projet supprimé')}catch(e){alert(e.message)}}
 
   function markDirty(){var e=document.getElementById('save-state');if(e)e.textContent='Modification…';clearTimeout(saveTimer);saveTimer=setTimeout(saveCurrent,650)}
-  async function saveCurrent(){if(!currentProject)return;try{currentProject=(await api('/api/atelier/projects/'+currentProject.id,{method:'PUT',body:JSON.stringify(currentProject)})).project;await reloadIndex();var e=document.getElementById('save-state');if(e)e.textContent='Enregistré ✓'}catch(err){var e2=document.getElementById('save-state');if(e2)e2.textContent='Erreur sauvegarde';console.error(err)}}
+  async function saveCurrent(){if(!currentProject)return;var projectToSave=currentProject,savedId=projectToSave.id;saveTimer=null;try{var saved=(await api('/api/atelier/projects/'+savedId,{method:'PUT',body:JSON.stringify(projectToSave)})).project;if(currentProject&&currentProject.id===savedId)currentProject=saved;await reloadIndex();var e=document.getElementById('save-state');if(e)e.textContent='Enregistré ✓';return true}catch(err){var e2=document.getElementById('save-state');if(e2)e2.textContent='Erreur sauvegarde';console.error(err);return false}}
   function setRoot(field,value){if(!currentProject)return;currentProject[field]=value;markDirty()}
-  function setData(field,value){if(!currentProject)return;currentProject.data=currentProject.data||{};currentProject.data[field]=value;markDirty()}
+  // La validation humaine ne dépend ni d'un modèle IA ni de ses propositions.
+  // Toute retouche du Concept demande une nouvelle confirmation, sans modifier les autres onglets.
+  var conceptEditableFields=['gameType','playMode','audience','playerCount','duration','difficulty','genre','tone','idea','creatorIntent','horror','violence','sensuality','romance','language','psychological']
+  function conceptIsApproved(d){return !!(d&&d.conceptCompletedAt)}
+  function refreshConceptCompletion(){
+    if(!currentProject||currentProject.kind!=='nyxia-game')return
+    var d=currentProject.data||{},approved=conceptIsApproved(d)
+    var tab=document.getElementById('game-tab-concept')
+    if(tab){tab.textContent=(approved?'✓ ':'✨ ')+'Concept';tab.classList.toggle('concept-complete',approved)}
+    var info=document.getElementById('concept-completion-status')
+    if(info){info.textContent=approved?'✅ Concept terminé et enregistré. NyXia le prendra en compte pour les étapes suivantes.':'○ Concept en cours : lorsque ton texte te convient, confirme-le sans utiliser l’IA.';info.classList.toggle('concept-approved',approved)}
+    var button=document.getElementById('confirm-concept-button')
+    if(button)button.textContent='✓ '+(approved?'Confirmer à nouveau mon concept':'Mon concept est terminé · informer NyXia')
+    var card=document.getElementById('concept-progress-card')
+    if(card){card.classList.toggle('ready',approved);card.innerHTML='<strong>'+(approved?'✓ Concept terminé':'○ Concept à confirmer')+'</strong>'+(approved?'Validation humaine enregistrée':'Aucune amélioration IA obligatoire')}
+  }
+  function setData(field,value){
+    if(!currentProject)return
+    currentProject.data=currentProject.data||{}
+    var d=currentProject.data
+    if(d[field]===value)return
+    d[field]=value
+    if(currentProject.kind==='nyxia-game'&&conceptEditableFields.includes(field)&&d.conceptCompletedAt){
+      delete d.conceptCompletedAt
+      refreshConceptCompletion()
+    }
+    markDirty()
+  }
+  async function confirmConceptCompleted(){
+    if(!currentProject||currentProject.kind!=='nyxia-game')return
+    var d=currentProject.data||{}
+    if(!String(d.idea||'').trim()&&!String(d.creatorIntent||'').trim()){
+      alert('Écris ton concept ou ton intention créative avant de confirmer. Aucun appel IA nécessaire.')
+      return
+    }
+    // Enregistre un état lisible par NyXia dans le projet ; pas de requête à /api/chat.
+    var previous=d.conceptCompletedAt
+    d.conceptCompletedAt=new Date().toISOString()
+    clearTimeout(saveTimer);saveTimer=null
+    var ok=await saveCurrent()
+    if(!ok){
+      if(previous)d.conceptCompletedAt=previous
+      else delete d.conceptCompletedAt
+      refreshConceptCompletion()
+      alert('Le Concept n’a pas été confirmé : sauvegarde impossible. Ton texte est conservé dans l’éditeur ; réessaie.')
+      return
+    }
+    renderGame()
+    toast('Concept terminé ✓ · aucune génération IA')
+  }
 
   function isGptTool(t){
     if(!t)return false
@@ -259,7 +492,7 @@
   // 🎮 ARCHITECTE NYXIA GAME — production humaine assistée
   // ---------------------------------------------------------------------------
   function gameTypeOptions(selected){return ['RPG & Aventure','ACE — Académie des Cadets Enquêteurs','Meurtre & Mystère','Soirée immersive','Histoire interactive'].map(function(x){return '<option'+(selected===x?' selected':'')+'>'+x+'</option>'}).join('')}
-  function gameTabBtn(id,label){return '<button class="game-tab '+(gameTab===id?'active':'')+'" onclick="setGameTab(\''+id+'\')">'+label+'</button>'}
+  function gameTabBtn(id,label){var approved=id==='concept'&&conceptIsApproved(currentProject&&currentProject.data);return '<button '+(id==='concept'?'id="game-tab-concept" ':'')+'class="game-tab '+(gameTab===id?'active':'')+(approved?' concept-complete':'')+'" onclick="setGameTab(\''+id+'\')">'+(approved?'✓ Concept':label)+'</button>'}
   function setGameTab(v){gameTab=v;renderGame()}
   function renderGame(){
     var host=document.getElementById('view-game'),ok=currentProject&&currentProject.kind==='nyxia-game'
@@ -286,13 +519,15 @@
   }
   function gameSidePanel(d){
     var sections=[['Concept',d.idea],['Bible',d.worldBible],['Structure',d.storyStructure],['Personnages',d.characters],['Joueurs',d.playerPrologue||d.playerArchetypes||d.playerFactions],['PNJ IA',d.npcIntelligence||d.npcMemoryRules],['Règles',d.mechanics],['Matériel',d.playerMaterials||d.hostMaterials],['Médias',d.imageBriefs||d.audioPlan||d.videoPlan],['Live',d.livePlan],['Contrôle',d.controlReport]]
-    var status=sections.map(function(x){return '<div class="game-status '+(String(x[1]||'').trim()?'ready':'')+'"><strong>'+(String(x[1]||'').trim()?'✓ ':'○ ')+x[0]+'</strong>'+(String(x[1]||'').trim()?'Prêt / en travail':'À produire')+'</div>'}).join('')
+    var status=sections.map(function(x){var isConcept=x[0]==='Concept',ready=isConcept?conceptIsApproved(d):!!String(x[1]||'').trim();return '<div '+(isConcept?'id="concept-progress-card" ':'')+'class="game-status '+(ready?'ready':'')+'"><strong>'+(ready?'✓ ':'○ ')+x[0]+(isConcept?(ready?' terminé':' à confirmer'):'')+'</strong>'+(isConcept?(ready?'Validation humaine enregistrée':'Aucune amélioration IA obligatoire'):(ready?'Prêt / en travail':'À produire'))+'</div>'}).join('')
     return '<div class="game-stack">'+aiPanel()+'<div class="panel"><h4>🧭 Avancement</h4><div class="game-status-grid">'+status+'</div><div class="divider"></div><div class="tools-line"><button class="btn gold" onclick="gameAI(\'next\')">✨ Que produire ensuite ?</button><button class="btn" onclick="showView(\'maps\')">🗺️ Cartes</button><button class="btn" onclick="showView(\'visual\')">🎨 Visuels</button><button class="btn" onclick="showView(\'video\')">🎬 Vidéo</button></div></div></div>'
   }
   function gameSelect(label,field,value,options){return '<div class="field"><label>'+label+'</label><select onchange="setData(\''+field+'\',this.value)">'+options.map(function(x){return '<option'+(value===x?' selected':'')+'>'+x+'</option>'}).join('')+'</select></div>'}
   function gameArea(label,field,value,rows){return '<div class="field"><label>'+label+'</label><textarea rows="'+(rows||7)+'" oninput="setData(\''+field+'\',this.value)">'+esc(value||'')+'</textarea></div>'}
   function gameMeter(label,field,value){var n=Number(value)||0;return '<div class="game-meter"><span>'+label+'</span><input type="range" min="0" max="5" step="1" value="'+n+'" oninput="setData(\''+field+'\',Number(this.value));this.nextElementSibling.textContent=this.value"><b>'+n+'</b></div>'}
-  function gameConcept(d){return '<h4>✨ Identité du jeu</h4><div class="game-note">Choisis l’âge du public : de <b>5 ans à 18 ans et plus</b>. L’histoire et son intensité doivent respecter ton choix.</div><div class="row"><div class="field"><label>Titre</label><input value="'+esc(currentProject.title)+'" oninput="setRoot(\'title\',this.value)"></div><div class="field"><label>Client / collection</label><input value="'+esc(currentProject.client||'')+'" oninput="setRoot(\'client\',this.value)"></div></div><div class="row three"><div class="field"><label>Type</label><select onchange="setData(\'gameType\',this.value)">'+gameTypeOptions(d.gameType)+'</select></div>'+gameSelect('Mode','playMode',d.playMode,['Présentiel','À distance','Hybride'])+gameSelect('Public','audience',d.audience,['5+','6+','7+','8+','9+','10+','11+','12+','13+','14+','15+','16+','17+','18+'])+'</div><div class="row three"><div class="field"><label>Joueurs</label><input type="number" min="1" value="'+(d.playerCount||8)+'" oninput="setData(\'playerCount\',Number(this.value))"></div><div class="field"><label>Durée</label><input value="'+esc(d.duration||'')+'" oninput="setData(\'duration\',this.value)"></div>'+gameSelect('Difficulté','difficulty',d.difficulty,['Accessible','Intermédiaire','Difficile','Expert'])+'</div><div class="row"><div class="field"><label>Genre / univers</label><input value="'+esc(d.genre||'')+'" oninput="setData(\'genre\',this.value)"></div><div class="field"><label>Ton</label><input value="'+esc(d.tone||'')+'" oninput="setData(\'tone\',this.value)"></div></div>'+bookConceptPanel()+gameArea('Ton idée brute','idea',d.idea,7)+gameArea('Intention créative — ce que les joueurs doivent vivre / ressentir','creatorIntent',d.creatorIntent,5)+'<div class="divider"></div><div class="game-kicker">Intensité créative 0–5</div>'+gameMeter('Horreur','horror',d.horror)+gameMeter('Violence','violence',d.violence)+gameMeter('Sensualité','sensuality',d.sensuality)+gameMeter('Romance','romance',d.romance)+gameMeter('Langage adulte','language',d.language)+gameMeter('Tension psychologique','psychological',d.psychological)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'concept\')">🧠 Structurer mon concept</button><button class="btn" onclick="gameAI(\'pitch\')">Créer le pitch</button></div>'}
+  function gameConcept(d){return '<h4>✨ Identité du jeu</h4><div class="game-note">Choisis l’âge du public : de <b>5 ans à 18 ans et plus</b>. L’histoire et son intensité doivent respecter ton choix.</div><div class="row"><div class="field"><label>Titre</label><input value="'+esc(currentProject.title)+'" oninput="setRoot(\'title\',this.value)"></div><div class="field"><label>Client / collection</label><input value="'+esc(currentProject.client||'')+'" oninput="setRoot(\'client\',this.value)"></div></div><div class="row three"><div class="field"><label>Type</label><select onchange="setData(\'gameType\',this.value)">'+gameTypeOptions(d.gameType)+'</select></div>'+gameSelect('Mode','playMode',d.playMode,['Présentiel','À distance','Hybride'])+gameSelect('Public','audience',d.audience,['5+','6+','7+','8+','9+','10+','11+','12+','13+','14+','15+','16+','17+','18+'])+'</div><div class="row three"><div class="field"><label>Joueurs</label><input type="number" min="1" value="'+(d.playerCount||8)+'" oninput="setData(\'playerCount\',Number(this.value))"></div><div class="field"><label>Durée</label><input value="'+esc(d.duration||'')+'" oninput="setData(\'duration\',this.value)"></div>'+gameSelect('Difficulté','difficulty',d.difficulty,['Accessible','Intermédiaire','Difficile','Expert'])+'</div><div class="row"><div class="field"><label>Genre / univers</label><input value="'+esc(d.genre||'')+'" oninput="setData(\'genre\',this.value)"></div><div class="field"><label>Ton</label><input value="'+esc(d.tone||'')+'" oninput="setData(\'tone\',this.value)"></div></div>'+bookConceptPanel()+gameArea('Ton idée brute','idea',d.idea,7)+gameArea('Intention créative — ce que les joueurs doivent vivre / ressentir','creatorIntent',d.creatorIntent,5)+'<div class="divider"></div><div class="game-kicker">Intensité créative 0–5</div>'+gameMeter('Horreur','horror',d.horror)+gameMeter('Violence','violence',d.violence)+gameMeter('Sensualité','sensuality',d.sensuality)+gameMeter('Romance','romance',d.romance)+gameMeter('Langage adulte','language',d.language)+gameMeter('Tension psychologique','psychological',d.psychological)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'concept\')">🧠 Structurer mon concept (facultatif)</button><button class="btn" onclick="gameAI(\'pitch\')">Créer le pitch (facultatif)</button></div>'+
+    '<div id="concept-completion-status" role="status" aria-live="polite" class="game-note '+(conceptIsApproved(d)?'concept-approved':'')+'">'+(conceptIsApproved(d)?'✅ Concept terminé et enregistré. NyXia le prendra en compte pour les étapes suivantes.':'○ Concept en cours : lorsque ton texte te convient, confirme-le sans utiliser l’IA.')+'</div>'+
+    '<div class="tools-line"><button id="confirm-concept-button" class="btn gold" type="button" onclick="confirmConceptCompleted()">✓ '+(conceptIsApproved(d)?'Confirmer à nouveau mon concept':'Mon concept est terminé · informer NyXia')+'</button><button class="btn" type="button" onclick="setGameTab(\'bible\')">Continuer vers la Bible →</button></div>'}
   // Import de livre dans Concept : l'original reste intact, les cases sont remplies seulement après validation.
   var conceptBook=null;
   function bookConceptPanel(){
@@ -412,6 +647,7 @@
     var original=JSON.stringify(d);
     try{
       if(!String(d.sourceDocuments||'').includes('## SOURCE — '+b.fileName+'\n'))d.sourceDocuments=gameImportAppend(d.sourceDocuments,b.fileName,b.markdown);
+      if(applied.some(function(k){return conceptEditableFields.includes(k)&&d[k]!==b.proposal[k]}))delete d.conceptCompletedAt;
       applied.forEach(function(k){d[k]=b.proposal[k]});
       var names=String(d.importedSourceNames||'').split(' · ').filter(Boolean);if(!names.includes(b.fileName))names.push(b.fileName);d.importedSourceNames=names.join(' · ');
       currentProject.data=d;currentProject=(await api('/api/atelier/projects/'+currentProject.id,{method:'PUT',body:JSON.stringify(currentProject)})).project;await reloadIndex();
@@ -2461,9 +2697,9 @@
 
   function gameContext(){
     var d=currentProject.data||{}
-    return {title:currentProject.title,client:currentProject.client||'',gameType:d.gameType,audience:d.audience,playMode:d.playMode,playerCount:d.playerCount,duration:d.duration,genre:d.genre,tone:d.tone,difficulty:d.difficulty,intensity:{horror:d.horror,violence:d.violence,sensuality:d.sensuality,romance:d.romance,language:d.language,psychological:d.psychological},idea:d.idea,creatorIntent:d.creatorIntent,lockedCanon:d.lockedCanon,worldBible:d.worldBible,storyStructure:d.storyStructure,scenesQuests:d.scenesQuests,endings:d.endings,characters:d.characters,playerPrologue:d.playerPrologue,playerCreationInstructions:d.playerCreationInstructions,playerArchetypes:d.playerArchetypes,playerFactions:d.playerFactions,playerStartingReputation:d.playerStartingReputation,playerReputationRules:d.playerReputationRules,playerBadgeCatalog:d.playerBadgeCatalog,npcIntelligence:d.npcIntelligence,npcMemoryRules:d.npcMemoryRules,npcRelationshipRules:d.npcRelationshipRules,npcAutonomyRules:d.npcAutonomyRules,npcVoicePlan:d.npcVoicePlan,npcTestName:d.npcTestName,npcRuntimeJson:d.npcRuntimeJson,npcModel:d.npcModel,factionsCreatures:d.factionsCreatures,itemsRewards:d.itemsRewards,mechanics:d.mechanics,combatRules:d.combatRules,progression:d.progression,playerMaterials:d.playerMaterials,hostMaterials:d.hostMaterials,livePlan:d.livePlan,imageBriefs:d.imageBriefs,audioPlan:d.audioPlan,videoPlan:d.videoPlan,mapPlan:d.mapPlan,controlReport:d.controlReport,sourceDocuments:d.sourceDocuments||'',guidedScenesJson:d.guidedScenesJson||''}
+    return {title:currentProject.title,client:currentProject.client||'',gameType:d.gameType,audience:d.audience,playMode:d.playMode,playerCount:d.playerCount,duration:d.duration,genre:d.genre,tone:d.tone,difficulty:d.difficulty,conceptValidation:{completed:conceptIsApproved(d),completedAt:d.conceptCompletedAt||null,approvedBy:conceptIsApproved(d)?'humain':'non confirmé'},intensity:{horror:d.horror,violence:d.violence,sensuality:d.sensuality,romance:d.romance,language:d.language,psychological:d.psychological},idea:d.idea,creatorIntent:d.creatorIntent,lockedCanon:d.lockedCanon,worldBible:d.worldBible,storyStructure:d.storyStructure,scenesQuests:d.scenesQuests,endings:d.endings,characters:d.characters,playerPrologue:d.playerPrologue,playerCreationInstructions:d.playerCreationInstructions,playerArchetypes:d.playerArchetypes,playerFactions:d.playerFactions,playerStartingReputation:d.playerStartingReputation,playerReputationRules:d.playerReputationRules,playerBadgeCatalog:d.playerBadgeCatalog,npcIntelligence:d.npcIntelligence,npcMemoryRules:d.npcMemoryRules,npcRelationshipRules:d.npcRelationshipRules,npcAutonomyRules:d.npcAutonomyRules,npcVoicePlan:d.npcVoicePlan,npcTestName:d.npcTestName,npcRuntimeJson:d.npcRuntimeJson,npcModel:d.npcModel,factionsCreatures:d.factionsCreatures,itemsRewards:d.itemsRewards,mechanics:d.mechanics,combatRules:d.combatRules,progression:d.progression,playerMaterials:d.playerMaterials,hostMaterials:d.hostMaterials,livePlan:d.livePlan,imageBriefs:d.imageBriefs,audioPlan:d.audioPlan,videoPlan:d.videoPlan,mapPlan:d.mapPlan,controlReport:d.controlReport,sourceDocuments:d.sourceDocuments||'',guidedScenesJson:d.guidedScenesJson||''}
   }
-  function gamePromptBase(){return 'Tu travailles dans NyXiaLabo avec une équipe humaine qui garde la direction créative. Adapte le jeu à l’âge choisi dans le Concept (de 5 ans à 18 ans et plus). Respecte les niveaux d’intensité demandés et n’ajoute aucun contenu inadapté au public sélectionné. La sensualité peut être forte et romantique sans devenir pornographique explicite. L’horreur peut être sombre et dérangeante selon le niveau choisi. Ne modifie jamais les faits du CANON VERROUILLÉ. Pour les PNJ IA, la Bible + le Canon + l’état du moteur sont l’autorité de vérité : un PNJ peut mentir en personnage mais ne peut pas inventer un nouveau fait canonique, accéder à une connaissance interdite ni modifier l’état du jeu. Ton travail doit produire du matériel réellement jouable et exploitable, pas seulement une belle histoire. Quand une information manque, propose une solution éditoriale au lieu de bloquer.'}
+  function gamePromptBase(){return 'Tu travailles dans NyXiaLabo avec une équipe humaine qui garde la direction créative. Adapte le jeu à l’âge choisi dans le Concept (de 5 ans à 18 ans et plus). Respecte les niveaux d’intensité demandés et n’ajoute aucun contenu inadapté au public sélectionné. La sensualité peut être forte et romantique sans devenir pornographique explicite. L’horreur peut être sombre et dérangeante selon le niveau choisi. Ne modifie jamais les faits du CANON VERROUILLÉ. Si conceptValidation.completed est vrai, le Concept a été déclaré terminé par la créatrice : prends-le comme base pour les étapes suivantes, ne propose une réécriture que si elle te le demande explicitement. Pour les PNJ IA, la Bible + le Canon + l’état du moteur sont l’autorité de vérité : un PNJ peut mentir en personnage mais ne peut pas inventer un nouveau fait canonique, accéder à une connaissance interdite ni modifier l’état du jeu. Ton travail doit produire du matériel réellement jouable et exploitable, pas seulement une belle histoire. Quand une information manque, propose une solution éditoriale au lieu de bloquer.'}
   async function gameAI(mode){
     if(!currentProject)return
     var c=gameContext(),ctx=JSON.stringify(c,null,2),sys=gamePromptBase(),prompt='',target=''
