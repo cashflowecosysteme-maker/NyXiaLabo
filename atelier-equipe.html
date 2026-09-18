@@ -103,6 +103,7 @@
 </div>
 <div id="toast" class="toast"></div>
 
+  <script src="/js/dialogue-core.js"></script>
 <script>
   var token = sessionStorage.getItem('sandbox_token') || ''
   var allProjects = []
@@ -2949,297 +2950,209 @@
     var m=map[action];await runAI('Tu es l’assistant de production GhostWriting de l’équipe humaine NyXiaLabo. L’humain garde la direction éditoriale. Tu ne changes JAMAIS un fait verrouillé. Si une amélioration exige de modifier un fait verrouillé, tu le signales comme proposition séparée.','Voici le dossier complet :\n\n'+ghostContext()+'\n\nTÂCHE : '+m[0],m[1])
   }
 
-  function renderAudio(){var host=document.getElementById('view-audio');var ok=currentProject&&currentProject.kind==='audiobook';host.innerHTML=projectSelector('audiobook','chooseAudio')+(ok?'<div class="game-tabs"><button class="game-tab '+(audioMode==='chapitres'?'active':'')+'" onclick="setAudioMode(\'chapitres\')">🎧 Narration · chapitres</button><button class="game-tab '+(audioMode==='dialogues'?'active':'')+'" onclick="setAudioMode(\'dialogues\')">🎭 Dialogues · répliques</button></div>'+(audioMode==='dialogues'?dialogueWorkspace():audioWorkspace()):'<div class="hero"><div class="badge">SERVICE ÉQUIPE</div><h3>Studio Livre Audio</h3><p>Aperçu gratuit par la voix du navigateur. Production réelle par Google Cloud Text-to-Speech. Le service appartient à l’équipe; Alex peut seulement y orienter les clients.</p><div class="tools-line" style="margin-top:16px"><a class="btn gold" href="/audiobook-studio.html">🧹 Préparer le manuscrit et calculer mes coûts</a></div></div>');if(ok){if(audioMode==='chapitres')loadVoices();else loadDialogueVoices()}}
-  function setAudioMode(mode){
-    if(mode!=='dialogues'&&mode!=='chapitres')return
-    audioMode=mode;renderAudio()
+  // ─── DIALOGUES : workflow isolé. Studio narration / Classement / Concept / Azgaar INTACTS. ───
+  var dialogueManuscriptSource='', dialogueManuscriptFile='', dialogueAiRunning=false;
+  function dialogueCore(){if(!window.NyXiaDialogueCore)throw new Error('Le fichier /js/dialogue-core.js manque : installe les deux fichiers ensemble.');return window.NyXiaDialogueCore;}
+  function renderAudio(){
+    var host=document.getElementById('view-audio'),ok=currentProject&&currentProject.kind==='audiobook';
+    host.innerHTML=projectSelector('audiobook','chooseAudio')+(ok?'<div class="game-tabs"><button class="game-tab '+(audioMode==='chapitres'?'active':'')+'" onclick="setAudioMode(\'chapitres\')">🎧 Narration · chapitres</button><button class="game-tab '+(audioMode==='dialogues'?'active':'')+'" onclick="setAudioMode(\'dialogues\')">🎭 Dialogues · répliques</button></div>'+(audioMode==='dialogues'?dialogueWorkspace():audioWorkspace()):'<div class="hero"><div class="badge">SERVICE ÉQUIPE</div><h3>Studio Livre Audio</h3><p>Aperçu gratuit par la voix du navigateur. Production réelle par Google Cloud Text-to-Speech. Le service appartient à l’équipe; Alex peut seulement y orienter les clients.</p><div class="tools-line" style="margin-top:16px"><a class="btn gold" href="/audiobook-studio.html">🧹 Préparer le manuscrit et calculer mes coûts</a></div></div>');
+    if(ok){if(audioMode==='chapitres')loadVoices();else if(dialogueFocusActor)loadDialogueVoices();}
   }
-  function dialogueList(){return Array.isArray(currentProject.data.dialogueReplicas)?currentProject.data.dialogueReplicas:[]}
-  function dialogueActorNames(){return Array.from(new Set(dialogueList().map(function(r){return r.character||''}).filter(Boolean))).sort(function(a,b){return a.localeCompare(b,'fr')})}
+  function setAudioMode(mode){if(mode!=='dialogues'&&mode!=='chapitres')return;audioMode=mode;renderAudio();}
+  function dialogueList(){return currentProject&&currentProject.data&&Array.isArray(currentProject.data.dialogueReplicas)?currentProject.data.dialogueReplicas:[];}
+  function dialogueActorNames(){
+    var seen=new Set(),out=[];dialogueList().forEach(function(r){var name=dialogueCore().actorInfo(r.character).primary;if(name&&!seen.has(name)&&!dialogueCore().actorInfo(r.character).secondary){seen.add(name);out.push(name);}});
+    dialogueList().forEach(function(r){var name=dialogueCore().actorInfo(r.character).primary;if(name&&!seen.has(name)){seen.add(name);out.push(name);}});
+    return out;
+  }
+  function dialogueActorRows(name){return dialogueList().map(function(r,i){return {row:r,index:i};}).filter(function(x){return dialogueCore().actorInfo(x.row.character).primary===name;});}
+  function dialogueReady(){
+    var d=currentProject&&currentProject.data,rows=dialogueList();
+    return !!(d&&d.dialogueReviewImported&&rows.length&&rows.every(function(r){return r.character&&r.text&&r.reviewedDocument&&!r.needsReview;}));
+  }
   function dialogueWorkspace(){
-    var d=currentProject.data||{},rows=dialogueList(),actors=dialogueActorNames()
-    if(dialogueFocusActor&&!actors.includes(dialogueFocusActor))dialogueFocusActor=''
-    var acts=dialogueFocusActor?Array.from(new Set(rows.filter(function(r){return r.character===dialogueFocusActor}).map(function(r){return r.act||'Sans acte'}))):[]
-    var visible=dialogueFocusActor?rows.filter(function(r){return r.character===dialogueFocusActor&&(!dialogueFocusAct||(r.act||'Sans acte')===dialogueFocusAct)}):[]
-    var ready=!!d.dialogueReviewImported&&rows.length>0&&rows.every(function(r){return !!r.character&&!r.needsReview&&!!r.reviewedDocument})
-    var voice=dialogueFocusActor?(d.dialogueVoices||{})[dialogueFocusActor]||'':''
-    var actorOptions='<option value="">— Sélectionner UN personnage —</option>'+actors.map(function(actor){return '<option value="'+classementAttr(actor)+'"'+(actor===dialogueFocusActor?' selected':'')+'>'+esc(actor)+'</option>'}).join('')
-    var actOptions='<option value="">Tous les actes de ce personnage</option>'+acts.map(function(act){return '<option value="'+classementAttr(act)+'"'+(act===dialogueFocusAct?' selected':'')+'>'+esc(act)+'</option>'}).join('')
-    var cards=dialogueFocusActor?(visible.length?visible.map(function(r){
-      var i=rows.indexOf(r),number=String(i+1).padStart(4,'0'),file=safeName(r.act||'acte')+'-'+safeName(r.character)+'-'+number+'.mp3',result=dialogueMp3[r.id],proposal=dialogueProposals[r.id]
-      var context=r.sourceText?'<p class="tiny">📄 '+esc(r.sourceFile||'Manuscrit')+' · ligne '+esc(r.sourceLine||'?')+' · '+esc(r.sourceChapter||'')+(r.needsReview?' · ⚠ À vérifier':' · ✓ Vérifiée')+'</p><details><summary>Voir le passage original</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc([r.contextBefore||'',r.sourceText||'',r.contextAfter||''].filter(Boolean).join('\n\n'))+'</pre></details>':''
-      var proposalHtml=proposal?'<div class="panel" style="margin:8px 0;padding:12px"><b>Proposition facultative de NyXia : '+esc(proposal.character||'À attribuer')+'</b><p style="white-space:pre-wrap">'+esc(proposal.text)+'</p><button class="btn gold" onclick="acceptDialogueProposal('+i+')">✓ Appliquer</button></div>':''
-      return '<div class="chapter"><div class="chapter-head"><span class="badge">'+number+'</span><b>'+esc(r.act||'Sans acte')+' · '+esc(r.character)+'</b><button class="btn danger" onclick="deleteDialogueReplica('+i+')">✕</button></div>'+context+'<div class="field"><label>Paroles à enregistrer</label><textarea aria-label="Réplique '+number+'" oninput="editDialogueReplica('+i+',this.value)">'+esc(r.text||'')+'</textarea></div>'+proposalHtml+'<div class="tools-line">'+(r.needsReview?'<button class="btn gold" onclick="approveDialogueReplica('+i+')">✓ Confirmer le texte</button>':'')+'<button class="btn primary" '+(!ready||dialogueBusy||!voice?'disabled ':'')+'onclick="generateDialogueReplica('+i+')">🎙️ Générer cette seule réplique</button>'+(result?'<a class="btn gold" download="'+classementAttr(file)+'" href="'+classementAttr(result)+'">⬇ MP3 '+number+'</a>':'')+'</div>'+(result?'<audio controls src="'+classementAttr(result)+'"></audio>':'')+'</div>'
-    }).join(''):'<p class="muted">Aucune réplique pour cet acte.</p>'):'<p class="muted">Sélectionne un personnage : aucune voix ni réplique des autres personnages ne sera affichée ou générée.</p>'
-    return '<div class="panel"><h4>🎭 Dialogues — un personnage à la fois</h4><p class="muted">Ce module prépare les répliques séparément. Le livre audio complet et sa narration par chapitres restent inchangés. Une réplique = un MP3, uniquement sur ton clic.</p>'+ 
-      '<div class="panel" style="margin-bottom:16px;border-color:rgba(167,139,250,.38)"><h4>1 — Extraire TOUS les dialogues et télécharger le contrôle</h4><p class="tiny">Importe le manuscrit .md/.txt. Le Labo relève les répliques repérables, leur acte et leur provenance ; télécharge le premier document et vérifie-le contre le manuscrit. Les dialogues intégrés à la narration peuvent échapper au repérage : corrige le document et, s’il manque une réplique, ajoute-la dans ce module puis télécharge une nouvelle version. Les noms incertains restent à attribuer. Pas de Google TTS à cette étape.</p><div class="tools-line"><button class="btn primary" onclick="document.getElementById(\'dialogue-source-file\').click()">📄 Importer le manuscrit (.md / .txt)</button><input id="dialogue-source-file" style="display:none" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" onchange="importDialogueManuscript(this.files);this.value=\'\'"><button class="btn gold" onclick="exportDialogueReviewDocument()">⬇ Document 1 — Tous les dialogues à vérifier</button><button class="btn" '+(dialogueAnalysisBusy?'disabled ':'')+'onclick="analyzeDialogueWithNyxia()">💜 Aide facultative à l’attribution</button></div><p class="tiny">'+esc(dialogueImportStatus||'Aucun fichier n’est supprimé à l’import. Vérifie toi-même les passages manquants.')+'</p></div>'+ 
-      '<div class="panel" style="margin-bottom:16px;border-color:rgba(167,139,250,.38)"><h4>2 — Réimporter TON document validé, puis classer par personnage</h4><p class="tiny">Après tes vérifications, remets le document 1 avec tous ses identifiants et un personnage pour chaque réplique. Le Labo refuse les doublons et les répliques absentes ou non attribuées. Tu peux alors télécharger un document regroupé par personnage puis par acte.</p><div class="tools-line"><button class="btn primary" onclick="document.getElementById(\'dialogue-reviewed-file\').click()">📄 Réimporter le document validé</button><input id="dialogue-reviewed-file" style="display:none" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" onchange="importDialogueReviewedDocument(this.files);this.value=\'\'"><button class="btn gold" '+(!ready?'disabled ':'')+'onclick="exportDialogueDocument()">⬇ Document 2 — Tous les personnages séparés</button></div><p class="tiny">'+(ready?'✅ Document validé : '+rows.length+' répliques disponibles par personnage.':'⚠ En attente de ton document validé et de toutes les attributions. Aucune production des dialogues encore ouverte.')+'</p></div>'+ 
-      '<div class="panel" style="margin-bottom:16px"><h4>Corriger ou ajouter une réplique oubliée</h4><div class="row"><div class="field"><label>Personnage</label><input id="dialogue-new-actor" list="dialogue-actors" placeholder="Ex. Kira Valthorn"><datalist id="dialogue-actors">'+actors.map(function(actor){return '<option value="'+classementAttr(actor)+'"></option>'}).join('')+'</datalist></div><div class="field"><label>Acte</label><input id="dialogue-new-act" placeholder="Acte I"></div></div><div class="field"><label>Répliques de ce seul personnage — une par ligne</label><textarea id="dialogue-import-text" rows="5" placeholder="— Tu sens ça aussi, n’est-ce pas ?"></textarea></div><div class="tools-line"><button class="btn primary" onclick="addDialogueReplicas()">+ Ajouter une réplique</button><button class="btn" onclick="exportDialogueReviewDocument()">⬇ Retélécharger le document 1 mis à jour</button></div><p class="tiny">Ajouter une réplique après validation nécessite un nouveau contrôle du document 1, pour n’en oublier aucune.</p></div>'+ 
-      '<div class="panel" style="margin-bottom:16px"><h4>3 — Produire UN personnage, puis passer au suivant</h4><div class="row"><div class="field"><label>Personnage à enregistrer</label><select id="dialogue-actor-filter" onchange="setDialogueActorFilter(this.value)">'+actorOptions+'</select></div><div class="field"><label>Acte (facultatif)</label><select onchange="setDialogueActFilter(this.value)" '+(!dialogueFocusActor?'disabled ':'')+'>'+actOptions+'</select></div></div>'+ 
-      (dialogueFocusActor?'<div class="field"><label>Voix Google — seulement '+esc(dialogueFocusActor)+'</label><select class="dialogue-voice" data-character="'+classementAttr(dialogueFocusActor)+'" onchange="setDialogueVoice(this.dataset.character,this.value)"><option value="">Chargement des voix…</option></select></div><div class="tools-line"><button class="btn gold" '+(!ready?'disabled ':'')+'onclick="exportDialogueActorDocument()">⬇ Télécharger UNIQUEMENT '+esc(dialogueFocusActor)+'</button></div><p class="tiny">'+visible.length+' réplique(s) de '+esc(dialogueFocusActor)+' affichée(s). Voix mémorisée pour ce personnage uniquement. Chaque clic produit un MP3 distinct ; aucun lot multivoix.</p>':'<p class="muted">Choisis d’abord Kira ou un autre personnage pour afficher uniquement ses dialogues et sa voix.</p>')+
-      '<div id="dialogue-list" style="margin-top:16px">'+cards+'</div><div id="dialogue-status" role="status" aria-live="polite" class="tiny"></div></div></div>'
+    var d=currentProject.data||{},rows=dialogueList(),actors=dialogueActorNames();
+    if(dialogueFocusActor&&!actors.includes(dialogueFocusActor)){dialogueFocusActor='';dialogueFocusAct='';}
+    var selected=dialogueFocusActor?dialogueActorRows(dialogueFocusActor):[],acts=Array.from(new Set(selected.map(function(x){return x.row.act||'Sans acte';}))),visible=selected.filter(function(x){return !dialogueFocusAct||(x.row.act||'Sans acte')===dialogueFocusAct;}),ready=dialogueReady();
+    var options='<option value="">— Choisir UN personnage —</option>'+actors.map(function(x){return '<option value="'+classementAttr(x)+'"'+(x===dialogueFocusActor?' selected':'')+'>'+esc(x)+'</option>';}).join('');
+    var actOptions='<option value="">Tous les actes</option>'+acts.map(function(x){return '<option value="'+classementAttr(x)+'"'+(x===dialogueFocusAct?' selected':'')+'>'+esc(x)+'</option>';}).join('');
+    var cards=visible.map(function(x){
+      var r=x.row,i=x.index,number=String(selected.indexOf(x)+1).padStart(3,'0'),file=safeName(dialogueFocusActor)+'-'+number+'.mp3',url=dialogueMp3[r.id];
+      return '<div class="chapter"><div class="chapter-head"><span class="badge">'+number+'</span><b>'+esc(r.act||'Sans acte')+' · '+esc(r.chapter||'Sans chapitre')+'</b></div>'+
+        '<p class="tiny">Personnage : '+esc(r.character||'À attribuer')+' · '+esc(r.sourceFile||'Source')+' · ligne '+esc(r.sourceLine||'?')+'</p>'+
+        '<div class="field"><label>Texte exact du document validé</label><textarea readonly aria-label="Réplique '+number+'">'+esc(r.text||'')+'</textarea></div>'+
+        '<button class="btn" onclick="copyDialogueReplica('+i+')">📋 Copier cette réplique</button> '+
+        '<button class="btn primary" '+(!ready||dialogueBusy||!((d.dialogueVoices||{})[dialogueFocusActor])?'disabled ':'')+'onclick="generateDialogueReplica('+i+')">🎙️ Générer UNIQUEMENT cette réplique</button> '+
+        (url?'<a class="btn gold" download="'+classementAttr(file)+'" href="'+classementAttr(url)+'">⬇ MP3 '+number+'</a><audio controls src="'+classementAttr(url)+'"></audio>':'')+'</div>';
+    }).join('');
+    return '<div class="panel"><h4>🎭 Dialogues — deux documents, une voix à la fois</h4><p class="muted">La narration complète par chapitres reste séparée et inchangée. Aucune synthèse Google automatique.</p>'+
+      '<div class="panel" style="margin-top:16px"><h4>ÉTAPE 1 · Extraire et vérifier</h4><p class="tiny">Importe un manuscrit quelconque. Le repérage local est provisoire ; NyXia peut ensuite examiner TOUT le texte sur ton clic. Ses paroles proposées ne sont acceptées que si chaque segment existe littéralement dans la source. Les passages non couverts et les locuteurs incertains restent signalés.</p><div class="tools-line">'+
+      '<button class="btn primary" onclick="document.getElementById(\'dialogue-source-file\').click()">📄 Importer manuscrit</button><input id="dialogue-source-file" type="file" style="display:none" accept=".md,.markdown,.txt" onchange="importDialogueManuscript(this.files);this.value=\'\'">'+
+      '<button class="btn" '+(dialogueAiRunning?'disabled ':'')+'onclick="analyzeDialogueWithNyxia()">💜 NyXia · extraction complète avec IA</button><button class="btn gold" '+(!rows.length?'disabled ':'')+'onclick="exportDialogueReviewDocument()">⬇ DOCUMENT 1 · dialogues à valider</button></div><p class="tiny">'+esc(dialogueImportStatus||'Aucun manuscrit importé dans cette session. Le document 1 est exportable dès qu’il contient des répliques.')+'</p><p class="tiny">'+rows.length+' réplique(s) dans le projet. Relis et corrige le document 1, puis réimporte-le. Garde les identifiants invisibles <!-- ... --> présents dans le fichier.</p></div>'+
+      '<div class="panel" style="margin-top:16px"><h4>ÉTAPE 2 · Réimporter TON document validé</h4><p class="tiny">Le document 1 corrigé est la seule référence du regroupement. Tous ses identifiants, ses paroles et ses attributions sont contrôlés : ni omission ni doublon.</p><div class="tools-line"><button class="btn primary" onclick="document.getElementById(\'dialogue-reviewed-file\').click()">📄 Réimporter document 1 validé</button><input id="dialogue-reviewed-file" type="file" style="display:none" accept=".md,.markdown,.txt" onchange="importDialogueReviewedDocument(this.files);this.value=\'\'"><button class="btn gold" '+(!ready?'disabled ':'')+'onclick="exportDialogueDocument()">⬇ DOCUMENT 2 · classement par personnage</button></div><p class="tiny">'+(ready?'✅ '+rows.length+' répliques validées, contrôle de classement disponible.':'⚠ Validation manuelle requise avant classement et production audio.')+'</p></div>'+
+      '<div class="panel" style="margin-top:16px"><h4>Compléter une réplique manquante</h4><p class="tiny">Si l’IA oublie une réplique, ajoute exactement ses paroles ici, puis retélécharge et revalide le document 1.</p><div class="row"><div class="field"><label>Personnage</label><input id="dialogue-new-actor" list="dialogue-actors" placeholder="Nom exact"><datalist id="dialogue-actors">'+actors.map(function(x){return '<option value="'+classementAttr(x)+'"></option>';}).join('')+'</datalist></div><div class="field"><label>Acte</label><input id="dialogue-new-act" placeholder="Acte I"></div></div><div class="field"><label>Chapitre</label><input id="dialogue-new-chapter" placeholder="Chapitre 2 — Titre"></div><div class="field"><label>Paroles exactes — une réplique par ligne</label><textarea id="dialogue-import-text" rows="3"></textarea></div><button class="btn" onclick="addDialogueReplicas()">+ Ajouter sans appeler l’IA</button></div>'+
+      '<div class="panel" style="margin-top:16px"><h4>PRODUCTION · UN personnage à la fois</h4><div class="row"><div class="field"><label>Personnage</label><select onchange="setDialogueActorFilter(this.value)">'+options+'</select></div><div class="field"><label>Acte</label><select '+(!dialogueFocusActor?'disabled ':'')+'onchange="setDialogueActFilter(this.value)">'+actOptions+'</select></div></div>'+
+      (dialogueFocusActor?'<div class="field"><label>Voix Google propre à '+esc(dialogueFocusActor)+' (Chirp 3 HD disponible selon ton compte)</label><select class="dialogue-voice" data-character="'+classementAttr(dialogueFocusActor)+'" onchange="setDialogueVoice(this.dataset.character,this.value)"><option value="">Chargement des voix…</option></select></div><div class="tools-line"><button class="btn" '+(!ready?'disabled ':'')+'onclick="copyDialogueActor()">📋 Copier toutes les répliques de '+esc(dialogueFocusActor)+'</button><button class="btn gold" '+(!ready?'disabled ':'')+'onclick="exportDialogueActorDocument()">⬇ Document de '+esc(dialogueFocusActor)+'</button></div><p class="tiny">'+selected.length+' réplique(s) pour ce personnage · '+visible.length+' affichée(s) selon le filtre. Un clic explicite = un seul MP3. Pas de génération par lot.</p>':'<p class="muted">Sélectionne un personnage : aucune réplique d’une autre voix ne sera affichée.</p>')+
+      '<div id="dialogue-list" style="margin-top:16px">'+(dialogueFocusActor?(cards||'<p class="muted">Aucune réplique.</p>'):'')+'</div><div id="dialogue-status" class="tiny" role="status" aria-live="polite"></div></div></div>';
   }
-  // Import sans appel IA/TTS : inventaire conservateur des passages qui commencent
-  // par une réplique (tiret cadratin/demi-cadratin ou guillemet français).
-  // Le bloc original est conservé pour éviter de perdre une phrase lors du nettoyage.
+  function dialogueId(){return crypto.randomUUID();}
   function dialogueExtractManuscript(source,filename){
-    var lines=String(source||'').replace(/\r\n?/g,'\n').split('\n'),out=[],act='Sans acte',chapter='',ambiguousQuotes=0
-    var cleanTitle=function(line){return line.replace(/^\s*\\?#{1,6}\s*/,'').replace(/\\([#*_-])/g,'$1').trim()}
-    var isOpening=function(line){return /^\s*(?:[—–]\s*\S|«\s*\S)/.test(line)}
-    for(var i=0;i<lines.length;i++){
-      var line=lines[i],heading=cleanTitle(line),isHeading=/^\s*\\?#{1,6}\s*/.test(line)
-      if(isHeading){if(/^acte\b/i.test(heading))act=heading;if(/^chapitre\b/i.test(heading))chapter=heading;continue}
-      if(!isOpening(line)){
-        // Ces guillemets enchâssés peuvent être des dialogues ou de simples citations.
-        if(/«[^»\n]+»/.test(line))ambiguousQuotes++
-        continue
-      }
-      var first=i,parts=[line],j=i+1
-      while(j<lines.length&&lines[j].trim()&&!/^\s*\\?#{1,6}\s*/.test(lines[j])&&!isOpening(lines[j])){parts.push(lines[j]);j++}
-      var original=parts.join('\n').trim()
-      var spoken=original.replace(/^\s*[—–]\s*/,'').replace(/^\s*«\s*/,'').replace(/\s*»\s*$/,'').trim()
-      var contextBefore=lines.slice(Math.max(0,first-4),first).filter(function(x){return x.trim()}).join(' ').slice(-700)
-      var contextAfter=lines.slice(j,Math.min(lines.length,j+4)).filter(function(x){return x.trim()}).join(' ').slice(0,700)
-      // Seule une attribution explicite par nom est acceptée d'emblée;
-      // « dit-il/elle » reste inconnu jusqu'à examen humain/IA.
-      var speech=original.match(/\b(?:dit|répondit|demanda|murmura|souffla|lança|s'exclama|s’écria|s'écria|confirma|compléta|continua|coupa|corrigea|chuchota|ajouta|ordonna|déclara|annonça|insista|répliqua|protesta|intervint)\s+([A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÿ'’-]*(?:\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÿ'’-]*)?)/u)
-      var character=speech?speech[1]:''
-      // Ces expressions sont des descriptions, pas des noms de personnages.
-      if(/^(?:Une|Un|La|Le|Les|Sa|Son|Ses|Des|Ce|Cette|Il|Elle|C'était)$/i.test(character))character=''
-      out.push({id:crypto.randomUUID(),character:character,act:act,chapter:chapter,text:spoken,sourceText:original,sourceFile:filename,sourceLine:first+1,sourceKey:filename+'|'+(first+1)+'|'+original,sourceChapter:chapter,contextBefore:contextBefore,contextAfter:contextAfter,needsReview:true})
-      i=j-1
-    }
-    return {entries:out,inlineQuotes:ambiguousQuotes}
+    return {entries:dialogueCore().fallback(source,filename,dialogueId),inlineQuotes:dialogueCore().scan(source).filter(function(x){return x.kind==='citation-incertaine';}).length};
   }
   async function importDialogueManuscript(files){
-    if(!currentProject||currentProject.kind!=='audiobook'||!files||!files.length)return
-    var file=files[0],projectId=currentProject.id
-    if(!/\.(md|markdown|txt)$/i.test(file.name)){alert('Choisis un manuscrit Markdown (.md) ou texte (.txt).');return}
-    if(file.size>3*1024*1024){alert('Manuscrit supérieur à 3 Mo : divise-le en actes pour l’import.');return}
+    if(!currentProject||currentProject.kind!=='audiobook'||!files||!files.length)return;
+    var file=files[0],projectId=currentProject.id;
+    if(!/\.(md|markdown|txt)$/i.test(file.name)||file.size>3*1024*1024){alert('Choisis un document .md ou .txt de moins de 3 Mo.');return;}
     try{
-      var raw=await file.text()
-      if(!currentProject||currentProject.id!==projectId)return
-      var parsed=dialogueExtractManuscript(raw,file.name),rows=currentProject.data.dialogueReplicas=currentProject.data.dialogueReplicas||[]
-      var known=new Set(rows.map(function(r){return r.sourceKey}).filter(Boolean)),added=0
-      parsed.entries.forEach(function(r){if(!known.has(r.sourceKey)){rows.push(r);known.add(r.sourceKey);added++}})
-      dialogueFocusActor='';dialogueFocusAct=''
-      dialogueImportStatus=added+' réplique(s) relevée(s) · '+(parsed.entries.length-added)+' doublon(s) évité(s) · '+parsed.inlineQuotes+' citation(s) intégrée(s) à la narration à inspecter séparément. Chaque réplique extraite doit être confirmée avant synthèse.'
-      if(added){delete currentProject.data.dialogueReviewImported;markDirty()}
-      renderAudio();toast('Manuscrit analysé : '+added+' nouvelles répliques')
-    }catch(e){alert('Extraction impossible : '+e.message)}
+      var raw=await file.text();if(!currentProject||currentProject.id!==projectId)return;
+      dialogueManuscriptSource=raw;dialogueManuscriptFile=file.name;
+      var parsed=dialogueExtractManuscript(raw,file.name),existing=dialogueList(),known=new Set(existing.map(function(r){return r.sourceKey;})),added=0;
+      var hasAiVersion=existing.some(function(r){return r.sourceFile===file.name&&r.sourceMethod==='IA vérifiée littéralement';});
+      parsed.entries.forEach(function(r){if(!hasAiVersion&&!known.has(r.sourceKey)){existing.push(r);known.add(r.sourceKey);added++;}});
+      currentProject.data.dialogueReplicas=existing;
+      if(added||existing.some(function(r){return r.sourceFile===file.name;})){delete currentProject.data.dialogueReviewImported;markDirty();}
+      dialogueFocusActor='';dialogueFocusAct='';
+      dialogueImportStatus=added+' repérage(s) provisoire(s) ajouté(s) ; '+parsed.inlineQuotes+' citation(s) potentiellement ambiguë(s). Clique « NyXia · extraction complète avec IA » pour examiner le manuscrit entier, puis vérifie le document 1. Aucun Google TTS lancé.';
+      renderAudio();
+    }catch(e){alert('Lecture du manuscrit impossible : '+e.message);}
   }
-  // DOCUMENT 1 : format Markdown humain, à éditer puis à remettre au Labo.
-  // Les IDs persistants empêchent d'intervertir deux répliques homonymes.
+  function parseDialogueAiJson(raw){return JSON.parse(String(raw||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/```\s*$/,'').trim());}
+  async function analyzeDialogueWithNyxia(){
+    if(dialogueAiRunning||!currentProject)return;
+    if(!dialogueManuscriptSource){alert('Réimporte ton manuscrit dans cette session pour que NyXia puisse comparer chaque parole à la source complète.');return;}
+    var core=dialogueCore(),chunks=core.makeChunks(dialogueManuscriptSource,4900),projectId=currentProject.id,filename=dialogueManuscriptFile,raw=dialogueManuscriptSource;
+    if(!confirm('NyXia va analyser TOUT le manuscrit en '+chunks.length+' requête(s) au modèle IA sélectionné. Ces requêtes IA peuvent coûter de l’argent, mais AUCUN appel Google TTS ne sera lancé. L’extraction existante sera remplacée pour CE fichier après le contrôle. Continuer ?'))return;
+    var responses=[],errors=[],model=currentAiTool();if(!model){alert('Choisis d’abord un modèle IA disponible.');return;}
+    dialogueAiRunning=true;
+    try{
+      for(var i=0;i<chunks.length;i++){
+        if(!currentProject||currentProject.id!==projectId)throw Error('Projet changé : extraction interrompue.');
+        var block=chunks[i];dialogueImportStatus='Extraction IA '+(i+1)+' / '+chunks.length+' : aucune voix Google générée.';
+        var sys='Tu extrais les dialogues d’un roman ou jeu RPG, quel que soit son univers. Réponds UNIQUEMENT par un objet JSON valide {"entries":[{"character":"nom exact ou vide si inconnu","segments":["premier fragment exact","suite exacte si la narration interrompt les paroles"]}]}. Extrais toutes les paroles, même enchâssées dans les paragraphes; respecte leur ordre et le locuteur identifiable. Chaque segment doit être une sous-chaîne COPIÉE CARACTÈRE PAR CARACTÈRE du texte fourni, y compris apostrophes, accents et ponctuation. Aucun ajout, correction, narration, didascalie inventée ni paraphrase. Si une réplique reprend après une incise, renvoie plusieurs segments exacts dans une même entrée. Ne mets pas les tirets introductifs ni les guillemets extérieurs dans les segments, sauf s’ils sont prononcés. Personnage incertain = chaîne vide. Un seul fragment par réplique simple. Ne crée aucune réplique qui ne figure pas dans la source. Aucun texte hors JSON.';
+        try{
+          var answer=await runAIText(sys,'CONTEXTE (ne pas extraire de celui-ci) : '+raw.slice(Math.max(0,block.start-280),block.start)+'\n\nSEULE SOURCE À EXTRAIRE (bloc '+(i+1)+'/'+chunks.length+') :\n'+block.text+'\n\nCONTEXTE APRÈS (ne pas extraire de celui-ci) : '+raw.slice(block.end,Math.min(raw.length,block.end+280)),model.id);
+          responses.push(parseDialogueAiJson(answer));
+        }catch(e){responses.push({entries:[]});errors.push('Bloc '+(i+1)+' : '+e.message);}
+      }
+      var result=core.acceptAI(raw,chunks,responses,dialogueId),old=dialogueList(),other=old.filter(function(r){return r.sourceFile!==filename;}),fresh=result.rows;
+      fresh.forEach(function(r){r.sourceFile=filename;});
+      var localFallback=core.fallback(raw,filename,dialogueId);
+      result.uncovered.forEach(function(candidate){
+        var extra=localFallback.find(function(x){return x.sourceStart===candidate.start;});
+        if(extra&&!fresh.some(function(r){return r.sourceStart===extra.sourceStart;}))fresh.push(extra);
+      });
+      fresh.sort(function(a,b){return (a.sourceStart||0)-(b.sourceStart||0);});
+      if(!fresh.length)throw Error('Aucune parole localisée : aucun remplacement effectué.');
+      if(!currentProject||currentProject.id!==projectId)return;
+      currentProject.data.dialogueReplicas=other.concat(fresh);delete currentProject.data.dialogueReviewImported;markDirty();
+      dialogueFocusActor='';dialogueFocusAct='';
+      dialogueImportStatus='IA : '+result.accepted+' réplique(s) vérifiée(s) littéralement, '+result.uncovered.length+' passage(s) repéré(s) non couverts (conservés pour révision), '+result.rejections.length+' proposition(s) rejetée(s) pour non-fidélité, '+errors.length+' bloc(s) en échec. Document 1 À RELIRE : toute réplique peut nécessiter une correction humaine. '+errors.slice(0,2).join(' ; ');
+      renderAudio();toast('Extraction contrôlée : télécharge et corrige le document 1.');
+    }catch(e){dialogueImportStatus='Extraction interrompue : '+e.message+'. Les données précédentes restent disponibles.';renderAudio();}
+    finally{dialogueAiRunning=false;if(currentProject&&currentProject.id===projectId&&audioMode==='dialogues')renderAudio();}
+  }
   function dialogueDownloadMarkdown(content,filename){
-    var blob=new Blob([content],{type:'text/markdown;charset=utf-8'}),url=URL.createObjectURL(blob)
-    audioUrls.push(url)
-    var a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove()
+    var url=URL.createObjectURL(new Blob([content],{type:'text/markdown;charset=utf-8'}));audioUrls.push(url);
+    var a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
   }
   function exportDialogueReviewDocument(){
-    if(!currentProject)return
-    var rows=dialogueList()
-    if(!rows.length){alert('Importe d’abord ton manuscrit pour extraire ses dialogues.');return}
-    var md='# '+currentProject.title+' — DOCUMENT 1 : DIALOGUES À VÉRIFIER\n\n'
-    md+='Contrôle ce document avec le manuscrit original : des répliques dans la narration peuvent échapper à l’extraction. Corrige chaque parole pour retirer les incises du narrateur. Remplace « À attribuer » par le nom exact du personnage. Conserve les lignes ### Réplique et leurs ID pour réimporter ce document. Ajoute les dialogues oubliés dans le Labo, puis télécharge de nouveau ce document.\n\n'
-    var lastAct=null
-    rows.forEach(function(r,i){
-      var act=r.act||'Sans acte';if(lastAct!==act){md+='## '+act+'\n\n';lastAct=act}
-      md+='### Réplique '+String(i+1).padStart(4,'0')+' [ID:'+r.id+'] — Personnage : '+(r.character||'À attribuer')+'\n\n'
-      md+=String(r.text||'').trim()+'\n\n'
-      md+='<!-- Provenance : '+(r.sourceFile||'saisie manuelle').replace(/-->/g,'')+' ; ligne '+(r.sourceLine||'?')+' -->\n\n'
-    })
-    dialogueDownloadMarkdown(md,safeName(currentProject.title)+'-01-dialogues-a-verifier.md')
+    if(!dialogueList().length){alert('Importe d’abord le manuscrit.');return;}
+    dialogueDownloadMarkdown(dialogueCore().document1(dialogueList(),currentProject.title),safeName(currentProject.title)+'-01-dialogues-a-valider.md');
   }
-  // Ne jamais accepter un document étranger : toutes ses répliques doivent référencer
-  // un ID de ce projet. Les cas manquants sont indiqués ; aucune suppression silencieuse.
-  function dialogueParseReviewedDocument(source){
-    var lines=String(source||'').replace(/\r\n?/g,'\n').split('\n'),items=[],current=null,act='Sans acte'
-    function finish(){
-      if(!current)return
-      var body=current.lines.join('\n').trim()
-      // Supprimer uniquement les commentaires de provenance générés par le Labo.
-      body=body.replace(/\n?<!-- Provenance :[^\n]*-->\s*$/,'').trim()
-      current.text=body;delete current.lines;items.push(current);current=null
-    }
-    lines.forEach(function(line){
-      var actMatch=line.match(/^##\s+(.+?)\s*$/)
-      if(actMatch){finish();act=actMatch[1];return}
-      var heading=line.match(/^###\s+Réplique\s+\d+\s+\[ID:([a-f\d-]{36})\]\s+—\s+Personnage\s*:\s*(.*?)\s*$/i)
-      if(heading){finish();current={id:heading[1],character:heading[2]==='À attribuer'?'':heading[2],act:act,lines:[]};return}
-      if(current){
-        if(/^<!-- Provenance :/.test(line)){current.lines.push(line);return}
-        if(/^#{1,3}\s/.test(line))throw new Error('En-tête inattendu dans la réplique '+current.id+'. Conserve le format téléchargé.')
-        current.lines.push(line)
-      }
-    })
-    finish()
-    return items
-  }
+  function dialogueParseReviewedDocument(raw){return dialogueCore().parseDocument1(raw);}
   async function importDialogueReviewedDocument(files){
-    if(!currentProject||currentProject.kind!=='audiobook'||!files||!files.length)return
-    var file=files[0],projectId=currentProject.id
-    if(!/\.(md|markdown|txt)$/i.test(file.name)||file.size>3*1024*1024){alert('Importe le document Markdown téléchargé depuis ce projet (maximum 3 Mo).');return}
+    if(!currentProject||currentProject.kind!=='audiobook'||!files||!files.length)return;
+    var f=files[0],projectId=currentProject.id;
+    if(!/\.(md|markdown|txt)$/i.test(f.name)||f.size>3*1024*1024){alert('Document Markdown de moins de 3 Mo requis.');return;}
     try{
-      var raw=await file.text();if(!currentProject||currentProject.id!==projectId)return
-      var incoming=dialogueParseReviewedDocument(raw),rows=dialogueList(),known=new Map(rows.map(function(r){return [r.id,r]}))
-      if(!incoming.length)throw new Error('Aucune ligne « ### Réplique … [ID:…] — Personnage : … » retrouvée. Importe le document 1 téléchargé depuis ce Labo.')
-      var seen=new Set(),invalid=[],empty=[],unassigned=[]
-      incoming.forEach(function(r){
-        if(seen.has(r.id))invalid.push('ID en double : '+r.id)
-        else if(!known.has(r.id))invalid.push('ID inconnu : '+r.id)
-        else if(!r.text)empty.push(r.id)
-        else if(!r.character)unassigned.push(r.id)
-        seen.add(r.id)
-      })
-      if(invalid.length||empty.length)throw new Error([invalid.slice(0,5).join(' ; '),empty.length+' réplique(s) vide(s)'].filter(Boolean).join(' ; '))
-      var missing=rows.filter(function(r){return !seen.has(r.id)})
-      if(missing.length)throw new Error(missing.length+' réplique(s) absente(s) du document. Retélécharge le document 1 et vérifie que toutes les répliques y figurent ; aucune ligne supprimée automatiquement.')
-      if(unassigned.length)throw new Error(unassigned.length+' réplique(s) sans personnage. Remplis chaque champ « Personnage : » avant de lancer la séparation.')
-      var msg=incoming.length+' répliques reconnues ; '+missing.length+' du projet absentes du document (elles resteront conservées) ; '+unassigned.length+' personnage(s) à attribuer.\n\nImporter les corrections et créer le regroupement par personnage ?'
-      if(!confirm(msg))return
-      incoming.forEach(function(r){var original=known.get(r.id);original.text=r.text;original.act=r.act;original.character=r.character;original.needsReview=false;original.reviewedDocument=true;delete dialogueProposals[r.id]})
-      currentProject.data.dialogueReviewImported={at:new Date().toISOString(),count:incoming.length}
-      dialogueFocusActor='';dialogueFocusAct='';markDirty()
-      dialogueImportStatus='Document validé réimporté : '+incoming.length+' répliques mises à jour, '+missing.length+' conservées hors document, '+unassigned.length+' sans personnage. Télécharge maintenant le document 2 regroupé, ou filtre Kira pour générer ses répliques.'
-      renderAudio();toast('Document validé : regroupement par personnage prêt')
-    }catch(e){alert('Document non importé : '+e.message)}
+      var raw=await f.text();if(!currentProject||currentProject.id!==projectId)return;
+      var incoming=dialogueParseReviewedDocument(raw),ordered=dialogueCore().reconcile(incoming,dialogueList());
+      var originals=new Map(dialogueList().map(function(x){return [x.id,x];}));
+      var edited=ordered.filter(function(r){return originals.get(r.id)&&originals.get(r.id).text!==r.text;});
+      var unverified=ordered.filter(function(r){var original=originals.get(r.id),source=String(original.sourceText||'');
+        return source&&source.indexOf(r.text)<0&&!(original.sourceMethod==='IA vérifiée littéralement'&&r.text===original.text);});
+      var changedHeadings=ordered.filter(function(r){var prev=originals.get(r.id);return prev&&(prev.act!==r.act||prev.chapter!==r.chapter);});
+      var grouped=dialogueCore().group(ordered);
+      if(unverified.length&&!confirm('ATTENTION : '+unverified.length+' réplique(s) ne correspondent PAS à une sous-chaîne continue du passage source et/ou ont été modifiées. Cela peut être normal pour des paroles séparées par une incise. Vérifie-les une seconde fois dans le manuscrit avant de confirmer : '+unverified.slice(0,4).map(function(x){return x.chapter+' / '+x.character;}).join(' ; ')+'. Continuer malgré cet avertissement ?'))return;
+      if(!confirm(ordered.length+' répliques identifiées, '+edited.length+' texte(s) modifié(s), '+changedHeadings.length+' acte(s)/chapitre(s) réattribué(s), '+unverified.length+' comparaison(s) à vérifier manuellement, '+grouped.total+' répliques classées, aucun ID manquant ni en double. CONFIRMES-TU avoir comparé les paroles au manuscrit original et validé toi-même le document complet ?'))return;
+      currentProject.data.dialogueReplicas=ordered;
+      currentProject.data.dialogueReviewImported={at:new Date().toISOString(),count:ordered.length};
+      dialogueFocusActor='';dialogueFocusAct='';markDirty();
+      dialogueImportStatus='Document 1 validé réimporté : '+ordered.length+' répliques ; '+grouped.total+' classées, aucune perte/duplication. Document 2 disponible.';
+      renderAudio();toast('Validation humaine enregistrée — document 2 prêt.');
+    }catch(e){alert('Réimportation REFUSÉE (aucune modification) : '+e.message);}
   }
-  function assignDialogueReplica(index,name){var r=dialogueList()[index];if(!r)return;r.character=String(name||'').trim();if(r.sourceText)r.needsReview=true;markDirty();renderAudio()}
-  function approveDialogueReplica(index){
-    var r=dialogueList()[index];if(!r)return
-    if(!r.character||!String(r.text||'').trim()){alert('Renseigne le personnage et le texte avant de confirmer.');return}
-    if(new TextEncoder().encode(r.text).length>=4300){alert('Réplique trop longue pour un seul MP3 : divise-la avant de valider.');return}
-    if(!confirm('Confirmer que ce texte contient seulement les paroles de '+r.character+' ?'))return
-    r.needsReview=false;markDirty();renderAudio() // La réimportation du document complet reste obligatoire pour la production.
-  }
-  function dialogueWords(str){return String(str||'').toLowerCase().normalize('NFC').match(/[\p{L}\p{N}]+/gu)||[]}
-  function dialogueFaithful(source,spoken){
-    var a=dialogueWords(source),b=dialogueWords(spoken),i=0
-    if(!b.length)return false
-    for(var j=0;j<a.length&&i<b.length;j++)if(a[j]===b[i])i++
-    return i===b.length
-  }
-  function parseDialogueAiJson(response){
-    var raw=String(response||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/```\s*$/,'').trim()
-    return JSON.parse(raw)
-  }
-  async function analyzeDialogueWithNyxia(){
-    if(dialogueAnalysisBusy||!currentProject)return
-    var items=dialogueList().filter(function(r){return r.sourceText&&r.needsReview})
-    if(!items.length){alert('Aucune réplique extraite en attente d’analyse. Importe le manuscrit ou confirme les fiches.');return}
-    if(!confirm('NyXia va analyser '+items.length+' répliques par petites séries, via le modèle IA sélectionné. Cela peut entraîner des frais IA, mais aucun Google TTS ne sera lancé. Continuer ?'))return
-    var projectId=currentProject.id,done=0,accepted=0,flagged=0
-    dialogueAnalysisBusy=true;dialogueImportStatus='Analyse de NyXia en cours…';renderAudio()
-    try{
-      for(var offset=0;offset<items.length;offset+=10){
-        if(!currentProject||currentProject.id!==projectId)throw new Error('Le projet a changé; analyse interrompue.')
-        var batch=items.slice(offset,offset+10),names=dialogueActorNames()
-        var packet=batch.map(function(r){return {id:r.id,act:r.act,chapter:r.chapter,original:r.sourceText,before:r.contextBefore,after:r.contextAfter,actorHint:r.character||''}})
-        dialogueImportStatus='NyXia analyse '+(offset+1)+'–'+Math.min(offset+10,items.length)+' / '+items.length+' répliques…'
-        var answer=await runAIText('Tu es NyXia, assistante éditoriale de production audio. Réponds seulement en JSON valide {"entries":[{"id":"identifiant donné","character":"nom exact ou chaîne vide si doute","spokenText":"UNIQUEMENT paroles prononcées"}]}. Traite CHAQUE identifiant UNE FOIS. Respecte absolument l’ordre des mots du paragraphe original; enlève les incises et la narration sans inventer ni reformuler. Si tu ne peux pas isoler les paroles avec certitude, renvoie spokenText identique au texte initial sans le tiret, et character vide si incertain. Identifie le locuteur à partir du contexte; ne déduis jamais une identité à partir du personnage interpellé. Aucun texte supplémentaire.', 'Personnages déjà connus : '+JSON.stringify(names)+'\n\nRépliques et contexte : '+JSON.stringify(packet))
-        var parsed=parseDialogueAiJson(answer),proposals=Array.isArray(parsed.entries)?parsed.entries:[],seen=new Set()
-        proposals.forEach(function(p){
-          if(!p||seen.has(p.id))return
-          var row=batch.find(function(x){return x.id===p.id});if(!row)return
-          seen.add(p.id)
-          var txt=String(p.spokenText||'').trim(),who=String(p.character||'').trim()
-          var context=[row.sourceText,row.contextBefore,row.contextAfter,names.join(' ')].join(' ')
-          var hasName=who&&(context.toLocaleLowerCase('fr').indexOf(who.toLocaleLowerCase('fr'))>=0||row.character===who)
-          if(!txt||!dialogueFaithful(row.sourceText,txt)||new TextEncoder().encode(txt).length>=4300){flagged++;return}
-          if(who&&!hasName)who=''
-          dialogueProposals[row.id]={character:who,text:txt};accepted++
-        })
-        done+=batch.length;flagged+=batch.length-seen.size
-      }
-      dialogueImportStatus='NyXia : '+done+' réplique(s) parcourue(s), '+accepted+' proposition(s) à examiner, '+flagged+' entrée(s) non résolue(s). Les textes originaux et les répliques du projet n’ont pas été remplacés.'
-    }catch(e){dialogueImportStatus='Analyse interrompue après '+done+'/'+items.length+' répliques : '+e.message+'. Les propositions déjà reçues restent consultables.'}
-    finally{dialogueAnalysisBusy=false;if(currentProject&&currentProject.id===projectId)renderAudio()}
-  }
-  function acceptDialogueProposal(index){
-    var r=dialogueList()[index],p=r&&dialogueProposals[r.id];if(!p)return
-    if(!p.character){alert('NyXia n’a pas identifié ce personnage : indique son nom avant de confirmer.');return}
-    r.text=p.text;r.character=p.character;r.needsReview=false;delete dialogueProposals[r.id];markDirty();renderAudio()
-  }
-  function acceptAllDialogueProposals(){
-    var accepted=0,unknown=0
-    if(!confirm('Appliquer les propositions de NyXia avec personnage identifié ? Tu peux toujours comparer chaque original avant de confirmer.'))return
-    dialogueList().forEach(function(r){var p=dialogueProposals[r.id];if(!p)return;if(!p.character){unknown++;return}r.text=p.text;r.character=p.character;r.needsReview=false;delete dialogueProposals[r.id];accepted++})
-    if(accepted)markDirty();dialogueImportStatus=accepted+' proposition(s) acceptée(s), '+unknown+' sans locuteur encore à vérifier.';renderAudio()
-  }
-
-  function setDialogueActorFilter(value){dialogueFocusActor=dialogueActorNames().includes(value)?value:'';dialogueFocusAct='';renderAudio()}
-  function setDialogueActFilter(value){dialogueFocusAct=value;renderAudio()}
   function addDialogueReplicas(){
-    var name=document.getElementById('dialogue-new-actor').value.trim(),act=document.getElementById('dialogue-new-act').value.trim()
-    if(!name||!act){alert('Indique le personnage et l’acte avant d’ajouter les répliques.');return}
-    var source=document.getElementById('dialogue-import-text').value,lines=source.split(/\r?\n/).map(function(line){return line.trim().replace(/^[—–-]\s*/,'')}).filter(Boolean)
-    if(!lines.length){alert('Écris une réplique ou colle les lignes de ce personnage avant de les ajouter.');return}
-    var list=currentProject.data.dialogueReplicas=currentProject.data.dialogueReplicas||[]
-    lines.forEach(function(line){list.push({id:crypto.randomUUID(),character:name,act:act,text:line,needsReview:true,reviewedDocument:false})})
-    delete currentProject.data.dialogueReviewImported
-    dialogueFocusActor=name;dialogueFocusAct=act;markDirty();renderAudio();toast(lines.length+' réplique(s) ajoutée(s) ; retélécharge le document 1 pour vérifier l’ensemble.')
+    var actor=document.getElementById('dialogue-new-actor').value.trim(),act=document.getElementById('dialogue-new-act').value.trim(),chapter=document.getElementById('dialogue-new-chapter').value.trim(),raw=document.getElementById('dialogue-import-text').value;
+    if(!actor||!act||!chapter||!raw.trim()){alert('Renseigne personnage, acte, chapitre et paroles exactes.');return;}
+    var lines=raw.split(/\r?\n/).filter(function(l){return !!l.trim();}),rows=dialogueList();
+    lines.forEach(function(text){rows.push({id:dialogueId(),character:actor,act:act,chapter:chapter,text:text,sourceFile:'Ajout humain',sourceLine:0,needsReview:true,reviewedDocument:false,sourceKey:'manuel:'+dialogueId()});});
+    currentProject.data.dialogueReplicas=rows;delete currentProject.data.dialogueReviewImported;markDirty();
+    dialogueFocusActor=dialogueCore().actorInfo(actor).primary;dialogueFocusAct=act;
+    dialogueImportStatus=lines.length+' réplique(s) ajoutée(s). Document 1 à télécharger et à valider à nouveau.';
+    renderAudio();
   }
-  function editDialogueReplica(index,text){var r=dialogueList()[index];if(!r)return;if(r.text===text)return;r.text=text;r.needsReview=true;r.reviewedDocument=false;delete currentProject.data.dialogueReviewImported;markDirty()}
-  function deleteDialogueReplica(index){var r=dialogueList()[index];if(!r||!confirm('Supprimer cette réplique uniquement ? Le document de validation devra ensuite être retéléchargé.'))return;dialogueList().splice(index,1);delete currentProject.data.dialogueReviewImported;markDirty();renderAudio()}
-  function setDialogueVoice(character,voice){
-    var d=currentProject.data;d.dialogueVoices=d.dialogueVoices||{};d.dialogueVoices[character]=voice;markDirty()
+  function setDialogueActorFilter(value){dialogueFocusActor=dialogueActorNames().includes(value)?value:'';dialogueFocusAct='';renderAudio();}
+  function setDialogueActFilter(value){dialogueFocusAct=value;renderAudio();}
+  function setDialogueVoice(actor,voice){
+    if(!dialogueFocusActor||actor!==dialogueFocusActor)return;
+    var v=currentProject.data.dialogueVoices=currentProject.data.dialogueVoices||{};v[actor]=voice;markDirty();renderAudio();
   }
   async function loadDialogueVoices(){
-    var selects=document.querySelectorAll('.dialogue-voice');if(!selects.length)return
-    var id=currentProject.id
+    var select=document.querySelector('.dialogue-voice');if(!select||!dialogueFocusActor)return;
+    var id=currentProject.id,actor=dialogueFocusActor;
     try{
-      var response=await api('/api/atelier/tts/voices?languageCode=fr-FR')
-      if(!currentProject||currentProject.id!==id||audioMode!=='dialogues')return
-      document.querySelectorAll('.dialogue-voice').forEach(function(sel){
-        var current=(currentProject.data.dialogueVoices||{})[sel.dataset.character]||''
-        sel.innerHTML='<option value="">— Choisir une voix Google —</option>'+response.voices.map(function(v){return '<option value="'+classementAttr(v.name)+'"'+(current===v.name?' selected':'')+'>'+esc(v.name)+' · '+esc(v.ssmlGender||'')+'</option>'}).join('')
-      })
-    }catch(e){document.querySelectorAll('.dialogue-voice').forEach(function(sel){sel.innerHTML='<option value="">'+esc(e.message)+'</option>'})}
+      var response=await api('/api/atelier/tts/voices?languageCode=fr-FR');
+      if(!currentProject||currentProject.id!==id||dialogueFocusActor!==actor||audioMode!=='dialogues')return;
+      var current=(currentProject.data.dialogueVoices||{})[actor]||'';
+      select=document.querySelector('.dialogue-voice');if(!select)return;
+      var voices=(response.voices||[]).slice().sort(function(a,b){return (b.name.includes('Chirp3-HD')?1:0)-(a.name.includes('Chirp3-HD')?1:0);});
+      select.innerHTML='<option value="">— Choisir une voix Google —</option>'+voices.map(function(v){return '<option value="'+classementAttr(v.name)+'"'+(current===v.name?' selected':'')+'>'+esc(v.name)+' · '+esc(v.ssmlGender||'')+'</option>';}).join('');
+    }catch(e){var sel=document.querySelector('.dialogue-voice');if(sel)sel.innerHTML='<option value="">'+esc(e.message)+'</option>';}
+  }
+  function dialogueCopyText(text){
+    if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(text);
+    var area=document.createElement('textarea');area.value=text;document.body.appendChild(area);area.select();var ok=document.execCommand('copy');area.remove();return ok?Promise.resolve():Promise.reject(Error('Copie refusée par le navigateur'));
+  }
+  function copyDialogueReplica(index){
+    var r=dialogueList()[index];if(!r||!dialogueFocusActor||dialogueCore().actorInfo(r.character).primary!==dialogueFocusActor)return;
+    dialogueCopyText(r.text).then(function(){toast('Réplique copiée');}).catch(function(e){alert(e.message);});
+  }
+  function copyDialogueActor(){
+    if(!dialogueReady()||!dialogueFocusActor)return;
+    var text=dialogueActorRows(dialogueFocusActor).map(function(x){return x.row.text;}).join('\n\n');
+    dialogueCopyText(text).then(function(){toast('Toutes les paroles de '+dialogueFocusActor+' copiées');}).catch(function(e){alert(e.message);});
   }
   async function generateDialogueReplica(index){
-    var r=dialogueList()[index];if(!r||dialogueBusy)return
-    var text=String(r.text||'').trim(),voice=(currentProject.data.dialogueVoices||{})[r.character]
-    if(!currentProject.data.dialogueReviewImported||!dialogueList().every(function(x){return !!x.character&&!x.needsReview&&!!x.reviewedDocument})){alert('Réimporte d’abord le document 1 COMPLET et validé pour séparer tous les personnages.');return}
-    if(!dialogueFocusActor||r.character!==dialogueFocusActor){alert('Sélectionne un seul personnage. Impossible de lancer une autre voix depuis cette liste.');return}
-    if(!text){alert('La réplique est vide.');return}
-    if(r.needsReview||!r.character){alert('Confirme d’abord le texte et le personnage de cette réplique extraite du manuscrit.');return}
-    if(!voice){alert('Choisis d’abord la voix Google de '+r.character+'.');return}
-    if(new TextEncoder().encode(text).length>=4300){alert('Cette réplique dépasse la limite de synthèse. Divise-la en deux répliques avant de générer.');return}
-    if(!confirm('Générer cette seule réplique avec Google TTS ? Cette action peut être facturée.'))return
-    var projectId=currentProject.id,status=document.getElementById('dialogue-status')
-    dialogueBusy=true;if(status)status.textContent='Génération de la réplique en cours…'
+    var r=dialogueList()[index];if(!r||dialogueBusy||!dialogueReady())return;
+    var actor=dialogueCore().actorInfo(r.character).primary,voice=(currentProject.data.dialogueVoices||{})[actor]||'';
+    if(actor!==dialogueFocusActor||!actor||!voice){alert('Sélectionne ce personnage et sa voix avant la production.');return;}
+    if(new TextEncoder().encode(r.text).length>=4300){alert('Réplique trop longue pour un MP3 Google. Corrige et revalide le document 1.');return;}
+    if(!confirm('Produire UN SEUL MP3 de '+actor+' avec la voix '+voice+' ? Appel Google éventuellement facturé.'))return;
+    var id=currentProject.id,status=document.getElementById('dialogue-status');dialogueBusy=true;
+    if(status)status.textContent='Génération de cette réplique uniquement…';
     try{
-      var response=await api('/api/atelier/tts',{method:'POST',body:JSON.stringify({text:text,voiceName:voice,languageCode:'fr-FR',speakingRate:currentProject.data.speakingRate||1,pitch:currentProject.data.pitch||0})})
-      if(!response.audioContent)throw new Error('Google TTS n’a pas retourné de fichier audio.')
-      var blob=base64Blob(response.audioContent),url=URL.createObjectURL(blob)
-      if(dialogueMp3[r.id])URL.revokeObjectURL(dialogueMp3[r.id])
-      dialogueMp3[r.id]=url;audioUrls.push(url)
-      if(!currentProject||currentProject.id!==projectId)return
-      renderAudio();toast('MP3 prêt : télécharge cette réplique')
-    }catch(e){alert('Erreur TTS : '+e.message)}
-    finally{dialogueBusy=false;if(currentProject&&currentProject.id===projectId&&document.getElementById('dialogue-list'))renderAudio()}
+      var response=await api('/api/atelier/tts',{method:'POST',body:JSON.stringify({text:r.text,voiceName:voice,languageCode:'fr-FR',speakingRate:currentProject.data.speakingRate||1,pitch:currentProject.data.pitch||0})});
+      if(!response.audioContent)throw Error('Fichier MP3 absent dans la réponse Google.');
+      var url=URL.createObjectURL(base64Blob(response.audioContent));if(dialogueMp3[r.id])URL.revokeObjectURL(dialogueMp3[r.id]);dialogueMp3[r.id]=url;audioUrls.push(url);
+      if(currentProject&&currentProject.id===id){renderAudio();toast('UN MP3 prêt à télécharger');}
+    }catch(e){alert('Erreur Google TTS : '+e.message);}
+    finally{dialogueBusy=false;if(currentProject&&currentProject.id===id&&currentView==='audio')renderAudio();}
   }
   function exportDialogueDocument(){
-    var rows=dialogueList();if(!rows.length){alert('Aucune réplique à exporter.');return}
-    if(!currentProject.data.dialogueReviewImported||rows.some(function(r){return !r.character||r.needsReview||!r.reviewedDocument})){alert('Importe le document 1 complet et validé avant d’exporter le regroupement par personnage.');return}
-    var groups=Object.create(null),names=[]
-    rows.forEach(function(r,i){var actor=r.character||'À attribuer',act=r.act||'Sans acte';if(!groups[actor]){groups[actor]=Object.create(null);names.push(actor)}if(!groups[actor][act])groups[actor][act]=[];groups[actor][act].push({number:i+1,text:r.text||'',sourceLine:r.sourceLine||0,sourceFile:r.sourceFile||'',review:r.needsReview})})
-    var md='# '+currentProject.title+' — Dialogues de production\n\nRépliques regroupées par personnage puis par acte. Les répliques extraites portent leur provenance (fichier et ligne). Vérifier celles marquées À VÉRIFIER avant Google TTS.\n\n'
-    names.sort(function(a,b){return a.localeCompare(b,'fr')}).forEach(function(actor){md+='## '+actor+'\n\n';Object.keys(groups[actor]).forEach(function(act){md+='### '+act+'\n\n';groups[actor][act].forEach(function(r){md+='**Réplique '+String(r.number).padStart(3,'0')+'**'+(r.sourceLine?' · '+r.sourceFile+' ligne '+r.sourceLine:'')+(r.review?' · À VÉRIFIER':'')+'\n\n'+r.text+'\n\n'})})})
-    var url=URL.createObjectURL(new Blob([md],{type:'text/markdown;charset=utf-8'}));audioUrls.push(url)
-    var a=document.createElement('a');a.href=url;a.download=safeName(currentProject.title)+'-dialogues-par-personnage.md';document.body.appendChild(a);a.click();a.remove()
+    if(!dialogueReady()){alert('Réimporte d’abord le document 1 complet et validé.');return;}
+    try{var doc=dialogueCore().document2(dialogueList(),currentProject.title);
+      dialogueDownloadMarkdown(doc,safeName(currentProject.title)+'-02-par-personnage.md');}
+    catch(e){alert('Contrôle bloquant avant export : '+e.message);}
+  }
+  function exportDialogueActorDocument(){
+    if(!dialogueReady()||!dialogueFocusActor)return;
+    var items=dialogueActorRows(dialogueFocusActor),txt='# '+currentProject.title+' — '+dialogueFocusActor+'\n\n',act='';
+    items.forEach(function(x,i){var r=x.row;if(act!==r.act){act=r.act;txt+='## '+(act||'Sans acte')+'\n\n';}
+      txt+='### Réplique '+String(i+1).padStart(3,'0')+' · '+(r.chapter||'Sans chapitre')+'\n\n'+r.text+'\n\n';});
+    dialogueDownloadMarkdown(txt,safeName(currentProject.title)+'-'+safeName(dialogueFocusActor)+'-voix.md');
   }
 
-  function exportDialogueActorDocument(){
-    if(!dialogueFocusActor){alert('Sélectionne d’abord un personnage.');return}
-    var rows=dialogueList()
-    if(!currentProject.data.dialogueReviewImported||rows.some(function(r){return !r.character||r.needsReview||!r.reviewedDocument})){alert('Réimporte d’abord le document 1 corrigé et complet.');return}
-    var selected=rows.map(function(r,i){return {r:r,index:i+1}}).filter(function(x){return x.r.character===dialogueFocusActor})
-    if(!selected.length){alert('Aucune réplique attribuée à ce personnage.');return}
-    var actor=dialogueFocusActor,md='# '+currentProject.title+' — '+actor+' — uniquement ses répliques\n\n',act=''
-    selected.forEach(function(x){var r=x.r,next=r.act||'Sans acte';if(next!==act){md+='## '+next+'\n\n';act=next}md+='### Réplique '+String(x.index).padStart(4,'0')+'\n\n'+r.text+'\n\n'})
-    dialogueDownloadMarkdown(md,safeName(currentProject.title)+'-'+safeName(actor)+'-seul.md')
-  }
   function audioWorkspace(){var d=currentProject.data||{},chs=d.chapters||[];return '<div class="workspace"><div class="panel"><h4>🎧 Livre & chapitres</h4><div class="row"><div class="field"><label>Titre</label><input value="'+esc(currentProject.title)+'" oninput="setRoot(\'title\',this.value)"></div><div class="field"><label>Auteur</label><input value="'+esc(d.author||'')+'" oninput="setData(\'author\',this.value)"></div></div><div class="field"><label>Direction de narration</label><textarea oninput="setData(\'notes\',this.value)">'+esc(d.notes||'')+'</textarea></div><div class="divider"></div><div class="tools-line"><button class="btn primary" onclick="addChapter()">+ Ajouter un chapitre</button><span class="tiny">Le contenu texte est sauvegardé dans le projet. Les MP3 restent des fichiers de production à télécharger.</span></div><div id="chapters" style="margin-top:12px">'+chs.map(renderChapter).join('')+'</div></div>'+audioControlPanel()+'</div>'}
   function renderChapter(c,i){return '<div class="chapter '+(i===selectedChapter?'selected':'')+'"><div class="chapter-head"><button class="btn" onclick="selectChapter('+i+')">'+(i===selectedChapter?'●':'○')+'</button><input value="'+esc(c.title||('Chapitre '+(i+1)))+'" oninput="updateChapter('+i+',\'title\',this.value)"><button class="btn danger" onclick="removeChapter('+i+')">✕</button></div><textarea oninput="updateChapter('+i+',\'text\',this.value)">'+esc(c.text||'')+'</textarea></div>'}
   function audioControlPanel(){var d=currentProject.data||{};return '<div class="panel"><h4>🎙️ Production audio</h4><div class="tools-line" style="margin:0 0 16px"><a class="btn gold" href="/audiobook-studio.html">🧹 Préparer le manuscrit et calculer mes coûts</a></div><div class="field"><label>Voix française Google Cloud</label><select id="voice-select" onchange="setData(\'voiceName\',this.value)"><option value="">Chargement des voix…</option></select></div><div class="row"><div class="field"><label>Vitesse</label><input type="number" min="0.25" max="4" step="0.05" value="'+(d.speakingRate||1)+'" oninput="setData(\'speakingRate\',Number(this.value))"></div><div class="field"><label>Hauteur</label><input type="number" min="-20" max="20" step="1" value="'+(d.pitch||0)+'" oninput="setData(\'pitch\',Number(this.value))"></div></div><div class="tools-line"><button class="btn" onclick="browserPreview()">🔊 Aperçu gratuit</button><button class="btn primary" onclick="generateSelectedAudio()">🎧 Générer le chapitre</button><button class="btn gold" onclick="generateBookZip()">⬇ Livre complet en ZIP</button></div><p class="tiny">Les longs chapitres sont découpés automatiquement en segments MP3 pour respecter la limite Google.</p><div id="audio-results"></div></div>'}
