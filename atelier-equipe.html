@@ -191,6 +191,12 @@
       entries.forEach(function(entry,ei){
         var pieces=entry&&entry.segments;
         if(!Array.isArray(pieces)&&typeof entry.text==='string')pieces=[entry.text];
+        // Une copie littérale peut malgré tout contenir une incise narrative.
+        // Rejeter ces propositions plutôt que les présenter comme paroles validées.
+        var narration=Array.isArray(pieces)&&pieces.some(function(piece){
+          return /[,.!?…]\s*(?:dit|répondit|demanda|murmura|souffla|lança|cria|hurla|chuchota|ajouta|déclara|répliqua|siffla|gémit|fit)(?:[-–—](?:il|elle|ils|elles)\b|\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÿ'’-]*)/iu.test(piece);
+        });
+        if(narration){rejections.push('Bloc '+(bi+1)+', entrée '+(ei+1)+' : incise narrative détectée ; vérification humaine requise');return;}
         var spans=exactSegments(s,pieces,cursor,block.end);
         if(!spans){rejections.push('Bloc '+(bi+1)+', entrée '+(ei+1)+' : paroles absentes ou modifiées dans le manuscrit');return;}
         // En cas d'entrées non triées, conserver un signal d'échec au lieu de trier silencieusement.
@@ -215,19 +221,22 @@
   }
   function fallback(source,filename,makeId) {
     var s=nl(source),candidates=scan(s);
+    var speechVerbs='(?:dit|répondit|demanda|murmura|souffla|lança|s.exclama|s.écria|confirma|compléta|continua|coupa|corrigea|chuchota|ajouta|ordonna|déclara|annonça|insista|répliqua|protesta|intervint|fit|cria|hurla|bredouilla|siffla|articula|balbutia|reprit|susurra|ricana|gronda|grogna|gémit|souffla|précisa)';
+    var tag=new RegExp('(?:,?\\s+)'+speechVerbs+'(?:[-–—](?:il|elle|ils|elles|je|tu|nous|vous|on)\\b|\\s+(?:[A-ZÀ-ÖØ-Þ][^.,;!?]{0,55}|(?:il|elle|ils|elles|le|la|lui)\\b))','iu');
     return candidates.map(function(c){
-      var raw=s.slice(c.rawStart,c.rawEnd),txt='';
-      if(c.kind==='named')txt=c.hint;
-      else if(c.kind==='citation-incertaine')txt=c.hint;
+      var raw=s.slice(c.rawStart,c.rawEnd),speech='';
+      if(c.kind==='named'||c.kind==='citation-incertaine')speech=c.hint;
       else {
-        // Le tiret introduit un CANDIDAT, pas une transcription certifiée :
-        // tant que l'IA ou Diane ne l'a pas isolé, aucune narration n'est exportée.
-        txt='';
+        // Première portion littérale AVANT la première incise reconnue.
+        // Toute réplique tronquée ou incertaine porte obligatoirement un avertissement.
+        var beginning=s.slice(c.start,c.end),tagMatch=beginning.match(tag);
+        speech=tagMatch?beginning.slice(0,tagMatch.index):beginning;
+        speech=speech.replace(/\s+$/,'');
       }
-      return {id:makeId(),character:c.character,act:c.act,chapter:c.chapter,text:txt,
+      return {id:makeId(),character:c.character,act:c.act,chapter:c.chapter,text:speech,
         sourceText:raw,sourceFile:filename,sourceLine:c.line,sourceStart:c.start,sourceEnd:c.end,
-        sourceKey:filename+'|'+c.start+'|'+c.end,sourceMethod:'Repérage provisoire',
-        needsReview:true,reviewedDocument:false,ambiguous:c.kind==='citation-incertaine'||txt.length===0,
+        sourceKey:filename+'|'+c.start+'|'+c.end,sourceMethod:'Pré-extraction locale à vérifier',
+        needsReview:true,reviewedDocument:false,ambiguous:true,
         contextBefore:s.slice(Math.max(0,c.rawStart-450),c.rawStart),
         contextAfter:s.slice(c.rawEnd,Math.min(s.length,c.rawEnd+450))};
     });
@@ -266,24 +275,34 @@
     rows.forEach(function(r,i){
       if((r.act||'Sans acte')!==act){act=r.act||'Sans acte';chapter='';md+='## '+act+'\n\n';}
       if((r.chapter||'Sans chapitre')!==chapter){chapter=r.chapter||'Sans chapitre';md+='['+chapter+']\n\n';}
-      md+=(r.character||'À attribuer')+' : «'+String(r.text||'')+'»\n';
+      md+=(r.character||'À attribuer')+' : « '+String(r.text||'')+' »\n';
       md+='<!-- NYXIA-REPLIQUE-ID:'+r.id+' -->\n';
-      md+='<!-- Provenance : '+String(r.sourceFile||'saisie manuelle').replace(/-->/g,'')+' ; ligne '+(r.sourceLine||'?')+' -->\n\n';
+      md+='<!-- Provenance : '+String(r.sourceFile||'saisie manuelle').replace(/-->/g,'')+' ; ligne '+(r.sourceLine||'?')+' -->\n';
+      if(r.needsReview||r.ambiguous)md+='<!-- À VÉRIFIER : comparer avec la source et attribuer le personnage. -->\n';
+      md+='\n';
     });
     return md;
   }
   function parseDocument1(doc) {
     var lines=nl(doc).split('\n'),out=[],act='Sans acte',chapter='Sans chapitre',pending=null;
+    function finishId(line,n){
+      var m=line.match(/^<!-- NYXIA-REPLIQUE-ID:([a-zA-Z0-9_-]+) -->\s*$/);
+      if(!m)return false;
+      if(!pending)throw Error('Identifiant isolé à la ligne '+(n+1));
+      var full=pending.parts.join('\n').replace(/\n+$/,'');
+      if(!full.endsWith('»'))throw Error('Guillemet final manquant pour la réplique ligne '+pending.line);
+      pending.text=full.slice(0,-1).replace(/ $/,'').replace(/^ /,'');delete pending.parts;delete pending.line;
+      pending.id=m[1];out.push(pending);pending=null;return true;
+    }
     lines.forEach(function(line,n){
+      if(finishId(line,n))return;
       var a=line.match(/^##\s+(.+?)\s*$/),c=line.match(/^###\s+(.+?)\s*$/)||line.match(/^\[(Chapitre[^\]]+)\]\s*$/i);
-      if(a){if(pending)throw Error('ID manquant avant la ligne '+(n+1));act=a[1];chapter='Sans chapitre';return;}
-      if(c){if(pending)throw Error('ID manquant avant la ligne '+(n+1));chapter=c[1];return;}
-      var id=line.match(/^<!-- NYXIA-REPLIQUE-ID:([a-zA-Z0-9_-]+) -->\s*$/);
-      if(id){if(!pending)throw Error('ID isolé ligne '+(n+1));pending.id=id[1];out.push(pending);pending=null;return;}
-      if(!pending){
-        var m=line.match(/^(.+?)\s*:\s*«([\s\S]*)»\s*$/u);
-        if(m){pending={id:'',character:m[1].trim()==='À attribuer'?'':m[1].trim(),text:m[2],act:act,chapter:chapter};return;}
-      }else if(line.trim())throw Error('Format de dialogue inattendu ligne '+(n+1)+'. Place chaque réplique sur une ligne.');
+      if(a||c){if(pending)throw Error('Identifiant de réplique manquant avant la ligne '+(n+1));
+        if(a){act=a[1];chapter='Sans chapitre';}else chapter=c[1];return;}
+      if(/^<!-- (?:Provenance|À VÉRIFIER|A VERIFIER|CONTRÔLE)[\s\S]*-->$/.test(line))return;
+      if(pending){pending.parts.push(line);return;}
+      var m=line.match(/^(.+?)\s*:\s*«([\s\S]*)$/u);
+      if(m)pending={id:'',character:m[1].trim()==='À attribuer'?'':m[1].trim(),parts:[m[2]],act:act,chapter:chapter,line:n+1};
     });
     if(pending)throw Error('Dernière réplique sans identifiant.');
     return out;
@@ -313,7 +332,7 @@
       grp.items.forEach(function(item){
         var r=item.row,now=r.act||'Sans acte';if(now!==act){act=now;md+='**'+act+'**\n\n';}
         var suffix=item.variant?' ('+item.variant+')':'';
-        md+='> ['+chapterReference(r.chapter)+']'+suffix+' «'+r.text+'»\n';
+        md+='> ['+chapterReference(r.chapter)+']'+suffix+' « '+r.text+' »\n';
         md+='<!-- NYXIA-REPLIQUE-ID:'+r.id+' -->\n';
       md+='<!-- Provenance : '+String(r.sourceFile||'saisie manuelle').replace(/-->/g,'')+' ; ligne '+(r.sourceLine||'?')+' -->\n\n';
       });
@@ -3177,9 +3196,20 @@
   // ─── DIALOGUES : workflow isolé. Studio narration / Classement / Concept / Azgaar INTACTS. ───
   var dialogueManuscriptSource='', dialogueManuscriptFile='', dialogueAiRunning=false;
   function dialogueCore(){if(!window.NyXiaDialogueCore)throw new Error('Le moteur de dialogues intégré au fichier HTML n’a pas pu démarrer.');return window.NyXiaDialogueCore;}
+  function dialogueAiTool(){
+    var select=document.getElementById('dialogue-model'),wanted=(select&&select.value)||lastAI.toolId||'';
+    return aiTools.find(function(t){return t.id===wanted;})||preferredGptTool()||aiTools[0]||null;
+  }
+  function dialogueModelSelector(){
+    var chosen=(aiTools.find(function(t){return t.id===lastAI.toolId;})||preferredGptTool()||aiTools[0]||{}).id||'';
+    return '<div class="field"><label>Modèle IA chargé de l’extraction (Gemini, Claude, GPT…)</label><select id="dialogue-model" onchange="rememberAiModel(this.value)">'+
+      (aiTools.length?aiTools.map(function(t){return '<option value="'+classementAttr(t.id)+'"'+(chosen===t.id?' selected':'')+'>'+esc(t.name||t.model)+'</option>';}).join(''):'<option value="">Aucun modèle IA disponible</option>')+
+      '</select></div>';
+  }
+
   function renderAudio(){
     var host=document.getElementById('view-audio'),ok=currentProject&&currentProject.kind==='audiobook';
-    host.innerHTML=projectSelector('audiobook','chooseAudio')+(ok?'<div class="game-tabs"><button class="game-tab '+(audioMode==='chapitres'?'active':'')+'" onclick="setAudioMode(\'chapitres\')">🎧 Narration · chapitres</button><button class="game-tab '+(audioMode==='dialogues'?'active':'')+'" onclick="setAudioMode(\'dialogues\')">🎭 Dialogues · répliques</button></div>'+(audioMode==='dialogues'?dialogueWorkspace():audioWorkspace()):'<div class="hero"><div class="badge">SERVICE ÉQUIPE</div><h3>Studio Livre Audio</h3><p>Aperçu gratuit par la voix du navigateur. Production réelle par Google Cloud Text-to-Speech. Le service appartient à l’équipe; Alex peut seulement y orienter les clients.</p><div class="tools-line" style="margin-top:16px"><a class="btn gold" href="/audiobook-studio.html">🧹 Préparer le manuscrit et calculer mes coûts</a></div></div>');
+    host.innerHTML=projectSelector('audiobook','chooseAudio')+(ok?'<div class="game-tabs"><button class="game-tab '+(audioMode==='chapitres'?'active':'')+'" onclick="setAudioMode(\'chapitres\')">🎧 Narration · chapitres</button><button class="game-tab '+(audioMode==='dialogues'?'active':'')+'" onclick="setAudioMode(\'dialogues\')">🎭 Dialogues · répliques</button></div>'+(audioMode==='dialogues'?dialogueWorkspace():audioWorkspace()):'<div class="hero"><div class="badge">SERVICE ÉQUIPE</div><h3>Studio Livre Audio</h3><p>Aperçu gratuit par la voix du navigateur. Production réelle par Google Cloud Text-to-Speech. Le service appartient à l’équipe; Alex peut seulement y orienter les clients. Les dialogues acceptent directement les manuscrits Markdown, sans PDF.</p></div></div>');
     if(ok){if(audioMode==='chapitres')loadVoices();else if(dialogueFocusActor)loadDialogueVoices();}
   }
   function setAudioMode(mode){if(mode!=='dialogues'&&mode!=='chapitres')return;audioMode=mode;renderAudio();}
@@ -3210,9 +3240,9 @@
         (url?'<a class="btn gold" download="'+classementAttr(file)+'" href="'+classementAttr(url)+'">⬇ MP3 '+number+'</a><audio controls src="'+classementAttr(url)+'"></audio>':'')+'</div>';
     }).join('');
     return '<div class="panel"><h4>🎭 Dialogues — deux documents, une voix à la fois</h4><p class="muted">La narration complète par chapitres reste séparée et inchangée. Aucune synthèse Google automatique.</p>'+
-      '<div class="panel" style="margin-top:16px"><h4>ÉTAPE 1 · Extraire et vérifier</h4><p class="tiny">Importe un manuscrit quelconque. Le repérage local est provisoire ; NyXia peut ensuite examiner TOUT le texte sur ton clic. Ses paroles proposées ne sont acceptées que si chaque segment existe littéralement dans la source. Les passages non couverts et les locuteurs incertains restent signalés.</p><div class="tools-line">'+
+      '<div class="panel" style="margin-top:16px"><h4>ÉTAPE 1 · Extraire et vérifier</h4><p class="tiny">Importe un manuscrit quelconque. L’importation du Markdown lance directement l’extraction IA après ton accord sur ses coûts. Sans modèle IA, aucune réplique ne sera inventée. Ses paroles proposées ne sont acceptées que si chaque segment existe littéralement dans la source. Les passages non couverts et les locuteurs incertains restent signalés.</p>'+dialogueModelSelector()+'<div class="tools-line">'+
       '<button class="btn primary" onclick="document.getElementById(\'dialogue-source-file\').click()">📄 Importer manuscrit</button><input id="dialogue-source-file" type="file" style="display:none" accept=".md,.markdown,.txt" onchange="importDialogueManuscript(this.files);this.value=\'\'">'+
-      '<button class="btn" '+(dialogueAiRunning?'disabled ':'')+'onclick="analyzeDialogueWithNyxia()">💜 NyXia · extraction complète avec IA</button><button class="btn gold" '+(!rows.length?'disabled ':'')+'onclick="exportDialogueReviewDocument()">⬇ DOCUMENT 1 · dialogues à valider</button></div><p class="tiny">'+esc(dialogueImportStatus||'Aucun manuscrit importé dans cette session. Le document 1 est exportable dès qu’il contient des répliques.')+'</p><p class="tiny">'+rows.length+' réplique(s) dans le projet. Relis et corrige le document 1, puis réimporte-le. Garde les identifiants invisibles <!-- ... --> présents dans le fichier.</p></div>'+
+      '<button class="btn" '+(dialogueAiRunning?'disabled ':'')+'onclick="analyzeDialogueWithNyxia()">💜 NyXia · extraction complète avec IA</button><button class="btn gold" '+(!rows.length?'disabled ':'')+'onclick="exportDialogueReviewDocument()">⬇ DOCUMENT 1 · dialogues à valider</button></div><p class="tiny">'+esc(dialogueImportStatus||'Aucun manuscrit importé dans cette session. Le document 1 se télécharge à la fin de l’extraction IA et doit être relu intégralement.')+'</p><p class="tiny">'+rows.length+' réplique(s) dans le projet. Relis et corrige le document 1, puis réimporte-le. Conserve les commentaires identifiants NYXIA-REPLIQUE-ID dans le fichier Markdown.</p></div>'+
       '<div class="panel" style="margin-top:16px"><h4>ÉTAPE 2 · Réimporter TON document validé</h4><p class="tiny">Le document 1 corrigé est la seule référence du regroupement. Tous ses identifiants, ses paroles et ses attributions sont contrôlés : ni omission ni doublon.</p><div class="tools-line"><button class="btn primary" onclick="document.getElementById(\'dialogue-reviewed-file\').click()">📄 Réimporter document 1 validé</button><input id="dialogue-reviewed-file" type="file" style="display:none" accept=".md,.markdown,.txt" onchange="importDialogueReviewedDocument(this.files);this.value=\'\'"><button class="btn gold" '+(!ready?'disabled ':'')+'onclick="exportDialogueDocument()">⬇ DOCUMENT 2 · classement par personnage</button></div><p class="tiny">'+(ready?'✅ '+rows.length+' répliques validées, contrôle de classement disponible.':'⚠ Validation manuelle requise avant classement et production audio.')+'</p></div>'+
       '<div class="panel" style="margin-top:16px"><h4>Compléter une réplique manquante</h4><p class="tiny">Si l’IA oublie une réplique, ajoute exactement ses paroles ici, puis retélécharge et revalide le document 1.</p><div class="row"><div class="field"><label>Personnage</label><input id="dialogue-new-actor" list="dialogue-actors" placeholder="Nom exact"><datalist id="dialogue-actors">'+actors.map(function(x){return '<option value="'+classementAttr(x)+'"></option>';}).join('')+'</datalist></div><div class="field"><label>Acte</label><input id="dialogue-new-act" placeholder="Acte I"></div></div><div class="field"><label>Chapitre</label><input id="dialogue-new-chapter" placeholder="Chapitre 2 — Titre"></div><div class="field"><label>Paroles exactes — une réplique par ligne</label><textarea id="dialogue-import-text" rows="3"></textarea></div><button class="btn" onclick="addDialogueReplicas()">+ Ajouter sans appeler l’IA</button></div>'+
       '<div class="panel" style="margin-top:16px"><h4>PRODUCTION · UN personnage à la fois</h4><div class="row"><div class="field"><label>Personnage</label><select onchange="setDialogueActorFilter(this.value)">'+options+'</select></div><div class="field"><label>Acte</label><select '+(!dialogueFocusActor?'disabled ':'')+'onchange="setDialogueActFilter(this.value)">'+actOptions+'</select></div></div>'+
@@ -3226,53 +3256,79 @@
   async function importDialogueManuscript(files){
     if(!currentProject||currentProject.kind!=='audiobook'||!files||!files.length)return;
     var file=files[0],projectId=currentProject.id;
-    if(!/\.(md|markdown|txt)$/i.test(file.name)||file.size>3*1024*1024){alert('Choisis un document .md ou .txt de moins de 3 Mo.');return;}
+    if(!/\.(md|markdown|txt)$/i.test(file.name)||file.size>3*1024*1024){alert('Choisis ton manuscrit .md ou .txt (maximum 3 Mo). Aucun PDF nécessaire.');return;}
     try{
       var raw=await file.text();if(!currentProject||currentProject.id!==projectId)return;
       dialogueManuscriptSource=raw;dialogueManuscriptFile=file.name;
-      var parsed=dialogueExtractManuscript(raw,file.name),existing=dialogueList(),known=new Set(existing.map(function(r){return r.sourceKey;})),added=0;
-      var hasAiVersion=existing.some(function(r){return r.sourceFile===file.name&&r.sourceMethod==='IA vérifiée littéralement';});
-      parsed.entries.forEach(function(r){if(!hasAiVersion&&!known.has(r.sourceKey)){existing.push(r);known.add(r.sourceKey);added++;}});
-      currentProject.data.dialogueReplicas=existing;
-      if(added||existing.some(function(r){return r.sourceFile===file.name;})){delete currentProject.data.dialogueReviewImported;markDirty();}
-      dialogueFocusActor='';dialogueFocusAct='';
-      dialogueImportStatus=added+' repérage(s) provisoire(s) ajouté(s) ; '+parsed.inlineQuotes+' citation(s) potentiellement ambiguë(s). Clique « NyXia · extraction complète avec IA » pour examiner le manuscrit entier, puis vérifie le document 1. Aucun Google TTS lancé.';
+      var hits=dialogueCore().scan(raw);
+      dialogueImportStatus='Manuscrit Markdown chargé : '+hits.length+' passages à examiner. Extraction NyXia prête ; aucun Google TTS lancé.';
       renderAudio();
+      // L’import démarre le vrai parcours d’extraction, pas une liste de répliques vides.
+      await analyzeDialogueWithNyxia();
     }catch(e){alert('Lecture du manuscrit impossible : '+e.message);}
   }
-  function parseDialogueAiJson(raw){return JSON.parse(String(raw||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/```\s*$/,'').trim());}
+  function parseDialogueAiJson(raw){
+    var value=String(raw||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/```\s*$/,'').trim();
+    try{return JSON.parse(value);}catch(e){
+      var a=value.indexOf('{'),b=value.lastIndexOf('}');
+      if(a<0||b<=a)throw Error('Le modèle n’a pas retourné le JSON attendu. Relance l’extraction.');
+      return JSON.parse(value.slice(a,b+1));
+    }
+  }
   async function analyzeDialogueWithNyxia(){
     if(dialogueAiRunning||!currentProject)return;
-    if(!dialogueManuscriptSource){alert('Réimporte ton manuscrit dans cette session pour que NyXia puisse comparer chaque parole à la source complète.');return;}
+    if(!dialogueManuscriptSource){alert('Importe ton manuscrit Markdown pour comparer chaque parole à sa source.');return;}
     var core=dialogueCore(),chunks=core.makeChunks(dialogueManuscriptSource,4900),projectId=currentProject.id,filename=dialogueManuscriptFile,raw=dialogueManuscriptSource;
-    if(!confirm('NyXia va analyser TOUT le manuscrit en '+chunks.length+' requête(s) au modèle IA sélectionné. Ces requêtes IA peuvent coûter de l’argent, mais AUCUN appel Google TTS ne sera lancé. L’extraction existante sera remplacée pour CE fichier après le contrôle. Continuer ?'))return;
-    var responses=[],errors=[],model=currentAiTool();if(!model){alert('Choisis d’abord un modèle IA disponible.');return;}
-    dialogueAiRunning=true;
+    var model=dialogueAiTool();if(!model){alert('Aucun modèle IA configuré. Ajoute un modèle dans Modèles & API avant de lancer l’extraction.');return;}
+    if(!confirm('Extraire les dialogues de ce manuscrit Markdown avec '+chunks.length+' appel(s) au modèle IA « '+model.name+' » ? Ces appels IA peuvent être facturés. AUCUN Google TTS ne sera lancé.'))return;
+    var responses=[],errors=[],system=[
+      'MISSION : EXTRACTION BRUTE DES RÉPLIQUES pour un manuscrit quelconque. Applique STRICTEMENT ces règles :',
+      'Tu ne modifies RIEN : aucune correction orthographique, reformulation, coupure des paroles, ajout, ponctuation modifiée.',
+      'Extrais TOUTES les répliques de la SOURCE À EXTRAIRE, dans leur ordre, y compris celles enchâssées dans les paragraphes de narration.',
+      'Écarte uniquement la narration et les incises qui ne sont pas prononcées. Si la parole reprend après une incise, conserve tous les fragments parlés de cette MÊME réplique.',
+      'Conserve le nom exact du personnage et ses variantes, ex. Velk (Entité). Un personnage douteux = chaîne vide, N’INVENTE PAS.',
+      'Format impératif JSON UNIQUEMENT : {"entries":[{"character":"nom ou chaîne vide","segments":["paroles EXACTES avant incise","paroles EXACTES après incise si présentes"]}]}',
+      'Chaque segment doit être COPIÉ CARACTÈRE PAR CARACTÈRE dans le bloc source : mêmes mots, ponctuation, accents et apostrophes.',
+      'Ne mets pas le tiret introductif ni les guillemets extérieurs dans les segments. Si une réplique est simple, segments contient UN seul texte exact.',
+      'Aucune invention et aucun texte hors JSON. Ne traite pas les passages de contexte, uniquement le BLOC SOURCE.'
+    ].join('\n');
+    dialogueAiRunning=true;dialogueImportStatus='Extraction en cours : '+chunks.length+' bloc(s), aucune génération audio.';renderAudio();
     try{
       for(var i=0;i<chunks.length;i++){
-        if(!currentProject||currentProject.id!==projectId)throw Error('Projet changé : extraction interrompue.');
-        var block=chunks[i];dialogueImportStatus='Extraction IA '+(i+1)+' / '+chunks.length+' : aucune voix Google générée.';
-        var sys='Tu extrais les dialogues d’un roman ou jeu RPG, quel que soit son univers. Réponds UNIQUEMENT par un objet JSON valide {"entries":[{"character":"nom exact ou vide si inconnu","segments":["premier fragment exact","suite exacte si la narration interrompt les paroles"]}]}. Extrais toutes les paroles, même enchâssées dans les paragraphes; respecte leur ordre et le locuteur identifiable. Chaque segment doit être une sous-chaîne COPIÉE CARACTÈRE PAR CARACTÈRE du texte fourni, y compris apostrophes, accents et ponctuation. Aucun ajout, correction, narration, didascalie inventée ni paraphrase. Si une réplique reprend après une incise, renvoie plusieurs segments exacts dans une même entrée. Ne mets pas les tirets introductifs ni les guillemets extérieurs dans les segments, sauf s’ils sont prononcés. Personnage incertain = chaîne vide. Un seul fragment par réplique simple. Ne crée aucune réplique qui ne figure pas dans la source. Aucun texte hors JSON.';
+        if(!currentProject||currentProject.id!==projectId)throw Error('Le projet a changé : extraction interrompue.');
+        var block=chunks[i];
+        dialogueImportStatus='Extraction '+(i+1)+' / '+chunks.length+' blocs — aucun Google TTS.';
+        var request={providerId:model.providerId,model:model.model,
+          system_prompt:(model.system_prompt?model.system_prompt+'\n\n':'')+system,
+          max_tokens:6000,temperature:0,
+          messages:[{role:'user',content:'CONTEXTE AVANT (NE PAS EXTRAIRE) :\n'+raw.slice(Math.max(0,block.start-250),block.start)+
+            '\n\nBLOC SOURCE À EXTRAIRE ('+(i+1)+'/'+chunks.length+') :\n'+block.text+
+            '\n\nCONTEXTE APRÈS (NE PAS EXTRAIRE) :\n'+raw.slice(block.end,Math.min(raw.length,block.end+250))}]};
         try{
-          var answer=await runAIText(sys,'CONTEXTE (ne pas extraire de celui-ci) : '+raw.slice(Math.max(0,block.start-280),block.start)+'\n\nSEULE SOURCE À EXTRAIRE (bloc '+(i+1)+'/'+chunks.length+') :\n'+block.text+'\n\nCONTEXTE APRÈS (ne pas extraire de celui-ci) : '+raw.slice(block.end,Math.min(raw.length,block.end+280)),model.id);
-          responses.push(parseDialogueAiJson(answer));
+          var answer=await api('/api/chat',{method:'POST',body:JSON.stringify(request)});
+          var parsed=parseDialogueAiJson(answer.text||'');
+          if(!Array.isArray(parsed.entries))throw Error('Champ entries manquant.');
+          responses.push(parsed);
         }catch(e){responses.push({entries:[]});errors.push('Bloc '+(i+1)+' : '+e.message);}
       }
+      if(errors.length)throw Error(errors.length+' bloc(s) IA ont échoué : le document 1 n’est PAS prêt. Aucun texte du projet n’a été remplacé. '+errors.slice(0,3).join(' ; '));
       var result=core.acceptAI(raw,chunks,responses,dialogueId),old=dialogueList(),other=old.filter(function(r){return r.sourceFile!==filename;}),fresh=result.rows;
       fresh.forEach(function(r){r.sourceFile=filename;});
-      var localFallback=core.fallback(raw,filename,dialogueId);
+      var fallback=core.fallback(raw,filename,dialogueId),added=0;
       result.uncovered.forEach(function(candidate){
-        var extra=localFallback.find(function(x){return x.sourceStart===candidate.start;});
-        if(extra&&!fresh.some(function(r){return r.sourceStart===extra.sourceStart;}))fresh.push(extra);
+        var row=fallback.find(function(x){return x.sourceStart===candidate.start;});
+        if(row&&row.text&&!fresh.some(function(r){return r.sourceStart>=candidate.rawStart&&r.sourceStart<candidate.rawEnd;})){
+          fresh.push(row);added++;
+        }
       });
       fresh.sort(function(a,b){return (a.sourceStart||0)-(b.sourceStart||0);});
-      if(!fresh.length)throw Error('Aucune parole localisée : aucun remplacement effectué.');
+      if(!fresh.length)throw Error('Aucune parole extraite. Les données précédentes sont conservées ; vérifie ton modèle IA.');
       if(!currentProject||currentProject.id!==projectId)return;
       currentProject.data.dialogueReplicas=other.concat(fresh);delete currentProject.data.dialogueReviewImported;markDirty();
       dialogueFocusActor='';dialogueFocusAct='';
-      dialogueImportStatus='IA : '+result.accepted+' réplique(s) vérifiée(s) littéralement, '+result.uncovered.length+' passage(s) repéré(s) non couverts (conservés pour révision), '+result.rejections.length+' proposition(s) rejetée(s) pour non-fidélité, '+errors.length+' bloc(s) en échec. Document 1 À RELIRE : toute réplique peut nécessiter une correction humaine. '+errors.slice(0,2).join(' ; ');
-      renderAudio();toast('Extraction contrôlée : télécharge et corrige le document 1.');
-    }catch(e){dialogueImportStatus='Extraction interrompue : '+e.message+'. Les données précédentes restent disponibles.';renderAudio();}
+      dialogueImportStatus='Extraction terminée : '+result.accepted+' réplique(s) IA copiée(s) depuis le manuscrit ; '+added+' passage(s) provisoire(s) à contrôler ; '+result.rejections.length+' proposition(s) rejetée(s) ; '+errors.length+' bloc(s) IA en erreur. Document 1 : vérifie les répliques et les éventuels oublis avant de le valider.';
+      renderAudio();toast('Document 1 à relire : passages ambigus signalés.');
+    }catch(e){dialogueImportStatus='Extraction interrompue : '+e.message+'. Projet précédent conservé.';renderAudio();alert(dialogueImportStatus);}
     finally{dialogueAiRunning=false;if(currentProject&&currentProject.id===projectId&&audioMode==='dialogues')renderAudio();}
   }
   function dialogueDownloadMarkdown(content,filename){
@@ -3281,6 +3337,7 @@
   }
   function exportDialogueReviewDocument(){
     if(!dialogueList().length){alert('Importe d’abord le manuscrit.');return;}
+    if(dialogueAiRunning){alert('L’extraction IA est en cours. Attends sa fin avant de télécharger le document.');return;}
     dialogueDownloadMarkdown(dialogueCore().document1(dialogueList(),currentProject.title),safeName(currentProject.title)+'-01-dialogues-a-valider.md');
   }
   function dialogueParseReviewedDocument(raw){return dialogueCore().parseDocument1(raw);}
