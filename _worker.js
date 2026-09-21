@@ -175,6 +175,35 @@ function bearerToken(request) {
   return h.startsWith("Bearer ") ? h.slice(7) : null;
 }
 
+// Passerelle de session Univers : aucun mot de passe ni cookie HttpOnly révélé au navigateur.
+// Un jeton Labo opaque renvoie vers la session Univers, revérifiée à chaque requête.
+const UNIVERS_BRIDGE_PREFIX = 'nyxialabo:univers:bridge:';
+const UNIVERS_BRIDGE_TTL = 60 * 60;
+function universCookie(request) {
+  const cookie = request.headers.get('Cookie') || '';
+  const match = cookie.match(/(?:^|;\s*)nyxia_univers=([^;]+)/);
+  if (!match) return '';
+  try { return decodeURIComponent(match[1]); } catch (_) { return ''; }
+}
+async function universSessionValid(env, token) {
+  if (!env.CASHFLOW_KV || !token || token.length > 300 || !/^[a-zA-Z0-9-]+$/.test(token)) return false;
+  const raw = await env.CASHFLOW_KV.get('univers:session:' + token);
+  if (!raw) return false;
+  try { return JSON.parse(raw).role === 'superadmin'; } catch (_) { return false; }
+}
+async function bridgeSessionValid(env, token) {
+  if (!env.CASHFLOW_KV || !token || !/^[a-f0-9-]{36}$/.test(token)) return false;
+  const parent = await env.CASHFLOW_KV.get(UNIVERS_BRIDGE_PREFIX + token);
+  return !!parent && await universSessionValid(env, parent);
+}
+async function issueBridge(env, request) {
+  const parent = universCookie(request);
+  if (!(await universSessionValid(env, parent))) return '';
+  const token = crypto.randomUUID();
+  await env.CASHFLOW_KV.put(UNIVERS_BRIDGE_PREFIX + token, parent, { expirationTtl: UNIVERS_BRIDGE_TTL });
+  return token;
+}
+
 // ---- Adaptateur texte (format OpenAI-compatible) ----
 
 async function callOpenAiCompatible(provider, env, { model, messages, max_tokens, temperature, system_prompt }) {
@@ -523,22 +552,22 @@ export default {
     const url = new URL(request.url);
     const parts = url.pathname.split("/").filter(Boolean); // ex: ["api","tools","nyxia"]
 
-    // --- Connexion (non protégé) ---
+    // --- Authentification unique Univers : aucune nouvelle connexion propre au Labo. ---
     if (request.method === "POST" && url.pathname === "/api/login") {
-      const { password } = await request.json().catch(() => ({}));
-      if (!env.ADMIN_PASSWORD || !env.SESSION_SECRET) return json({ success: false, error: "Serveur mal configuré (secrets manquants)." }, 500);
-      if (password !== env.ADMIN_PASSWORD) return json({ success: false, error: "Mot de passe incorrect." }, 401);
-      return json({ success: true, token: await signSession(env.SESSION_SECRET) });
+      const token = await issueBridge(env, request);
+      return token ? json({ success: true, token }) : json({ success: false, error: "Session Univers non reconnue. Vérifie la connexion depuis Univers." }, 401);
     }
     if (request.method === "POST" && url.pathname === "/api/check-auth") {
       const { token } = await request.json().catch(() => ({}));
-      return json({ valid: await verifySession(env.SESSION_SECRET, token) });
+      if (await bridgeSessionValid(env, token)) return json({ valid: true, token });
+      const fresh = await issueBridge(env, request);
+      return json(fresh ? { valid: true, token: fresh } : { valid: false });
     }
 
-    // --- Tout le reste sous /api/ est protégé ---
+    // Chaque requête protégée doit conserver une session Univers active.
     if (parts[0] === "api") {
-      const ok = await verifySession(env.SESSION_SECRET, bearerToken(request));
-      if (!ok) return json({ error: "Non autorisé" }, 401);
+      const ok = await bridgeSessionValid(env, bearerToken(request));
+      if (!ok) return json({ error: "Session Univers expirée ou absente." }, 401);
     }
 
     // --- Outils API personnalisés : CRUD ---
