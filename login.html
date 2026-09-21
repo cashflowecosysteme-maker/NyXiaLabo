@@ -145,7 +145,12 @@
       }).then(function (r) { return r.json() }).then(function (data) {
         if (!data.valid || !data.token) return false
         sessionStorage.setItem('sandbox_token', data.token)
-        window.location.replace('/dashboard.html')
+        // Depuis le Super Admin 2, entrer directement dans l'Atelier demandé.
+        // Un retour depuis le tableau de bord conserve son itinéraire historique.
+        var next = new URLSearchParams(location.search).get('next')
+        var fromDashboard = false
+        try { var previous = new URL(document.referrer); fromDashboard = previous.origin === location.origin && previous.pathname === '/dashboard.html' } catch (_) {}
+        window.location.replace(next === '/dashboard.html' || (!next && fromDashboard) ? '/dashboard.html' : '/atelier-equipe')
         return true
       })
     }
