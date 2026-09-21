@@ -9,11 +9,29 @@ command = "node scripts/build-azgaar.mjs"
 [assets]
 directory = "./"
 binding = "ASSETS"
-run_worker_first = ["/api/*", "/cartographie/azgaar/*", "/game-media/*"]
+run_worker_first = ["/api/*", "/cartographie/azgaar/*", "/game-media/*", "/", "/index.html", "/login*", "/dashboard*", "/atelier-equipe*", "/audiobook-studio*", "/wan-image*", "/wan-video*"]
 
+# KV historique du Labo, conservée pour récupérer les données existantes sans suppression.
+# L'application écrit désormais dans CASHFLOW_KV, sous le préfixe nyxialabo:.
 [[kv_namespaces]]
-binding = "HUB_CONFIG"
+binding = "LABO_LEGACY_KV"
 id = "75b93baac0974f8cb8d1f2089eceb4e6"
+
+# Même KV que les portails, Univers, Boutique et Répertoire : pas de nouvelle KV.
+[[kv_namespaces]]
+binding = "CASHFLOW_KV"
+id = "106db6da016d49d2b480452f19bad695"
+
+# Même D1 que le Super Admin, sans nouvelle table et sans migration automatique.
+[[d1_databases]]
+binding = "DB"
+database_name = "nyxia-cercles-db"
+database_id = "a21fd813-06fa-41f1-b744-07bf1c5c7951"
+
+# Index commun utilisé par Univers et les portails.
+[[vectorize]]
+binding = "VECTORIZE_INDEX"
+index_name = "univers-livres"
 
 [browser]
 binding = "BROWSER"
