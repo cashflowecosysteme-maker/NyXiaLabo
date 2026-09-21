@@ -68,21 +68,21 @@ function projectMeta(project) {
 }
 
 async function loadIndex(env) {
-  if (!env.LABO_STORE) return []
-  return (await env.LABO_STORE.get(PROJECT_INDEX_KEY, 'json')) || []
+  if (!env.HUB_CONFIG) return []
+  return (await env.HUB_CONFIG.get(PROJECT_INDEX_KEY, 'json')) || []
 }
 
 async function saveIndex(env, index) {
-  if (!env.LABO_STORE) throw new Error('Stockage Labo sur KV commune non configuré')
+  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
   const sorted = [...index]
     .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
     .slice(0, MAX_INDEX_ITEMS)
-  await env.LABO_STORE.put(PROJECT_INDEX_KEY, JSON.stringify(sorted))
+  await env.HUB_CONFIG.put(PROJECT_INDEX_KEY, JSON.stringify(sorted))
 }
 
 async function saveProject(env, project) {
-  if (!env.LABO_STORE) throw new Error('Stockage Labo sur KV commune non configuré')
-  await env.LABO_STORE.put(PROJECT_PREFIX + project.id, JSON.stringify(project))
+  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
+  await env.HUB_CONFIG.put(PROJECT_PREFIX + project.id, JSON.stringify(project))
   const index = await loadIndex(env)
   const next = index.filter(x => x.id !== project.id)
   next.push(projectMeta(project))
@@ -90,13 +90,13 @@ async function saveProject(env, project) {
 }
 
 async function getProject(env, id) {
-  if (!env.LABO_STORE) return null
-  return await env.LABO_STORE.get(PROJECT_PREFIX + id, 'json')
+  if (!env.HUB_CONFIG) return null
+  return await env.HUB_CONFIG.get(PROJECT_PREFIX + id, 'json')
 }
 
 async function deleteProject(env, id) {
-  if (!env.LABO_STORE) throw new Error('Stockage Labo sur KV commune non configuré')
-  await env.LABO_STORE.delete(PROJECT_PREFIX + id)
+  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
+  await env.HUB_CONFIG.delete(PROJECT_PREFIX + id)
   await saveIndex(env, (await loadIndex(env)).filter(x => x.id !== id))
 }
 
@@ -442,9 +442,9 @@ async function cartoGenerateMap(request, env) {
   const targetUrl = cartoMapUrl(request, env, cfg)
   const browserTargetUrl = new URL(targetUrl)
   const bearer = cartoBearerValue(request)
-  if (bearer && env.LABO_STORE) {
+  if (bearer && env.HUB_CONFIG) {
     const nonce = crypto.randomUUID()
-    await env.LABO_STORE.put(CARTO_NONCE_PREFIX + nonce, bearer, { expirationTtl: 120 })
+    await env.HUB_CONFIG.put(CARTO_NONCE_PREFIX + nonce, bearer, { expirationTtl: 120 })
     browserTargetUrl.searchParams.set('nx_auth', nonce)
   }
   const browser = await puppeteer.launch(env.BROWSER)
@@ -599,11 +599,11 @@ async function cartoServeEditorAsset(request, env, ctx) {
 
   // Browser Rendering reçoit un nonce à usage unique, jamais le token de session dans l'URL.
   const nonce = url.searchParams.get('nx_auth')
-  if (nonce && env.LABO_STORE) {
+  if (nonce && env.HUB_CONFIG) {
     const key = CARTO_NONCE_PREFIX + cleanText(nonce, 100)
-    const token = await env.LABO_STORE.get(key)
+    const token = await env.HUB_CONFIG.get(key)
     if (token) {
-      await env.LABO_STORE.delete(key)
+      await env.HUB_CONFIG.delete(key)
       const headers = new Headers()
       headers.set('Authorization', 'Bearer ' + token)
       const checkReq = new Request(new URL('/api/tools', request.url).toString(), { method: 'GET', headers })
@@ -707,23 +707,23 @@ function gameProductPublic(product) {
 }
 
 async function gameLoadProductIndex(env) {
-  if (!env.LABO_STORE) return []
-  return (await env.LABO_STORE.get(GAME_PRODUCT_INDEX_KEY, 'json')) || []
+  if (!env.HUB_CONFIG) return []
+  return (await env.HUB_CONFIG.get(GAME_PRODUCT_INDEX_KEY, 'json')) || []
 }
 async function gameSaveProductIndex(env, index) {
-  if (!env.LABO_STORE) throw new Error('Stockage Labo sur KV commune non configuré')
+  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
   const clean = [...index].filter(Boolean).slice(0, 500)
-  await env.LABO_STORE.put(GAME_PRODUCT_INDEX_KEY, JSON.stringify(clean))
+  await env.HUB_CONFIG.put(GAME_PRODUCT_INDEX_KEY, JSON.stringify(clean))
 }
 async function gameGetProduct(env, id) {
-  if (!env.LABO_STORE) return null
+  if (!env.HUB_CONFIG) return null
   const key = gameProductKey(id)
   if (!key || key === GAME_PRODUCT_PREFIX) return null
-  return await env.LABO_STORE.get(key, 'json')
+  return await env.HUB_CONFIG.get(key, 'json')
 }
 async function gameSaveProduct(env, product) {
-  if (!env.LABO_STORE) throw new Error('Stockage Labo sur KV commune non configuré')
-  await env.LABO_STORE.put(gameProductKey(product.id), JSON.stringify(product))
+  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
+  await env.HUB_CONFIG.put(gameProductKey(product.id), JSON.stringify(product))
   const index = await gameLoadProductIndex(env)
   const next = index.filter(x => x.id !== product.id)
   next.unshift(gameProductPublic(product))
@@ -758,6 +758,35 @@ function gamePlayerBadgeCatalog(value) {
       .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 90)
     return { id: id || `badge-${index + 1}`, icon: cleanText(icon, 20) || '🏅', name: cleanText(name, 120), description: cleanText(description, 360) }
   }).filter(x => x.name)
+}
+
+// Rôles prédéfinis : le savoir, les secrets et les consignes IA restent côté serveur.
+function gameSafePortraitUrl(value) {
+  const url = cleanText(value || '', 1600)
+  if (url.startsWith('/game-media/')) return url
+  try { const parsed = new URL(url); return parsed.protocol === 'https:' ? parsed.toString() : '' }
+  catch (_) { return '' }
+}
+function gamePlayableRosterFromData(d = {}) {
+  const raw = d.playableCharacters || []
+  const entries = Array.isArray(raw) ? raw : []
+  const used = new Set()
+  return entries.slice(0, 8).map((entry, index) => {
+    const id = cleanText(entry?.id || `pj-${index + 1}`, 70).replace(/[^a-zA-Z0-9_-]/g, '')
+    const name = cleanText(entry?.name || '', 120)
+    if (!id || !name || used.has(id)) return null
+    used.add(id)
+    return { id, name, archetype: cleanText(entry.archetype, 120), faction: cleanText(entry.faction, 120),
+      publicBio: cleanText(entry.publicBio, 1200), portraitUrl: gameSafePortraitUrl(entry.portraitUrl),
+      strength: cleanText(entry.strength, 700), weakness: cleanText(entry.weakness, 700),
+      motivation: cleanText(entry.motivation, 900), secret: cleanText(entry.secret, 1200),
+      aiInstructions: cleanText(entry.aiInstructions, 6000), knowledgeIds: Array.isArray(entry.knowledgeIds) ? entry.knowledgeIds.map(v => cleanText(v,100)).filter(Boolean).slice(0, 40) : [] }
+  }).filter(Boolean)
+}
+function gamePublicRoster(session) {
+  const reserved = new Set((session.players || []).map(p => p.character?.id).filter(Boolean))
+  return (session.playableCharacters || []).map(c => ({ id:c.id, name:c.name, archetype:c.archetype,
+    faction:c.faction, publicBio:c.publicBio, portraitUrl:c.portraitUrl, available: !reserved.has(c.id) }))
 }
 
 function gamePlayerConfigFromData(d = {}) {
@@ -931,6 +960,7 @@ async function gamePublishProject(env, project, body = {}) {
     defaultTeams: gameLiveTeams(body.teams || d.liveTeams),
     guidedScenes,
     playerConfig: gamePlayerConfigFromData(d),
+    playableCharacters: gamePlayableRosterFromData(d),
     runtimeSnapshot: gameRuntimeSnapshotFromData(d),
     hostPackage: gameHostPackageFromData(d),
     starterRuntime: guidedScenes.length ? gameRuntimeFromGuidedScene(guidedScenes[0], 0) : gameLiveCleanRuntime({
@@ -955,7 +985,7 @@ async function gameLoadLicenseByRawKey(env, rawKey) {
   const normalized = gameNormalizeAccessKey(rawKey)
   if (!normalized) return null
   const hash = await gameSha256Hex(normalized)
-  const license = await env.LABO_STORE.get(gameLicenseKey(hash), 'json')
+  const license = await env.HUB_CONFIG.get(gameLicenseKey(hash), 'json')
   return license ? { license, hash } : null
 }
 
@@ -964,7 +994,7 @@ function gameLicenseExpired(license) {
 }
 
 async function gameCreateLicense(env, body = {}) {
-  if (!env.LABO_STORE) throw new Error('Stockage Labo sur KV commune non configuré')
+  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
   const productIds = [...new Set((Array.isArray(body.productIds) ? body.productIds : [body.productId]).map(x => cleanText(x, 120)).filter(Boolean))]
   if (!productIds.length) throw new Error('Au moins un produit est requis')
   for (const id of productIds) {
@@ -988,14 +1018,14 @@ async function gameCreateLicense(env, body = {}) {
     createdAt: stamp,
     updatedAt: stamp
   }
-  await env.LABO_STORE.put(gameLicenseKey(hash), JSON.stringify(license))
+  await env.HUB_CONFIG.put(gameLicenseKey(hash), JSON.stringify(license))
   return { accessKey, license }
 }
 
 async function gameSaveLicense(env, hash, license) {
   license.updatedAt = gameLiveNow()
   license.sessions = Array.isArray(license.sessions) ? license.sessions.slice(-GAME_LIBRARY_MAX_RECENT_SESSIONS) : []
-  await env.LABO_STORE.put(gameLicenseKey(hash), JSON.stringify(license))
+  await env.HUB_CONFIG.put(gameLicenseKey(hash), JSON.stringify(license))
 }
 
 function gameLibraryToken(request, body = null) {
@@ -1003,11 +1033,11 @@ function gameLibraryToken(request, body = null) {
 }
 
 async function gameLibraryAuth(env, token) {
-  if (!token || !env.LABO_STORE) return null
+  if (!token || !env.HUB_CONFIG) return null
   const tokenHash = await gameSha256Hex(token)
-  const auth = await env.LABO_STORE.get(gameLibrarySessionKey(tokenHash), 'json')
+  const auth = await env.HUB_CONFIG.get(gameLibrarySessionKey(tokenHash), 'json')
   if (!auth?.licenseHash) return null
-  const license = await env.LABO_STORE.get(gameLicenseKey(auth.licenseHash), 'json')
+  const license = await env.HUB_CONFIG.get(gameLicenseKey(auth.licenseHash), 'json')
   if (!license || license.active === false || gameLicenseExpired(license)) return null
   return { auth, license, licenseHash: auth.licenseHash }
 }
@@ -1015,7 +1045,7 @@ async function gameLibraryAuth(env, token) {
 async function gameIssueLibraryToken(env, licenseHash, email = '') {
   const token = crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '')
   const tokenHash = await gameSha256Hex(token)
-  await env.LABO_STORE.put(gameLibrarySessionKey(tokenHash), JSON.stringify({
+  await env.HUB_CONFIG.put(gameLibrarySessionKey(tokenHash), JSON.stringify({
     licenseHash,
     email: cleanText(email || '', 240).toLowerCase(),
     createdAt: gameLiveNow()
@@ -1082,6 +1112,7 @@ async function gameCreateSessionFromProduct(env, product, owner = {}, overrides 
     runtime: gameLiveCleanRuntime({ ...(product.starterRuntime || {}), sharedClues: [], teamClues: {} }),
     guidedScenes: structuredClone(product.guidedScenes || product.hostPackage?.guidedScenes || []),
     playerConfig: structuredClone(product.playerConfig || product.hostPackage?.playerConfig || {}),
+    playableCharacters: structuredClone(product.playableCharacters || []),
     projectSnapshot: structuredClone(product.runtimeSnapshot || {}),
     hostPackage: structuredClone(product.hostPackage || {})
   }
@@ -1102,7 +1133,7 @@ async function handleGameLibrary(request, env) {
     if (found.license.email && suppliedEmail !== found.license.email) return json({ error: 'Cette clé est liée à une autre adresse courriel' }, 401)
     const token = crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '')
     const tokenHash = await gameSha256Hex(token)
-    await env.LABO_STORE.put(gameLibrarySessionKey(tokenHash), JSON.stringify({
+    await env.HUB_CONFIG.put(gameLibrarySessionKey(tokenHash), JSON.stringify({
       licenseHash: found.hash,
       email: suppliedEmail || found.license.email || '',
       createdAt: gameLiveNow()
@@ -1173,15 +1204,15 @@ function gameLiveLog(session, event) {
   session.log = session.log.slice(-GAME_LIVE_MAX_LOG)
 }
 async function gameLiveLoad(env, code) {
-  if (!env.LABO_STORE) return null
+  if (!env.HUB_CONFIG) return null
   const normalized = gameLiveCode(code)
   if (!normalized) return null
-  return await env.LABO_STORE.get(gameLiveKey(normalized), 'json')
+  return await env.HUB_CONFIG.get(gameLiveKey(normalized), 'json')
 }
 async function gameLiveSave(env, session) {
-  if (!env.LABO_STORE) throw new Error('Stockage Labo sur KV commune non configuré')
+  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
   session.updatedAt = gameLiveNow()
-  await env.LABO_STORE.put(gameLiveKey(session.code), JSON.stringify(session), { expirationTtl: GAME_LIVE_TTL })
+  await env.HUB_CONFIG.put(gameLiveKey(session.code), JSON.stringify(session), { expirationTtl: GAME_LIVE_TTL })
 }
 async function gameLiveUniqueCode(env) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -1200,11 +1231,13 @@ function gameLiveFindPlayer(session, token) {
 function gameLivePublicPlayer(p, self = false) {
   const c = p?.character && typeof p.character === 'object' ? p.character : null
   const character = c ? {
+    id: cleanText(c.id || '', 70),
     name: cleanText(c.name || '', 120),
     archetype: cleanText(c.archetype || '', 120),
     faction: cleanText(c.faction || '', 120),
     publicBio: cleanText(c.publicBio || '', 1200),
-    portraitDataUrl: cleanText(c.portraitDataUrl || '', 240000)
+    portraitDataUrl: cleanText(c.portraitDataUrl || '', 240000),
+    portraitUrl: cleanText(c.portraitUrl || '', 1600)
   } : null
   if (self && character) {
     character.strength = cleanText(c.strength || '', 700)
@@ -1237,6 +1270,7 @@ function gameLivePublicState(session, player) {
     players: (session.players || []).map(p => gameLivePublicPlayer(p, false)),
     teams: session.teams || [],
     playerConfig: session.playerConfig || {},
+    playableRoster: gamePublicRoster(session),
     runtime: {
       guidedSceneIndex: Number.isInteger(runtime.guidedSceneIndex) ? runtime.guidedSceneIndex : 0,
       guidedSceneId: runtime.guidedSceneId || '',
@@ -1261,6 +1295,7 @@ function gameLivePublicState(session, player) {
 function gameLiveHostState(session) {
   const clone = structuredClone(session)
   clone.hostToken = undefined
+  clone.playableCharacters = (clone.playableCharacters || []).map(({aiInstructions,knowledgeIds,...safe}) => safe)
   clone.players = (clone.players || []).map(p => ({ ...p, token: undefined }))
   if (clone.npcState) {
     Object.values(clone.npcState).forEach(v => { if (v && v.history) v.history = v.history.slice(-6) })
@@ -1404,7 +1439,7 @@ async function handleGamePublic(request, env) {
     if (session.status === 'ended') return json({ error: 'Cette partie est terminée' }, 409)
     const name = cleanText(body.name, 80)
     if (!name) return json({ error: 'Ton nom est requis' }, 400)
-    if ((session.players || []).length >= GAME_LIVE_MAX_PLAYERS) return json({ error: 'Partie complète' }, 409)
+    if ((session.players || []).length >= ((session.playableCharacters || []).length || GAME_LIVE_MAX_PLAYERS)) return json({ error: 'Partie complète' }, 409)
     const priorToken = cleanText(body.playerToken || '', 180)
     let player = priorToken ? gameLiveFindPlayer(session, priorToken) : null
     if (!player) {
@@ -1437,6 +1472,20 @@ async function handleGamePublic(request, env) {
   player.lastSeenAt = gameLiveNow()
 
   if (request.method === 'POST' && path === '/character') {
+    // Les nouveaux jeux à distribution imposée utilisent exclusivement les rôles approuvés.
+    if (Array.isArray(session.playableCharacters) && session.playableCharacters.length) {
+      if (player.character?.id) return json({ error: 'Ton personnage est déjà attribué. Seul le MJ peut organiser un transfert.' }, 409)
+      const selected = session.playableCharacters.find(c => c.id === cleanText(body.characterId || '', 70))
+      if (!selected) return json({ error: 'Choisis un personnage du jeu.' }, 400)
+      if ((session.players || []).some(p => p.id !== player.id && p.character?.id === selected.id)) return json({ error: 'Ce personnage est déjà attribué.' }, 409)
+      const { aiInstructions, knowledgeIds, ...character } = selected
+      player.character = { ...character, createdAt:gameLiveNow(), updatedAt:gameLiveNow() }
+      player.reputation = selected.faction ? { [selected.faction]:Number(session.playerConfig?.startingReputation)||0 } : {}
+      gameLiveLog(session, { type:'character-selected', playerId:player.id, playerName:player.name,
+        characterId:selected.id, characterName:selected.name })
+      await gameLiveSave(env, session)
+      return json({ ok:true, state:gameLivePublicState(session, player) })
+    }
     const cfg = session.playerConfig || {}
     const allowedArchetypes = Array.isArray(cfg.archetypes) ? cfg.archetypes : []
     const allowedFactions = Array.isArray(cfg.factions) ? cfg.factions : []
@@ -1479,10 +1528,16 @@ async function handleGamePublic(request, env) {
     let entry = { id: crypto.randomUUID(), at: gameLiveNow(), type, playerId: player.id, playerName: player.name, team: player.team }
     if (type === 'roll') {
       if (session.runtime?.allowDice === false) return json({ error: 'Les dés sont désactivés pour cette scène' }, 409)
-      const sides = Math.max(2, Math.min(1000, Number(body.sides) || 20))
+      const sides = Number(body.sides)
+      if (![4, 6, 10, 20].includes(sides)) return json({ error:'Choisis un dé D4, D6, D10 ou D20.' }, 400)
       const mode = body.mode === 'physical' ? 'physical' : 'digital'
-      const result = mode === 'physical' ? Math.max(1, Math.min(sides, Number(body.result) || 1)) : await gameLiveSecureDie(sides)
-      entry = { ...entry, sides, mode, result }
+      const physicalResult = Number(body.result)
+      if (mode === 'physical' && (!Number.isInteger(physicalResult) || physicalResult < 1 || physicalResult > sides))
+        return json({ error:'Résultat physique invalide pour ce dé.' }, 400)
+      const result = mode === 'physical' ? physicalResult : await gameLiveSecureDie(sides)
+      entry = { ...entry, sides, mode, result, characterId:player.character?.id || '',
+        characterName:player.character?.name || '', sceneId:session.runtime?.guidedSceneId || '',
+        sceneTitle:session.runtime?.sceneTitle || '', context:cleanText(body.context || '', 140) }
     } else {
       entry.text = cleanText(body.text || '', 2400)
       if (!entry.text) return json({ error: 'Message vide' }, 400)
@@ -1598,6 +1653,17 @@ async function handleGameCustomerHost(request, env) {
 
   const joinUrl = `${url.origin}/game-live.html?code=${code}`
   if (request.method === 'GET') return json({ session: gameLiveHostState(session), joinUrl })
+  if (request.method === 'POST' && body.type === 'roll') {
+    if (session.runtime?.allowDice === false) return json({ error:'Dés désactivés dans cette scène.' },409)
+    const sides = Number(body.sides)
+    if (![4,6,10,20].includes(sides)) return json({ error:'Dé non pris en charge.' },400)
+    const result = await gameLiveSecureDie(sides)
+    const entry = { id:crypto.randomUUID(),at:gameLiveNow(),type:'roll',playerId:'host',playerName:'Maître de jeu',
+      sides,mode:'digital',result,sceneId:session.runtime?.guidedSceneId || '',sceneTitle:session.runtime?.sceneTitle || '' }
+    gameLiveLog(session,entry)
+    await gameLiveSave(env,session)
+    return json({ ok:true, action:entry, session:gameLiveHostState(session),joinUrl })
+  }
   if (request.method === 'PUT') {
     await gameLiveApplyHostUpdate(session, body)
     await gameLiveSave(env, session)
@@ -1632,6 +1698,7 @@ async function handleGameHost(request, env) {
       defaultTeams: gameLiveTeams(body.teams || d.liveTeams),
       guidedScenes: gameGuidedScenesFromData(d),
       playerConfig: gamePlayerConfigFromData(d),
+      playableCharacters: gamePlayableRosterFromData(d),
       runtimeSnapshot: gameRuntimeSnapshotFromData(d),
       hostPackage: gameHostPackageFromData(d),
       starterRuntime: gameGuidedScenesFromData(d).length ? gameRuntimeFromGuidedScene(gameGuidedScenesFromData(d)[0], 0) : gameLiveCleanRuntime({ phase: 'Accueil', allowNpc: true, allowDice: true, sharedClues: [], teamClues: {} })
@@ -1673,7 +1740,7 @@ async function handleAtelier(request, env, ctx) {
   if (request.method === 'GET' && url.pathname === '/api/atelier/health') {
     return json({
       ok: true,
-      kv: !!env.LABO_STORE,
+      kv: !!env.HUB_CONFIG,
       googleTts: googleTtsConfigured(env),
       cartography: !!env.BROWSER && !!env.MAPS,
       version: 'atelier-equipe-4.1-player-characters-badges-reputation'
