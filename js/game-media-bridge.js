@@ -10,6 +10,70 @@
  */
 import existingWorker from './tts-bridge.js'
 
+const LABO_KV_PREFIX = 'nyxialabo:'
+const LEGACY_DELETED = '__NYXIALABO_CENTRAL_DELETED__'
+const EXPIRING_LEGACY = /(?:^|:)(?:[^:]*session[^:]*|live|[^:]*nonce[^:]*)(?::|$)/i
+
+// Toutes les écritures du Labo vont à la KV commune, dans son propre espace de clés.
+// L'ancienne KV est lue uniquement pour ne perdre aucun projet ou réglage antérieur.
+// Les clés à durée limitée ne sont pas recopiées sans leur échéance d'origine.
+function laboStore(central, legacy) {
+  function decode(raw, mode) {
+    if (raw === null || raw === LEGACY_DELETED) return null
+    const type = typeof mode === 'string' ? mode : mode?.type
+    return type === 'json' ? JSON.parse(raw) : raw
+  }
+  return {
+    async get(key, mode) {
+      const scopedKey = LABO_KV_PREFIX + key
+      const current = await central.get(scopedKey)
+      if (current !== null) return decode(current, mode)
+      const old = legacy ? await legacy.get(key) : null
+      if (old === null) return null
+      // Migration non destructive, uniquement lors de la lecture des clés persistantes.
+      if (!EXPIRING_LEGACY.test(key)) await central.put(scopedKey, old)
+      return decode(old, mode)
+    },
+    put(key, value, options) {
+      return central.put(LABO_KV_PREFIX + key, value, options)
+    },
+    delete(key) {
+      // Tombstone : l'ancienne KV ne peut pas ressusciter un projet supprimé.
+      return central.put(LABO_KV_PREFIX + key, LEGACY_DELETED)
+    }
+  }
+}
+
+function sessionUnivers(request) {
+  const cookie = request.headers.get('Cookie') || ''
+  const match = cookie.match(/(?:^|;\s*)nyxia_univers=([^;]+)/)
+  return match && match[1] && match[1].length <= 240 ? match[1] : ''
+}
+
+async function universAccess(request, central) {
+  const token = sessionUnivers(request)
+  if (!token || !central) return false
+  const raw = await central.get('univers:session:' + token)
+  if (!raw) return false
+  try { return JSON.parse(raw).role === 'superadmin' }
+  catch (_) { return false }
+}
+
+// Autorise l'intégration visuelle UNIQUEMENT dans Univers et empêche la mise
+// en cache d'une page administrative. Respecte les autres directives CSP.
+function allowUniversFrame(response) {
+  const headers = new Headers(response.headers)
+  const existing = headers.get('Content-Security-Policy') || ''
+  const other = existing.split(';').map(x => x.trim())
+    .filter(x => x && !/^frame-ancestors(?:\s|$)/i.test(x))
+  other.push('frame-ancestors https://univers.nyxia.top')
+  headers.set('Content-Security-Policy', other.join('; '))
+  headers.delete('X-Frame-Options')
+  headers.set('Cache-Control', 'private, no-store')
+  headers.set('Vary', 'Cookie')
+  return new Response(response.body, {status:response.status,statusText:response.statusText,headers})
+}
+
 const PREFIX = 'nyxia-game/media/'
 const PUBLIC = '/game-media/'
 const MAX_BYTES = 75 * 1024 * 1024
@@ -49,41 +113,41 @@ async function sha256(value){
 }
 function sessionProjectMatches(session,projectId){return session&&session.status!=='ended'&&session.sourceProjectId===projectId}
 async function validLicense(env,hash,projectId){
-  if(!hash||!env.HUB_CONFIG)return false
-  const license=await env.HUB_CONFIG.get('game:license:'+hash,'json')
+  if(!hash||!env.LABO_STORE)return false
+  const license=await env.LABO_STORE.get('game:license:'+hash,'json')
   if(!license||license.active===false||(license.expiresAt&&(!Number.isFinite(Date.parse(license.expiresAt))||Date.parse(license.expiresAt)<=Date.now())))return false
   for(const id of license.productIds||[]){
-    const product=await env.HUB_CONFIG.get('game:product:'+id,'json')
+    const product=await env.LABO_STORE.get('game:product:'+id,'json')
     if(product&&product.active!==false&&product.sourceProjectId===projectId)return true
   }
   return false
 }
 async function mediaAllowed(request,env,ctx,projectId){
   // L'accès à une autre œuvre est refusé même avec un compte valide.
-  if(!env.HUB_CONFIG)return false
+  if(!env.LABO_STORE)return false
   const bearer=request.headers.get('Authorization')||''
   const team=bearer.startsWith('Bearer ')?bearer.slice(7):cookieValue(request,cookies.team)
   if(team){
-    const headers=new Headers();headers.set('Authorization','Bearer '+team)
+    const headers=new Headers();headers.set('Authorization','Bearer '+team);headers.set('Cookie',request.headers.get('Cookie')||'')
     if(await hasTeamAccess(new Request(request.url,{headers}),env,ctx))return true
   }
   const library=cookieValue(request,cookies.library)
   if(library){
-    const auth=await env.HUB_CONFIG.get('game:library-session:'+await sha256(library),'json')
+    const auth=await env.LABO_STORE.get('game:library-session:'+await sha256(library),'json')
     if(auth&&await validLicense(env,auth.licenseHash,projectId))return true
   }
   for(const kind of ['host','player']){
     const raw=cookieValue(request,cookies[kind])
     const match=/^([A-Z0-9]{4,12}):([a-zA-Z0-9_-]{16,180})$/.exec(raw)
     if(!match)continue
-    const session=await env.HUB_CONFIG.get('game:live:'+match[1],'json')
+    const session=await env.LABO_STORE.get('game:live:'+match[1],'json')
     if(!sessionProjectMatches(session,projectId))continue
     const matched=kind==='host'?session.hostToken===match[2]:(session.players||[]).some(x=>x.token===match[2])
     if(!matched)continue
     // Si cette soirée provient d'une vente, toute révocation/expiration de la licence
     // coupe aussi l'accès aux médias de l'animateur et des joueurs.
     if(session.ownerLicenseId){
-      const licenseHash=await env.HUB_CONFIG.get('game:media:session-license:'+match[1])
+      const licenseHash=await env.LABO_STORE.get('game:media:session-license:'+match[1])
       if(!licenseHash||!(await validLicense(env,licenseHash,projectId)))continue
     }
     return true
@@ -102,12 +166,12 @@ async function authenticatedApiResponse(request,response,env){
     const token=request.headers.get('X-NyXia-Library-Token')||''
     if(data.license&&token)return addCookie(response,cookies.library,token,30*86400)
   }
-  if(path==='/api/game/library/sessions'&&request.method==='POST'&&env.HUB_CONFIG){
+  if(path==='/api/game/library/sessions'&&request.method==='POST'&&env.LABO_STORE){
     const data=await response.clone().json().catch(()=>({}))
     const token=request.headers.get('X-NyXia-Library-Token')||''
     if(data.ok&&/^[A-Z0-9]{4,12}$/.test(data.code||'')&&token){
-      const a=await env.HUB_CONFIG.get('game:library-session:'+await sha256(token),'json')
-      if(a?.licenseHash)await env.HUB_CONFIG.put('game:media:session-license:'+data.code,a.licenseHash,{expirationTtl:72*3600})
+      const a=await env.LABO_STORE.get('game:library-session:'+await sha256(token),'json')
+      if(a?.licenseHash)await env.LABO_STORE.put('game:media:session-license:'+data.code,a.licenseHash,{expirationTtl:72*3600})
     }
   }
   const host=/^\/api\/game\/host\/([A-Z0-9]{4,12})$/.exec(path)
@@ -165,8 +229,8 @@ async function upload(request,env,ctx){
   }
   if(format.kind==='image' && !sniffImage(ext,new Uint8Array(await file.slice(0,16).arrayBuffer())))return json({error:'Image invalide'},415)
   // Vérifier l'existence du projet ET de l'asset dans le projet, sans faire confiance au navigateur.
-  if(!env.HUB_CONFIG)return json({error:'Stockage des projets indisponible'},503)
-  const project=await env.HUB_CONFIG.get('atelier:project:'+projectId,'json')
+  if(!env.LABO_STORE)return json({error:'Stockage des projets indisponible'},503)
+  const project=await env.LABO_STORE.get('atelier:project:'+projectId,'json')
   if(!project||project.kind!=='nyxia-game')return json({error:'Projet NyXia Game introuvable'},404)
   let assets=[]
   try {assets=JSON.parse(project.data?.productionAssetsJson||'[]')}catch(_){}
@@ -188,13 +252,13 @@ async function upload(request,env,ctx){
 // une URL quelconque (prévention SSRF) et jamais de génération IA payante ici.
 async function importFree(request,env,ctx){
   if(!(await hasTeamAccess(request,env,ctx)))return json({error:'Accès équipe requis'},401)
-  if(!env.MAPS||!env.HUB_CONFIG)return json({error:'R2 ou projets non raccordés'},503)
+  if(!env.MAPS||!env.LABO_STORE)return json({error:'R2 ou projets non raccordés'},503)
   const origin=request.headers.get('Origin')
   if(origin&&origin!==new URL(request.url).origin)return json({error:'Origine interdite'},403)
   const body=await request.json().catch(()=>({}))
   const projectId=String(body.projectId||''),assetId=String(body.assetId||'')
   if(!idValid(projectId)||!idValid(assetId))return json({error:'Identifiant invalide'},400)
-  const project=await env.HUB_CONFIG.get('atelier:project:'+projectId,'json')
+  const project=await env.LABO_STORE.get('atelier:project:'+projectId,'json')
   if(!project||project.kind!=='nyxia-game')return json({error:'Projet introuvable'},404)
   let list=[]
   try{list=JSON.parse(project.data?.productionAssetsJson||'[]')}catch(_){}
@@ -293,13 +357,13 @@ async function economyImageGenerate(request,env,ctx){
   if(!(await hasTeamAccess(request,env,ctx)))return json({error:'Accès équipe requis'},401)
   const origin=request.headers.get('Origin')
   if(origin&&origin!==new URL(request.url).origin)return json({error:'Origine interdite'},403)
-  if(!env.HUB_CONFIG)return json({error:'Stockage projet indisponible'},503)
+  if(!env.LABO_STORE)return json({error:'Stockage projet indisponible'},503)
   if(!env.AIMLAPI_API_KEY)return json({error:'Secret AIMLAPI_API_KEY absent de ce Worker ; aucun coût engagé.'},503)
   const body=await request.json().catch(()=>({}))
   const {projectId,assetId}=body
   if(body.confirmed!==true)return json({error:'Confirmation explicite obligatoire avant un appel payant'},400)
   if(!idValid(projectId)||!idValid(assetId)||!ECONOMY_IMAGE_IDS.has(body.model))return json({error:'Projet, média ou modèle non autorisé'},400)
-  const project=await env.HUB_CONFIG.get('atelier:project:'+projectId,'json')
+  const project=await env.LABO_STORE.get('atelier:project:'+projectId,'json')
   if(!project||project.kind!=='nyxia-game')return json({error:'Jeu introuvable'},404)
   let assets=[]
   try{assets=JSON.parse(project.data?.productionAssetsJson||'[]')}catch(_){}
@@ -329,12 +393,12 @@ async function cloudflareImageGenerate(request,env,ctx){
   const origin=request.headers.get('Origin')
   if(origin&&origin!==new URL(request.url).origin)return json({error:'Origine interdite'},403)
   if(!env.AI||typeof env.AI.run!=='function')return json({error:'Binding Workers AI absent : ajouter [ai] binding = "AI" dans wrangler.toml, puis redéployer.'},503)
-  if(!env.HUB_CONFIG)return json({error:'Stockage projet indisponible'},503)
+  if(!env.LABO_STORE)return json({error:'Stockage projet indisponible'},503)
   const body=await request.json().catch(()=>({}))
   if(body.confirmed!==true)return json({error:'Confirmation explicite exigée : une requête consomme des neurones (facturable au-delà du quota).'},400)
   const {projectId,assetId}=body
   if(body.model!=='@cf/black-forest-labs/flux-1-schnell'||!idValid(projectId)||!idValid(assetId))return json({error:'Modèle ou média non autorisé'},400)
-  const project=await env.HUB_CONFIG.get('atelier:project:'+projectId,'json')
+  const project=await env.LABO_STORE.get('atelier:project:'+projectId,'json')
   if(!project||project.kind!=='nyxia-game')return json({error:'Projet introuvable'},404)
   let assets=[]
   try{assets=JSON.parse(project.data?.productionAssetsJson||'[]')}catch(_){}
@@ -388,7 +452,23 @@ async function pixabaySearch(request,env,ctx){
 
 export default {
   async fetch(request,env,ctx){
+    // Fail closed if the ecosystem's common KV is not bound.
+    if (!env.CASHFLOW_KV) return json({error:'KV commune Univers non configurée'},503)
+    const central = env.CASHFLOW_KV
+    env = {...env, LABO_STORE:laboStore(central, env.LABO_LEGACY_KV)}
     const path=new URL(request.url).pathname
+    // Le Labo est ouvert depuis Univers ; ses pages administratives ne sont
+    // pas accessibles avec un ancien mot de passe ou un ancien jeton seul.
+    if (path === '/' || path === '/index.html' || path === '/login')
+      return Response.redirect(new URL('/login.html',request.url),302)
+    if (path === '/login.html')
+      return allowUniversFrame(await existingWorker.fetch(request,env,ctx))
+    if (['dashboard','atelier-equipe','audiobook-studio', 'wan-image','wan-video']
+        .some(name => path === '/' + name || path === '/' + name + '.html' || path === '/' + name + '/')) {
+      if (!(await universAccess(request,central)))
+        return Response.redirect('https://univers.nyxia.top/',302)
+      return allowUniversFrame(await existingWorker.fetch(request,env,ctx))
+    }
     if(path.startsWith(PUBLIC)) {
       if(request.method!=='GET'&&request.method!=='HEAD')return new Response('Méthode interdite',{status:405})
       try{return await serveMedia(request,env,ctx)}catch(_){return new Response('Média indisponible',{status:503})}
