@@ -44,36 +44,6 @@ function laboStore(central, legacy) {
   }
 }
 
-function sessionUnivers(request) {
-  const cookie = request.headers.get('Cookie') || ''
-  const match = cookie.match(/(?:^|;\s*)nyxia_univers=([^;]+)/)
-  return match && match[1] && match[1].length <= 240 ? match[1] : ''
-}
-
-async function universAccess(request, central) {
-  const token = sessionUnivers(request)
-  if (!token || !central) return false
-  const raw = await central.get('univers:session:' + token)
-  if (!raw) return false
-  try { return JSON.parse(raw).role === 'superadmin' }
-  catch (_) { return false }
-}
-
-// Autorise l'intégration visuelle UNIQUEMENT dans Univers et empêche la mise
-// en cache d'une page administrative. Respecte les autres directives CSP.
-function allowUniversFrame(response) {
-  const headers = new Headers(response.headers)
-  const existing = headers.get('Content-Security-Policy') || ''
-  const other = existing.split(';').map(x => x.trim())
-    .filter(x => x && !/^frame-ancestors(?:\s|$)/i.test(x))
-  other.push('frame-ancestors https://univers.nyxia.top')
-  headers.set('Content-Security-Policy', other.join('; '))
-  headers.delete('X-Frame-Options')
-  headers.set('Cache-Control', 'private, no-store')
-  headers.set('Vary', 'Cookie')
-  return new Response(response.body, {status:response.status,statusText:response.statusText,headers})
-}
-
 const PREFIX = 'nyxia-game/media/'
 const PUBLIC = '/game-media/'
 const MAX_BYTES = 75 * 1024 * 1024
@@ -457,18 +427,6 @@ export default {
     const central = env.CASHFLOW_KV
     env = {...env, LABO_STORE:laboStore(central, env.LABO_LEGACY_KV)}
     const path=new URL(request.url).pathname
-    // Le Labo est ouvert depuis Univers ; ses pages administratives ne sont
-    // pas accessibles avec un ancien mot de passe ou un ancien jeton seul.
-    if (path === '/' || path === '/index.html' || path === '/login')
-      return Response.redirect(new URL('/login.html',request.url),302)
-    if (path === '/login.html')
-      return allowUniversFrame(await existingWorker.fetch(request,env,ctx))
-    if (['dashboard','atelier-equipe','audiobook-studio', 'wan-image','wan-video']
-        .some(name => path === '/' + name || path === '/' + name + '.html' || path === '/' + name + '/')) {
-      if (!(await universAccess(request,central)))
-        return Response.redirect('https://univers.nyxia.top/',302)
-      return allowUniversFrame(await existingWorker.fetch(request,env,ctx))
-    }
     if(path.startsWith(PUBLIC)) {
       if(request.method!=='GET'&&request.method!=='HEAD')return new Response('Méthode interdite',{status:405})
       try{return await serveMedia(request,env,ctx)}catch(_){return new Response('Média indisponible',{status:503})}
