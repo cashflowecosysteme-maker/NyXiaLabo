@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <link rel="icon" type="image/png" href="/FavIcon.png">
-  <title>NyXiaLabo — Atelier Équipe</title>
+  <title>Atelier équipe humaine + IA · NyXia</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,700;1,500&display=swap" rel="stylesheet">
@@ -71,7 +71,7 @@
 <body>
 <div class="shell">
   <aside>
-    <div class="brand"><div class="orb">🧪</div><div><h1>NyXiaLabo</h1><small>Atelier équipe humaine + IA</small></div></div>
+    <div class="brand"><div class="orb">🧪</div><div><h1>Atelier équipe humaine + IA</h1><small>Outil interne du Super Admin 2</small></div></div>
     <div class="nav-label">Atelier</div>
     <button class="nav-btn active" data-view="home" onclick="showView('home')"><span class="ico">🏠</span>Vue d'ensemble</button>
     <button class="nav-btn" data-view="ghost" onclick="showView('ghost')"><span class="ico">✍️</span>GhostWriting</button>
@@ -79,10 +79,7 @@
     <button class="nav-btn" data-view="game" onclick="showView('game')"><span class="ico">🎮</span>Architecte NyXia Game</button>
     <button class="nav-btn" data-view="mystery" onclick="showView('mystery')"><span class="ico">🎲</span>Meurtre & Mystère</button>
     <button class="nav-btn" data-view="maps" onclick="showView('maps')"><span class="ico">🗺️</span>Cartographie & Mondes</button>
-    <button class="nav-btn" data-view="visual" onclick="showView('visual')"><span class="ico">🎨</span>Création visuelle</button>
-    <button class="nav-btn" data-view="video" onclick="showView('video')"><span class="ico">🎬</span>Vidéo</button>
-    <button class="nav-btn" data-view="models" onclick="showView('models')"><span class="ico">🧪</span>Modèles & API</button>
-    <div class="back"><button class="nav-btn" onclick="location.href='/dashboard.html'"><span class="ico">↩</span>Retour au Labo complet</button></div>
+    <div class="back"><button class="nav-btn" onclick="location.href='https://univers.nyxia.top/superadmin2/'"><span class="ico">↩</span>Retour au Super Admin 2</button></div>
   </aside>
 
   <main>
@@ -140,16 +137,16 @@
   async function api(url, opts){
     opts=opts||{}; opts.headers=Object.assign({},h(),opts.headers||{})
     var r=await fetch(url,opts); var data=await r.json().catch(function(){return {}})
-    if(r.status===401){ sessionStorage.removeItem('sandbox_token'); location.href='/login.html'; throw new Error('Session expirée') }
+    if(r.status===401){ sessionStorage.removeItem('sandbox_token'); location.href='/login.html?next=%2Fatelier-equipe'; throw new Error('Session expirée') }
     if(!r.ok) throw new Error(data.error||('HTTP '+r.status))
     return data
   }
 
   async function boot(){
-    if(!token){ location.href='/login.html'; return }
+    if(!token){ location.href='/login.html?next=%2Fatelier-equipe'; return }
     try{
       var auth=await fetch('/api/check-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:token})}).then(function(r){return r.json()})
-      if(!auth.valid){ location.href='/login.html'; return }
+      if(!auth.valid){ location.href='/login.html?next=%2Fatelier-equipe'; return }
       var data=await Promise.all([api('/api/atelier/health'),api('/api/atelier/projects'),api('/api/tools')])
       var health=data[0]; allProjects=data[1].projects||[]; tools=data[2].tools||[]
       // Même session équipe : autorise les aperçus médias privés (balises image/audio/vidéo).
@@ -160,7 +157,7 @@
       var savedTool=aiTools.find(function(t){return t.id===savedAi})
       var bootTool=savedTool||preferredGptTool()
       if(bootTool)rememberAiModel(bootTool.id)
-      cartoReady=!!health.cartography; var he=document.getElementById('health'); he.textContent='● Atelier connecté · TTS : '+(health.googleTts?'identifiants détectés, test requis':(health.ttsCredentialType==='oauth-client-id'||health.ttsCredentialType==='oauth-client-json'?'ID OAuth non compatible':'configuration à corriger'))+(cartoReady?' · Cartographie prête':' · Cartographie à configurer'); he.className='status warn'; if(health.ttsMessage&&!health.googleTts){var diagnostic=document.getElementById('tts-diagnostic');diagnostic.style.display='block';diagnostic.textContent=health.ttsMessage+' Aucune valeur secrète n’est affichée.'}
+      cartoReady=!!health.cartography; var he=document.getElementById('health'); he.textContent=(health.kv&&health.d1&&health.vectorize?'● KV + D1 + Vectorize raccordées':'⚠ Vérifier KV / D1 / Vectorize')+' · TTS : '+(health.googleTts?'identifiants détectés, test requis':(health.ttsCredentialType==='oauth-client-id'||health.ttsCredentialType==='oauth-client-json'?'ID OAuth non compatible':'configuration à corriger'))+(cartoReady?' · Cartographie prête':' · Cartographie à configurer'); he.className='status '+(health.kv&&health.d1&&health.vectorize?'ok':'warn'); if(health.ttsMessage&&!health.googleTts){var diagnostic=document.getElementById('tts-diagnostic');diagnostic.style.display='block';diagnostic.textContent=health.ttsMessage+' Aucune valeur secrète n’est affichée.'}
       if(location.hash==='#audio')showView('audio');else renderHome()
     }catch(e){ document.getElementById('health').textContent='⚠ '+e.message; document.getElementById('health').className='status warn'; renderHome() }
   }
@@ -190,18 +187,15 @@
   function renderHome(){
     var recent=(allProjects||[]).filter(function(p){return !isClassementArchived(p)}).slice(0,8).map(function(p){return '<tr><td>'+kindIcon(p.kind)+' <span class="kind">'+esc(kindLabel(p.kind))+'</span></td><td><b>'+esc(p.title)+'</b><div class="tiny">'+esc(p.client||'')+'</div></td><td>'+new Date(p.updatedAt).toLocaleDateString('fr-CA')+'</td><td><button class="btn" onclick="openProject(\''+p.id+'\')">Ouvrir</button></td></tr>'}).join('')
     document.getElementById('view-home').innerHTML=''+
-      '<div class="hero"><div class="badge">ATELIER INTERNE · ÉQUIPE HUMAINE + IA</div><h3>Créer plus vite sans céder la direction créative.</h3><p>Le Labo reste ton atelier. Les modèles servent à produire, tester, comparer et contrôler. Les faits verrouillés, les décisions éditoriales et la relation client restent entre les mains de l’équipe humaine.</p></div>'+
+      '<div class="hero"><div class="badge">ATELIER INTERNE · ÉQUIPE HUMAINE + IA</div><h3>Créer plus vite sans céder la direction créative.</h3><p>Cet outil du Super Admin 2 sert à fabriquer les livres et les jeux. Les modèles aident à produire, tester, comparer et contrôler. Les faits verrouillés, les décisions éditoriales et la relation client restent entre les mains de l’équipe humaine.</p></div>'+
       '<div class="grid">'+
         homeCard('✍️','GhostWriting','Idée → synopsis → plan → chapitres → cohérence. Les faits verrouillés sont injectés dans chaque demande IA.','ghost','Nouveau livre')+
         homeCard('🎧','Studio Livre Audio','Aperçu gratuit dans le navigateur, puis production réelle avec Google Cloud Text-to-Speech.','audio','Nouveau livre audio')+
         homeCard('🎮','Architecte NyXia Game','Idée → structure jouable → personnages → règles → matériel → médias → contrôle → package. RPG, ACE, soirées, enquêtes et histoires interactives.','game','Créer un jeu')+
         homeCard('🎲','Meurtre & Mystère','Bible Maîtresse, contrôle de solvabilité, dossiers et variantes pour les enquêtes verrouillées.','mystery','Ouvrir')+
         homeCard('🗺️','Cartographie & Mondes','Azgaar devient la vérité géographique : seed verrouillée, villes, États, rivières, routes et exports .map / JSON / SVG / PNG.','maps','Créer une carte')+
-        homeCard('🎨','Création visuelle','Retrouve les moteurs déjà présents dans le Labo pour couvertures, personnages et scènes.','visual','Ouvrir')+
-        homeCard('🎬','Vidéo','Bandes-annonces, teasers, scènes courtes et messages fictifs en réutilisant les outils existants.','video','Ouvrir')+
-        homeCard('🧪','Modèles & API','Comparer les modèles, outils API personnalisés, banques et fournisseurs avant intégration portail.','models','Ouvrir')+
       '</div>'+
-      '<div class="section-title"><div><h3>Projets récents</h3><p>Stockés dans HUB_CONFIG, donc disponibles à l’équipe sur le Labo.</p></div></div>'+
+      '<div class="section-title"><div><h3>Projets récents</h3><p>Enregistrés dans CASHFLOW_KV, la KV commune de NyXia.</p></div></div>'+
       '<div class="card">'+(recent?'<table class="recent"><tr><th>Atelier</th><th>Projet</th><th>Modifié</th><th></th></tr>'+recent+'</table>':'<p>Aucun projet Atelier pour l’instant.</p>')+'</div>'
   }
   // CLASSEMENT : page transversale, sans nouveaux endpoints ni copie du projet en localStorage.
@@ -363,7 +357,7 @@
   function homeCard(i,t,p,v,b){return '<div class="card"><div class="bigico">'+i+'</div><h4>'+t+'</h4><p>'+p+'</p><div class="card-actions"><button class="btn primary" onclick="showView(\''+v+'\')">'+b+'</button></div></div>'}
 
   async function openProject(id){
-    try{ var d=await api('/api/atelier/projects/'+id); currentProject=d.project; var v=({ghostwriting:'ghost',audiobook:'audio','nyxia-game':'game',mystery:'mystery',visual:'visual',video:'video',api:'models'})[currentProject.kind]||'home'; showView(v) }catch(e){alert(e.message)}
+    try{ var d=await api('/api/atelier/projects/'+id); currentProject=d.project; var v=({ghostwriting:'ghost',audiobook:'audio','nyxia-game':'game',mystery:'mystery',visual:'home',video:'home',api:'home'})[currentProject.kind]||'home'; showView(v) }catch(e){alert(e.message)}
   }
 
   function projectSelector(kind,onchangeName){
