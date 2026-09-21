@@ -68,21 +68,21 @@ function projectMeta(project) {
 }
 
 async function loadIndex(env) {
-  if (!env.HUB_CONFIG) return []
-  return (await env.HUB_CONFIG.get(PROJECT_INDEX_KEY, 'json')) || []
+  if (!env.LABO_STORE) return []
+  return (await env.LABO_STORE.get(PROJECT_INDEX_KEY, 'json')) || []
 }
 
 async function saveIndex(env, index) {
-  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
+  if (!env.LABO_STORE) throw new Error('CASHFLOW_KV non raccordée à l’Atelier')
   const sorted = [...index]
     .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
     .slice(0, MAX_INDEX_ITEMS)
-  await env.HUB_CONFIG.put(PROJECT_INDEX_KEY, JSON.stringify(sorted))
+  await env.LABO_STORE.put(PROJECT_INDEX_KEY, JSON.stringify(sorted))
 }
 
 async function saveProject(env, project) {
-  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
-  await env.HUB_CONFIG.put(PROJECT_PREFIX + project.id, JSON.stringify(project))
+  if (!env.LABO_STORE) throw new Error('CASHFLOW_KV non raccordée à l’Atelier')
+  await env.LABO_STORE.put(PROJECT_PREFIX + project.id, JSON.stringify(project))
   const index = await loadIndex(env)
   const next = index.filter(x => x.id !== project.id)
   next.push(projectMeta(project))
@@ -90,13 +90,13 @@ async function saveProject(env, project) {
 }
 
 async function getProject(env, id) {
-  if (!env.HUB_CONFIG) return null
-  return await env.HUB_CONFIG.get(PROJECT_PREFIX + id, 'json')
+  if (!env.LABO_STORE) return null
+  return await env.LABO_STORE.get(PROJECT_PREFIX + id, 'json')
 }
 
 async function deleteProject(env, id) {
-  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
-  await env.HUB_CONFIG.delete(PROJECT_PREFIX + id)
+  if (!env.LABO_STORE) throw new Error('CASHFLOW_KV non raccordée à l’Atelier')
+  await env.LABO_STORE.delete(PROJECT_PREFIX + id)
   await saveIndex(env, (await loadIndex(env)).filter(x => x.id !== id))
 }
 
@@ -442,9 +442,9 @@ async function cartoGenerateMap(request, env) {
   const targetUrl = cartoMapUrl(request, env, cfg)
   const browserTargetUrl = new URL(targetUrl)
   const bearer = cartoBearerValue(request)
-  if (bearer && env.HUB_CONFIG) {
+  if (bearer && env.LABO_STORE) {
     const nonce = crypto.randomUUID()
-    await env.HUB_CONFIG.put(CARTO_NONCE_PREFIX + nonce, bearer, { expirationTtl: 120 })
+    await env.LABO_STORE.put(CARTO_NONCE_PREFIX + nonce, bearer, { expirationTtl: 120 })
     browserTargetUrl.searchParams.set('nx_auth', nonce)
   }
   const browser = await puppeteer.launch(env.BROWSER)
@@ -599,11 +599,11 @@ async function cartoServeEditorAsset(request, env, ctx) {
 
   // Browser Rendering reçoit un nonce à usage unique, jamais le token de session dans l'URL.
   const nonce = url.searchParams.get('nx_auth')
-  if (nonce && env.HUB_CONFIG) {
+  if (nonce && env.LABO_STORE) {
     const key = CARTO_NONCE_PREFIX + cleanText(nonce, 100)
-    const token = await env.HUB_CONFIG.get(key)
+    const token = await env.LABO_STORE.get(key)
     if (token) {
-      await env.HUB_CONFIG.delete(key)
+      await env.LABO_STORE.delete(key)
       const headers = new Headers()
       headers.set('Authorization', 'Bearer ' + token)
       const checkReq = new Request(new URL('/api/tools', request.url).toString(), { method: 'GET', headers })
@@ -707,23 +707,23 @@ function gameProductPublic(product) {
 }
 
 async function gameLoadProductIndex(env) {
-  if (!env.HUB_CONFIG) return []
-  return (await env.HUB_CONFIG.get(GAME_PRODUCT_INDEX_KEY, 'json')) || []
+  if (!env.LABO_STORE) return []
+  return (await env.LABO_STORE.get(GAME_PRODUCT_INDEX_KEY, 'json')) || []
 }
 async function gameSaveProductIndex(env, index) {
-  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
+  if (!env.LABO_STORE) throw new Error('CASHFLOW_KV non raccordée à l’Atelier')
   const clean = [...index].filter(Boolean).slice(0, 500)
-  await env.HUB_CONFIG.put(GAME_PRODUCT_INDEX_KEY, JSON.stringify(clean))
+  await env.LABO_STORE.put(GAME_PRODUCT_INDEX_KEY, JSON.stringify(clean))
 }
 async function gameGetProduct(env, id) {
-  if (!env.HUB_CONFIG) return null
+  if (!env.LABO_STORE) return null
   const key = gameProductKey(id)
   if (!key || key === GAME_PRODUCT_PREFIX) return null
-  return await env.HUB_CONFIG.get(key, 'json')
+  return await env.LABO_STORE.get(key, 'json')
 }
 async function gameSaveProduct(env, product) {
-  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
-  await env.HUB_CONFIG.put(gameProductKey(product.id), JSON.stringify(product))
+  if (!env.LABO_STORE) throw new Error('CASHFLOW_KV non raccordée à l’Atelier')
+  await env.LABO_STORE.put(gameProductKey(product.id), JSON.stringify(product))
   const index = await gameLoadProductIndex(env)
   const next = index.filter(x => x.id !== product.id)
   next.unshift(gameProductPublic(product))
@@ -985,7 +985,7 @@ async function gameLoadLicenseByRawKey(env, rawKey) {
   const normalized = gameNormalizeAccessKey(rawKey)
   if (!normalized) return null
   const hash = await gameSha256Hex(normalized)
-  const license = await env.HUB_CONFIG.get(gameLicenseKey(hash), 'json')
+  const license = await env.LABO_STORE.get(gameLicenseKey(hash), 'json')
   return license ? { license, hash } : null
 }
 
@@ -994,7 +994,7 @@ function gameLicenseExpired(license) {
 }
 
 async function gameCreateLicense(env, body = {}) {
-  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
+  if (!env.LABO_STORE) throw new Error('CASHFLOW_KV non raccordée à l’Atelier')
   const productIds = [...new Set((Array.isArray(body.productIds) ? body.productIds : [body.productId]).map(x => cleanText(x, 120)).filter(Boolean))]
   if (!productIds.length) throw new Error('Au moins un produit est requis')
   for (const id of productIds) {
@@ -1018,14 +1018,14 @@ async function gameCreateLicense(env, body = {}) {
     createdAt: stamp,
     updatedAt: stamp
   }
-  await env.HUB_CONFIG.put(gameLicenseKey(hash), JSON.stringify(license))
+  await env.LABO_STORE.put(gameLicenseKey(hash), JSON.stringify(license))
   return { accessKey, license }
 }
 
 async function gameSaveLicense(env, hash, license) {
   license.updatedAt = gameLiveNow()
   license.sessions = Array.isArray(license.sessions) ? license.sessions.slice(-GAME_LIBRARY_MAX_RECENT_SESSIONS) : []
-  await env.HUB_CONFIG.put(gameLicenseKey(hash), JSON.stringify(license))
+  await env.LABO_STORE.put(gameLicenseKey(hash), JSON.stringify(license))
 }
 
 function gameLibraryToken(request, body = null) {
@@ -1033,11 +1033,11 @@ function gameLibraryToken(request, body = null) {
 }
 
 async function gameLibraryAuth(env, token) {
-  if (!token || !env.HUB_CONFIG) return null
+  if (!token || !env.LABO_STORE) return null
   const tokenHash = await gameSha256Hex(token)
-  const auth = await env.HUB_CONFIG.get(gameLibrarySessionKey(tokenHash), 'json')
+  const auth = await env.LABO_STORE.get(gameLibrarySessionKey(tokenHash), 'json')
   if (!auth?.licenseHash) return null
-  const license = await env.HUB_CONFIG.get(gameLicenseKey(auth.licenseHash), 'json')
+  const license = await env.LABO_STORE.get(gameLicenseKey(auth.licenseHash), 'json')
   if (!license || license.active === false || gameLicenseExpired(license)) return null
   return { auth, license, licenseHash: auth.licenseHash }
 }
@@ -1045,7 +1045,7 @@ async function gameLibraryAuth(env, token) {
 async function gameIssueLibraryToken(env, licenseHash, email = '') {
   const token = crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '')
   const tokenHash = await gameSha256Hex(token)
-  await env.HUB_CONFIG.put(gameLibrarySessionKey(tokenHash), JSON.stringify({
+  await env.LABO_STORE.put(gameLibrarySessionKey(tokenHash), JSON.stringify({
     licenseHash,
     email: cleanText(email || '', 240).toLowerCase(),
     createdAt: gameLiveNow()
@@ -1133,7 +1133,7 @@ async function handleGameLibrary(request, env) {
     if (found.license.email && suppliedEmail !== found.license.email) return json({ error: 'Cette clé est liée à une autre adresse courriel' }, 401)
     const token = crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '')
     const tokenHash = await gameSha256Hex(token)
-    await env.HUB_CONFIG.put(gameLibrarySessionKey(tokenHash), JSON.stringify({
+    await env.LABO_STORE.put(gameLibrarySessionKey(tokenHash), JSON.stringify({
       licenseHash: found.hash,
       email: suppliedEmail || found.license.email || '',
       createdAt: gameLiveNow()
@@ -1204,15 +1204,15 @@ function gameLiveLog(session, event) {
   session.log = session.log.slice(-GAME_LIVE_MAX_LOG)
 }
 async function gameLiveLoad(env, code) {
-  if (!env.HUB_CONFIG) return null
+  if (!env.LABO_STORE) return null
   const normalized = gameLiveCode(code)
   if (!normalized) return null
-  return await env.HUB_CONFIG.get(gameLiveKey(normalized), 'json')
+  return await env.LABO_STORE.get(gameLiveKey(normalized), 'json')
 }
 async function gameLiveSave(env, session) {
-  if (!env.HUB_CONFIG) throw new Error('HUB_CONFIG non configuré')
+  if (!env.LABO_STORE) throw new Error('CASHFLOW_KV non raccordée à l’Atelier')
   session.updatedAt = gameLiveNow()
-  await env.HUB_CONFIG.put(gameLiveKey(session.code), JSON.stringify(session), { expirationTtl: GAME_LIVE_TTL })
+  await env.LABO_STORE.put(gameLiveKey(session.code), JSON.stringify(session), { expirationTtl: GAME_LIVE_TTL })
 }
 async function gameLiveUniqueCode(env) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -1736,14 +1736,30 @@ async function handleAtelier(request, env, ctx) {
 
   if (!(await isAuthorized(request, env, ctx))) return json({ error: 'Non autorisé' }, 401)
 
-  // État/capacités — jamais la valeur des secrets.
+  // Diagnostic lecture seule des ressources centrales. Aucune table D1 créée ou modifiée.
   if (request.method === 'GET' && url.pathname === '/api/atelier/health') {
+    let d1 = false
+    let d1Error = ''
+    if (env.DB && typeof env.DB.prepare === 'function') {
+      try {
+        await env.DB.prepare('SELECT 1 AS ok').first()
+        d1 = true
+      } catch (error) {
+        d1Error = 'D1 centrale liée, mais requête de lecture impossible.'
+      }
+    } else {
+      d1Error = 'Binding DB absent.'
+    }
     return json({
-      ok: true,
-      kv: !!env.HUB_CONFIG,
+      ok: !!env.LABO_STORE && d1 && !!env.VECTORIZE_INDEX,
+      kv: !!env.LABO_STORE,
+      d1,
+      d1Error,
+      vectorize: !!env.VECTORIZE_INDEX,
+      bindings: { kv: 'CASHFLOW_KV', d1: 'nyxia-cercles-db', vectorize: 'univers-livres' },
       googleTts: googleTtsConfigured(env),
       cartography: !!env.BROWSER && !!env.MAPS,
-      version: 'atelier-equipe-4.1-player-characters-badges-reputation'
+      version: 'atelier-equipe-4.1-central-kv-d1-vectorize'
     })
   }
 
