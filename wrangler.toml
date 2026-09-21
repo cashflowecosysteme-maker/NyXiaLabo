@@ -9,7 +9,7 @@ command = "node scripts/build-azgaar.mjs"
 [assets]
 directory = "./"
 binding = "ASSETS"
-run_worker_first = ["/api/*", "/cartographie/azgaar/*", "/game-media/*", "/", "/index.html", "/login*", "/dashboard*", "/atelier-equipe*", "/audiobook-studio*", "/wan-image*", "/wan-video*"]
+run_worker_first = ["/api/*", "/cartographie/azgaar/*", "/game-media/*"]
 
 # KV historique du Labo, conservée pour récupérer les données existantes sans suppression.
 # L'application écrit désormais dans CASHFLOW_KV, sous le préfixe nyxialabo:.
