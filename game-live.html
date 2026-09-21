@@ -92,7 +92,7 @@ async function join(){
     let n=document.getElementById('name')?.value||''
     let r=await api('/api/game/live/join',{method:'POST',body:JSON.stringify({code,name:n,playerToken:token})})
     token=r.playerToken;sessionStorage.setItem('nyxgame_player_'+code,token);state=r.state;inspectRewards(state);render()
-  }catch(e){joinForm(e.message)}
+  }catch(e){if(String(e.message).includes('ancien accès')){token='';sessionStorage.removeItem('nyxgame_player_'+code)}joinForm(e.message)}
 }
 async function load(){
   if(!token){joinForm();return}
@@ -111,7 +111,7 @@ function renderCharacterSelection(){
   app.innerHTML=`<section class="card"><h1>${esc(state.title)}</h1><div class="prologue">${esc(cfg.prologue||'Bienvenue dans cette aventure.')}</div></section>
     <section class="card"><h2>🎭 Choisis ton personnage</h2><p class="mut">Ton identité de joueur reste ${esc(state.player?.name||'toi')}. Tu découvriras le secret de ton rôle une fois choisi.</p>
     <div class="roster">${roster.map(c=>`<label class="roster-option ${c.available?'':'occupied'}"><input type="radio" name="character" value="${esc(c.id)}" ${c.available?'':'disabled'}><span><b>${esc(c.name)}</b> · ${esc(c.archetype||'')}${c.faction?' · '+esc(c.faction):''}<small>${esc(c.publicBio||'')}${c.available?'':' · Déjà attribué'}</small></span></label>`).join('')}</div>
-    <button class="primary" onclick="chooseCharacter()">Incarner ce personnage</button></section>`
+    <button class="primary" onclick="chooseCharacter()">Incarner ce personnage</button>${state.partyRules?.characterChoice!=='roster'||state.player?.lateJoin?'<button onclick="renderCharacterCreation()">✨ Créer mon propre personnage</button>':''}</section>`
 }
 async function chooseCharacter(){
   const characterId=document.querySelector('input[name="character"]:checked')?.value
@@ -171,7 +171,7 @@ function characterCard(){
   return `<section class="card"><h2>🎭 Ton personnage</h2><div class="characterhead"><div class="portrait">${portrait}</div><div><b style="font-size:18px">${esc(c.name)}</b><div class="mut">${esc(c.archetype||'')}${c.archetype&&c.faction?' · ':''}${esc(c.faction||'')}</div>${c.motivation?`<div style="margin-top:5px">${esc(c.motivation)}</div>`:''}</div></div><div class="reps">${repHtml}</div><div class="badges">${badgesHtml}</div>${c.secret?`<details class="secret"><summary style="cursor:pointer">🔒 Ton secret</summary><div style="margin-top:7px">${esc(c.secret)}</div></details>`:''}</section>`
 }
 function render(){
-  if(!state?.player?.character?.name){if(state?.playableRoster?.length)renderCharacterSelection();else renderCharacterCreation();return}
+  if(!state?.player?.character?.name){if(state?.partyRules?.characterChoice==='create')renderCharacterCreation();else if(state?.playableRoster?.length)renderCharacterSelection();else if(state?.partyRules?.characterChoice==='roster'&&!state?.player?.lateJoin){app.innerHTML='<section class="card"><h2>Distribution indisponible</h2><p>Le jeu exige une fiche prédéfinie, mais aucune n’a été publiée. Contacte l’organisateur.</p></section>'}else renderCharacterCreation();return}
   let r=state.runtime||{},all=[...(r.sharedClues||[]),...(r.teamClues||[])]
   status.textContent=(state.status||'lobby')+' · '+(state.player?.team||'')
   let bg=r.imageUrl?`background-image:url('${String(r.imageUrl).replace(/'/g,"%27")}')`:''
@@ -184,7 +184,7 @@ function render(){
     ${characterCard()}
     <section class="card"><h2>🎲 Dés</h2>${r.allowDice!==false?`<div class="actions"><button onclick="roll(4)">D4</button><button onclick="roll(6)">D6</button><button onclick="roll(10)">D10</button><button onclick="roll(20)">D20</button></div><div id="diceStage" class="dice-stage" role="status" aria-live="polite"><div id="die" class="die-shape d20"><div id="dice" class="die-result">🎲</div></div></div><div class="mut">Tu peux aussi utiliser un vrai dé.</div><div class="actions"><button onclick="physical()">Entrer un résultat physique</button></div>`:'<div class="mut">Dés désactivés pour cette scène.</div>'}</section>
     <section class="card"><h2>🧙 PNJ</h2>${r.allowNpc!==false&&r.activeNpc?`<b>${esc(r.activeNpc)}</b><textarea id="npcmsg" rows="3" placeholder="Pose ta question…"></textarea><div class="actions"><button class="primary" onclick="askNpc()">Parler</button></div><div id="npcreply"></div>`:'<div class="mut">Aucun PNJ disponible maintenant.</div>'}</section>
-    <section class="card"><h2>💬 Décision / action</h2><textarea id="decision" rows="3" placeholder="Votre décision d’équipe ou ton action…"></textarea><div class="actions"><button onclick="sendDecision()">Envoyer</button>${r.zoomUrl?`<button onclick="window.open('${esc(r.zoomUrl)}','_blank')">🎥 Zoom</button>`:''}</div></section>
+    <section class="card"><h2>💬 Décision / action</h2><textarea id="decision" rows="3" placeholder="Votre décision d’équipe ou ton action…"></textarea><div class="actions"><button onclick="sendDecision()">Envoyer</button>${r.zoomUrl?`<button onclick="window.open('${esc(r.zoomUrl)}','_blank')">🎥 Zoom</button>`:''}</div></section><section class="card"><h2>📜 Interventions récentes</h2>${(state.publicEvents||[]).slice(-5).map(e=>`<div class="clue"><b>${esc(e.playerName||'Système')} :</b> ${esc(e.text||('result' in e?'Dé '+e.result:''))}</div>`).join('')||'<div class="mut">En attente de la première action.</div>'}</section><section class="card"><h2>👥 Partie en cours</h2><div class="mut">${(state.players||[]).map(p=>`${esc(p.character?.name||p.name)}${p.controller==='ai'?' 🤖':''}`).join(' · ')}</div><div class="actions">${state.partyRules?.gmMode==='ai'?`<button class="primary" onclick="aiGm('${state.status==='lobby'?'start':'next'}')">${state.status==='lobby'?'▶ Démarrer avec le MJ IA':'➡️ Scène suivante avec le MJ IA'}</button>`:''}${state.players?.some(p=>p.controller==='ai')?`<select id="companionSelect" aria-label="Choisir un compagnon IA">${state.players.filter(p=>p.controller==='ai').map(p=>`<option value="${esc(p.id)}">${esc(p.character?.name||p.name)}</option>`).join('')}</select><button onclick="askCompanion()">🤖 Faire intervenir ce compagnon</button>`:''}<button class="danger" onclick="leaveGame()">🚪 Quitter cette partie</button></div><div id="partyReply" class="mut" aria-live="polite"></div></section>
   </div></div>`
 }
 async function roll(sides){
@@ -196,6 +196,26 @@ async function roll(sides){
 }
 async function physical(){let sides=Number(prompt('Quel dé ? D4, D6, D10 ou D20 ?','20')||0);if(![4,6,10,20].includes(sides))return;let result=Number(prompt('Résultat obtenu ?','')||0);if(!Number.isInteger(result)||result<1||result>sides)return;try{let r=await api('/api/game/live/action',{method:'POST',body:JSON.stringify({code,playerToken:token,type:'roll',mode:'physical',sides,result})});document.getElementById('dice').textContent='D'+sides+' → '+r.action.result+' (dé physique)'}catch(e){rewardToast(e.message)}}
 async function sendDecision(){let el=document.getElementById('decision');if(!el?.value.trim())return;await api('/api/game/live/action',{method:'POST',body:JSON.stringify({code,playerToken:token,type:'decision',text:el.value})});el.value=''}
+async function leaveGame(){
+  if(!confirm('Quitter cette partie ? La partie continue et ton personnage ne sera pas transmis au nouveau joueur.'))return
+  try{await api('/api/game/live/leave',{method:'POST',body:JSON.stringify({code,playerToken:token})});token='';sessionStorage.removeItem('nyxgame_player_'+code);state=null;joinForm('Tu as quitté la partie. La progression des autres joueurs est conservée.')}
+  catch(e){rewardToast(e.message)}
+}
+async function askCompanion(){
+  const aiId=document.getElementById('companionSelect')?.value
+  const ai=(state.players||[]).find(p=>p.id===aiId&&p.controller==='ai')
+  if(!ai)return
+  const output=document.getElementById('partyReply');if(output)output.textContent='Le compagnon prépare son intervention via OpenRouter…'
+  try{const r=await api('/api/game/live/ai-turn',{method:'POST',body:JSON.stringify({code,playerToken:token,aiId:ai.id})});if(output)output.textContent=r.name+' : '+r.reply}
+  catch(e){if(output)output.textContent=e.message}
+}
+async function aiGm(action){
+  const output=document.getElementById('partyReply');if(output)output.textContent='Le maître de jeu prépare la scène via OpenRouter…'
+  try{const expectedIndex=Number(state.runtime?.guidedSceneIndex)||0
+    const r=await api('/api/game/live/ai-gm',{method:'POST',body:JSON.stringify({code,playerToken:token,expectedIndex,action})})
+    state=r.state;render();const el=document.getElementById('partyReply');if(el)el.textContent='Scène prête.'
+  }catch(e){if(output)output.textContent=e.message}
+}
 async function askNpc(){let msg=document.getElementById('npcmsg'),reply=document.getElementById('npcreply');if(!msg?.value.trim())return;reply.innerHTML='<div class="mut">Le personnage réfléchit…</div>';try{let r=await api('/api/game/live/npc-chat',{method:'POST',body:JSON.stringify({code,playerToken:token,message:msg.value})});reply.innerHTML='<div class="npcReply">'+esc(r.reply)+'</div>';msg.value=''}catch(e){reply.innerHTML='<div class="mut">'+esc(e.message)+'</div>'}}
 load()
 setInterval(()=>{if(token)load()},6000)
