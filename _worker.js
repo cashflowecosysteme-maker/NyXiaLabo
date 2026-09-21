@@ -175,22 +175,6 @@ function bearerToken(request) {
   return h.startsWith("Bearer ") ? h.slice(7) : null;
 }
 
-// Univers est l'unique autorité d'authentification du Labo.
-// Son cookie HttpOnly est partagé par les sous-domaines *.nyxia.top ;
-// une signature du Labo SANS session Univers active n'autorise jamais l'accès.
-async function universAdminSession(request, env) {
-  if (!env.CASHFLOW_KV) return false;
-  const cookie = request.headers.get('Cookie') || '';
-  const match = cookie.match(/(?:^|;\s*)nyxia_univers=([^;]+)/);
-  if (!match) return false;
-  const token = match[1];
-  if (!token || token.length > 240) return false;
-  const raw = await env.CASHFLOW_KV.get('univers:session:' + token);
-  if (!raw) return false;
-  try { return JSON.parse(raw).role === 'superadmin'; }
-  catch (_) { return false; }
-}
-
 // ---- Adaptateur texte (format OpenAI-compatible) ----
 
 async function callOpenAiCompatible(provider, env, { model, messages, max_tokens, temperature, system_prompt }) {
@@ -539,28 +523,22 @@ export default {
     const url = new URL(request.url);
     const parts = url.pathname.split("/").filter(Boolean); // ex: ["api","tools","nyxia"]
 
-    // Le Labo ne dispose plus d'un mot de passe indépendant d'Univers.
+    // --- Connexion (non protégé) ---
     if (request.method === "POST" && url.pathname === "/api/login") {
-      return json({ success: false, error: "Connecte-toi au Super Admin Univers." }, 410);
+      const { password } = await request.json().catch(() => ({}));
+      if (!env.ADMIN_PASSWORD || !env.SESSION_SECRET) return json({ success: false, error: "Serveur mal configuré (secrets manquants)." }, 500);
+      if (password !== env.ADMIN_PASSWORD) return json({ success: false, error: "Mot de passe incorrect." }, 401);
+      return json({ success: true, token: await signSession(env.SESSION_SECRET) });
     }
     if (request.method === "POST" && url.pathname === "/api/check-auth") {
-      if (!(await universAdminSession(request, env)))
-        return json({ valid: false, error: 'Connexion Univers requise.' });
-      if (!env.SESSION_SECRET)
-        return json({ valid: false, error: 'Secret de session Labo absent.' }, 503);
       const { token } = await request.json().catch(() => ({}));
-      const localToken = await verifySession(env.SESSION_SECRET, token)
-        ? token : await signSession(env.SESSION_SECRET);
-      const res = json({ valid: true, token: localToken });
-      res.headers.set('Cache-Control', 'no-store');
-      return res;
+      return json({ valid: await verifySession(env.SESSION_SECRET, token) });
     }
 
-    // Toutes les API internes exigent simultanément Univers ET la session locale.
+    // --- Tout le reste sous /api/ est protégé ---
     if (parts[0] === "api") {
-      const ok = (await universAdminSession(request, env)) &&
-        !!env.SESSION_SECRET && await verifySession(env.SESSION_SECRET, bearerToken(request));
-      if (!ok) return json({ error: "Session Super Admin Univers requise" }, 401);
+      const ok = await verifySession(env.SESSION_SECRET, bearerToken(request));
+      if (!ok) return json({ error: "Non autorisé" }, 401);
     }
 
     // --- Outils API personnalisés : CRUD ---
