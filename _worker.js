@@ -12,7 +12,7 @@
  *   ADMIN_PASSWORD, SESSION_SECRET, OPENROUTER_API_KEY, AIMLAPI_API_KEY,
  *   PEXELS_KEY (déjà présente chez toi)
  *
- * KV lié : HUB_CONFIG (clés "providers" et "tools")
+ * Données : CASHFLOW_KV commune via adaptateur nyxialabo: (ancienne KV lue en secours).
  */
 
 const SESSION_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
@@ -173,6 +173,22 @@ async function verifySession(secret, token) {
 function bearerToken(request) {
   const h = request.headers.get("Authorization") || "";
   return h.startsWith("Bearer ") ? h.slice(7) : null;
+}
+
+// Univers est l'unique autorité d'authentification du Labo.
+// Son cookie HttpOnly est partagé par les sous-domaines *.nyxia.top ;
+// une signature du Labo SANS session Univers active n'autorise jamais l'accès.
+async function universAdminSession(request, env) {
+  if (!env.CASHFLOW_KV) return false;
+  const cookie = request.headers.get('Cookie') || '';
+  const match = cookie.match(/(?:^|;\s*)nyxia_univers=([^;]+)/);
+  if (!match) return false;
+  const token = match[1];
+  if (!token || token.length > 240) return false;
+  const raw = await env.CASHFLOW_KV.get('univers:session:' + token);
+  if (!raw) return false;
+  try { return JSON.parse(raw).role === 'superadmin'; }
+  catch (_) { return false; }
 }
 
 // ---- Adaptateur texte (format OpenAI-compatible) ----
@@ -416,11 +432,11 @@ async function callRapidApi(env, source, fields) {
 }
 
 async function getCustomTools(env) {
-  if (env.HUB_CONFIG) { const s = await env.HUB_CONFIG.get("customTools", "json"); if (s) return s; }
+  if (env.LABO_STORE) { const s = await env.LABO_STORE.get("customTools", "json"); if (s) return s; }
   return [];
 }
 async function saveCustomTools(env, list) {
-  await env.HUB_CONFIG.put("customTools", JSON.stringify(list));
+  await env.LABO_STORE.put("customTools", JSON.stringify(list));
 }
 
 function setNestedValue(obj, path, value) {
@@ -467,11 +483,11 @@ async function callCustomTool(env, toolConfig, fields) {
 // ---- Helpers KV ----
 
 async function getProviders(env) {
-  if (env.HUB_CONFIG) { const s = await env.HUB_CONFIG.get("providers", "json"); if (s) return s; }
+  if (env.LABO_STORE) { const s = await env.LABO_STORE.get("providers", "json"); if (s) return s; }
   return DEFAULT_PROVIDERS;
 }
 async function saveProviders(env, providers) {
-  await env.HUB_CONFIG.put("providers", JSON.stringify(providers));
+  await env.LABO_STORE.put("providers", JSON.stringify(providers));
 }
 const CATEGORY_MIGRATIONS = {
   "musique-libre": "musique",
@@ -480,8 +496,8 @@ const CATEGORY_MIGRATIONS = {
 };
 
 async function getTools(env) {
-  if (env.HUB_CONFIG) {
-    const stored = await env.HUB_CONFIG.get("tools", "json");
+  if (env.LABO_STORE) {
+    const stored = await env.LABO_STORE.get("tools", "json");
     if (stored) {
       let changed = false;
       stored.forEach(t => {
@@ -491,7 +507,7 @@ async function getTools(env) {
           changed = true;
         }
       });
-      const deletedIds = new Set((await env.HUB_CONFIG.get("deletedToolIds", "json")) || []);
+      const deletedIds = new Set((await env.LABO_STORE.get("deletedToolIds", "json")) || []);
       const storedIds = new Set(stored.map(t => t.id));
       const missingDefaults = DEFAULT_TOOLS.filter(t => !storedIds.has(t.id) && !deletedIds.has(t.id));
       const merged = missingDefaults.length ? [...stored, ...missingDefaults] : stored;
@@ -502,7 +518,7 @@ async function getTools(env) {
   return DEFAULT_TOOLS;
 }
 async function saveTools(env, tools) {
-  await env.HUB_CONFIG.put("tools", JSON.stringify(tools));
+  await env.LABO_STORE.put("tools", JSON.stringify(tools));
 }
 function slugify(name) {
   return name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -523,22 +539,28 @@ export default {
     const url = new URL(request.url);
     const parts = url.pathname.split("/").filter(Boolean); // ex: ["api","tools","nyxia"]
 
-    // --- Connexion (non protégé) ---
+    // Le Labo ne dispose plus d'un mot de passe indépendant d'Univers.
     if (request.method === "POST" && url.pathname === "/api/login") {
-      const { password } = await request.json().catch(() => ({}));
-      if (!env.ADMIN_PASSWORD || !env.SESSION_SECRET) return json({ success: false, error: "Serveur mal configuré (secrets manquants)." }, 500);
-      if (password !== env.ADMIN_PASSWORD) return json({ success: false, error: "Mot de passe incorrect." }, 401);
-      return json({ success: true, token: await signSession(env.SESSION_SECRET) });
+      return json({ success: false, error: "Connecte-toi au Super Admin Univers." }, 410);
     }
     if (request.method === "POST" && url.pathname === "/api/check-auth") {
+      if (!(await universAdminSession(request, env)))
+        return json({ valid: false, error: 'Connexion Univers requise.' });
+      if (!env.SESSION_SECRET)
+        return json({ valid: false, error: 'Secret de session Labo absent.' }, 503);
       const { token } = await request.json().catch(() => ({}));
-      return json({ valid: await verifySession(env.SESSION_SECRET, token) });
+      const localToken = await verifySession(env.SESSION_SECRET, token)
+        ? token : await signSession(env.SESSION_SECRET);
+      const res = json({ valid: true, token: localToken });
+      res.headers.set('Cache-Control', 'no-store');
+      return res;
     }
 
-    // --- Tout le reste sous /api/ est protégé ---
+    // Toutes les API internes exigent simultanément Univers ET la session locale.
     if (parts[0] === "api") {
-      const ok = await verifySession(env.SESSION_SECRET, bearerToken(request));
-      if (!ok) return json({ error: "Non autorisé" }, 401);
+      const ok = (await universAdminSession(request, env)) &&
+        !!env.SESSION_SECRET && await verifySession(env.SESSION_SECRET, bearerToken(request));
+      if (!ok) return json({ error: "Session Super Admin Univers requise" }, 401);
     }
 
     // --- Outils API personnalisés : CRUD ---
@@ -627,9 +649,9 @@ export default {
       if (request.method === "DELETE" && toolId) {
         const filtered = tools.filter(t => t.id !== toolId);
         await saveTools(env, filtered);
-        const deletedIds = new Set((await env.HUB_CONFIG.get("deletedToolIds", "json")) || []);
+        const deletedIds = new Set((await env.LABO_STORE.get("deletedToolIds", "json")) || []);
         deletedIds.add(toolId);
-        await env.HUB_CONFIG.put("deletedToolIds", JSON.stringify([...deletedIds]));
+        await env.LABO_STORE.put("deletedToolIds", JSON.stringify([...deletedIds]));
         return json({ ok: true });
       }
     }
