@@ -120,17 +120,10 @@
       </div>
 
       <form id="login-form" onsubmit="return false">
-        <div class="form-group">
-          <label class="form-label" for="password">Mot de passe</label>
-          <div class="input-wrap">
-            <input class="form-input" type="password" id="password" placeholder="••••••••" autocomplete="current-password" required>
-            <button type="button" class="toggle-pw" id="toggle-pw" onclick="togglePw()" title="Afficher/masquer">👁</button>
-          </div>
-        </div>
-
+        <p class="login-subtitle">Accès avec ta session du Super Admin Univers.</p>
         <button class="btn-login" id="btn-login" onclick="doLogin()">
           <div class="spinner" id="spinner"></div>
-          <span id="btn-text">Entrer</span>
+          <span id="btn-text">Vérifier mon accès Univers</span>
         </button>
 
         <div class="msg-box" id="msg-box"></div>
@@ -143,51 +136,32 @@
   <script src="/js/starry-bg.js" defer></script>
 
   <script>
-    ;(function () {
-      var token = sessionStorage.getItem('sandbox_token')
-      if (!token) return
-      fetch('/api/check-auth', {
+    // Un seul aller vers le tableau de bord, uniquement après validation réelle.
+    function verifyUnivers() {
+      return fetch('/api/check-auth', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token })
+        body: JSON.stringify({ token: sessionStorage.getItem('sandbox_token') || '' }),
+        cache: 'no-store'
+      }).then(function (r) { return r.json() }).then(function (data) {
+        if (!data.valid || !data.token) return false
+        sessionStorage.setItem('sandbox_token', data.token)
+        window.location.replace('/dashboard.html')
+        return true
       })
-      .then(function (r) { return r.json() })
-      .then(function (data) { if (data.valid) window.location.href = '/dashboard.html' })
-      .catch(function () {})
-    })()
+    }
+    verifyUnivers().then(function (valid) {
+      if (!valid) showMsg('Ta session Univers n’est pas reconnue par le Labo. Ouvre le Labo depuis Univers; aucun nouveau mot de passe n’est nécessaire.', 'error')
+    }).catch(function () { showMsg('Vérification Univers indisponible. Aucun changement de session effectué.', 'error') })
 
     function doLogin() {
-      var password = document.getElementById('password').value
       var btn = document.getElementById('btn-login')
       var spinner = document.getElementById('spinner')
-      var btnText = document.getElementById('btn-text')
-      var msgBox = document.getElementById('msg-box')
-
-      if (!password) { showMsg('Entre le mot de passe.', 'error'); return }
-
       btn.disabled = true
       spinner.style.display = 'block'
-      btnText.textContent = 'Connexion...'
-      msgBox.style.display = 'none'
-
-      fetch('/api/login', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: password })
-      })
-      .then(function (r) { return r.json() })
-      .then(function (data) {
-        if (data.success && data.token) {
-          sessionStorage.setItem('sandbox_token', data.token)
-          showMsg('✓ Connexion réussie...', 'success')
-          setTimeout(function () { window.location.href = '/dashboard.html' }, 500)
-        } else {
-          showMsg(data.error || 'Mot de passe incorrect.', 'error')
-          btn.disabled = false; spinner.style.display = 'none'; btnText.textContent = 'Entrer'
-        }
-      })
-      .catch(function () {
-        showMsg('Impossible de joindre le Worker. Vérifie le déploiement.', 'error')
-        btn.disabled = false; spinner.style.display = 'none'; btnText.textContent = 'Entrer'
-      })
+      verifyUnivers().then(function (valid) {
+        if (!valid) showMsg('Session Univers absente ou expirée. Reviens dans Univers et utilise le bouton Labo existant.', 'error')
+      }).catch(function () { showMsg('Vérification Univers indisponible.', 'error') })
+        .finally(function () { btn.disabled = false; spinner.style.display = 'none' })
     }
 
     function showMsg(text, type) {
@@ -195,12 +169,6 @@
       box.textContent = text; box.className = 'msg-box ' + type; box.style.display = 'block'
     }
 
-    function togglePw() {
-      var input = document.getElementById('password')
-      input.type = input.type === 'password' ? 'text' : 'password'
-    }
-
-    document.addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin() })
   </script>
 
 </body>
