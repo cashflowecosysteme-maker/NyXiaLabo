@@ -143,15 +143,19 @@
     }
 
     ;(function checkAuth() {
-      if (!sessionToken) { window.location.href = '/login.html'; return }
-      fetch('/api/check-auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: sessionToken }) })
+      fetch('/api/check-auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: sessionToken }), cache: 'no-store' })
         .then(function (r) { return r.json() })
-        .then(function (data) { if (!data.valid) { window.location.href = '/login.html'; return } loadAll() })
-        .catch(function () { window.location.href = '/login.html' })
+        .then(function (data) {
+          if (!data.valid || !data.token) { sessionStorage.removeItem('sandbox_token'); window.location.replace('/login.html'); return }
+          sessionToken = data.token
+          sessionStorage.setItem('sandbox_token', sessionToken)
+          loadAll()
+        })
+        .catch(function () { sessionStorage.removeItem('sandbox_token'); window.location.replace('/login.html') })
     })()
 
     function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + sessionToken } }
-    function logout() { sessionStorage.removeItem('sandbox_token'); window.location.href = '/login.html' }
+    function logout() { sessionStorage.removeItem('sandbox_token'); window.location.href = 'https://univers.nyxia.top/' }
     function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML }
     function errText(e) {
       if (!e) return ''
