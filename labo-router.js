@@ -724,7 +724,11 @@ async function gameGetProduct(env, id) {
 }
 async function gameSaveProduct(env, product) {
   if (!env.LABO_STORE) throw new Error('CASHFLOW_KV non raccordée à l’Atelier')
-  await env.LABO_STORE.put(gameProductKey(product.id), JSON.stringify(product))
+  // Le jeu compilé lit la clé centrale directe; garder aussi la copie historique du Labo.
+  if (!env.CASHFLOW_KV) throw new Error('CASHFLOW_KV commune indisponible : publication annulée')
+  const content = JSON.stringify(product)
+  await env.CASHFLOW_KV.put(gameProductKey(product.id), content)
+  await env.LABO_STORE.put(gameProductKey(product.id), content)
   const index = await gameLoadProductIndex(env)
   const next = index.filter(x => x.id !== product.id)
   next.unshift(gameProductPublic(product))
@@ -819,8 +823,8 @@ function gameRuntimeSnapshotFromData(d = {}) {
     playerBadgeCatalog: d.playerBadgeCatalog || '',
     npcIntelligence: d.npcIntelligence || '',
     npcRuntimeJson: d.npcRuntimeJson || '',
+    gmBrain: {id:'nyxia-mj',knowledgeDocs:Array.isArray(d.gmBrain?.knowledgeDocs)?d.gmBrain.knowledgeDocs.map(x=>({id:x.id,title:x.title,parts:x.parts,model:x.model||'',bookId:x.bookId||'',bookTitle:x.bookTitle||'',bookPart:x.bookPart||0,bookParts:x.bookParts||0})):[]},
     npcCharacters: Array.isArray(d.npcCharacters) ? structuredClone(d.npcCharacters) : [],
-    gmBrain: d.gmBrain || { id:'nyxia-mj', knowledgeDocs:[] },
     npcMemoryRules: d.npcMemoryRules || '',
     npcRelationshipRules: d.npcRelationshipRules || '',
     npcAutonomyRules: d.npcAutonomyRules || '',

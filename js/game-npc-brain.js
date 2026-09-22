@@ -6,6 +6,7 @@
 const VALID_ID = /^[a-zA-Z0-9_-]{1,120}$/
 const MAX_TEXT = 30000
 const MAX_DOCS = 40
+const MAX_MJ_DOCS = 120
 const encoder = new TextEncoder()
 const reply = (body, status=200) => new Response(JSON.stringify(body), {status, headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}})
 function safe(value, max=180) { return String(value == null ? '' : value).trim().slice(0,max) }
@@ -104,7 +105,14 @@ export async function handleNpcAtelier(request,env,getProject,saveProject) {
     const docs=Array.isArray(character.knowledgeDocs)?character.knowledgeDocs:[]
     const minimumTrust=Number(body.minimumTrust??0)
     if(!Number.isInteger(minimumTrust)||minimumTrust<0||minimumTrust>100)return reply({error:'Confiance minimale invalide (0–100)'},400)
-    if(docs.length>=MAX_DOCS)return reply({error:'Maximum de 40 documents par personnage'},409)
+    const bookId=id==='nyxia-mj'?safe(body.bookId,80):''
+    const bookPart=Number(body.bookPart||0),bookParts=Number(body.bookParts||0)
+    if(bookId && (!VALID_ID.test(bookId)||!Number.isInteger(bookPart)||!Number.isInteger(bookParts)||bookPart<1||bookPart>bookParts||bookParts>MAX_MJ_DOCS))return reply({error:'Identification du livre invalide'},400)
+    if(bookId){
+      const prior=docs.find(x=>x.bookId===bookId&&x.bookPart===bookPart)
+      if(prior)return reply({ok:true,document:prior,alreadyIndexed:true},200) // reprise sans doublon
+    }
+    if(docs.length>=(id==='nyxia-mj'?MAX_MJ_DOCS:MAX_DOCS))return reply({error:'Capacité du cerveau atteinte : '+(id==='nyxia-mj'?MAX_MJ_DOCS:MAX_DOCS)+' documents'},409)
     try{
       const chunks=chunksOf(text),{vectors,model}=await embed(env,chunks),namespace=await npcNamespace(gameId,id)
       const docId=crypto.randomUUID(),vectorIds=[]
@@ -117,7 +125,7 @@ export async function handleNpcAtelier(request,env,getProject,saveProject) {
       // Écriture seulement APRÈS confirmation de l'upsert. Jamais de copie dans une autre KV.
       const document={gameId,characterId:id,id:docId,title,chunks,vectorIds,model,createdAt:new Date().toISOString()}
       await env.CASHFLOW_KV.put(knowledgeKey(gameId,id,docId),JSON.stringify(document))
-      const descriptor={id:docId,title,parts:chunks.length,minimumTrust,createdAt:document.createdAt}
+      const descriptor={id:docId,title,parts:chunks.length,minimumTrust,model,createdAt:document.createdAt,...(bookId?{bookId,bookTitle:safe(body.bookTitle||title,160),bookPart,bookParts}:{})}
       npcSaveRecord(project,id,{...character,knowledgeDocs:[...docs,descriptor]})
       await saveProject(env,project)
       return reply({ok:true,document:descriptor,namespace,model,notice:'Indexation asynchrone : la recherche peut demander quelques secondes.'},201)
@@ -125,9 +133,28 @@ export async function handleNpcAtelier(request,env,getProject,saveProject) {
   }
   if(path==='/api/atelier/game/npc/knowledge'&&request.method==='DELETE'){
     const body=await request.json().catch(()=>({})),gameId=safe(body.projectId,120),id=safe(body.characterId,120),docId=safe(body.documentId,80)
-    if(!VALID_ID.test(gameId)||!VALID_ID.test(id)||!VALID_ID.test(docId))return reply({error:'Identifiants invalides'},400)
+    if(!VALID_ID.test(gameId)||!VALID_ID.test(id)||!(VALID_ID.test(docId)||(id==='nyxia-mj'&&VALID_ID.test(safe(body.bookId,80)))))return reply({error:'Identifiants invalides'},400)
     const project=await getProject(env,gameId),character=project&&npcRecord(project,id)
     if(!character)return reply({error:'Personnage introuvable'},404)
+    const bookId=id==='nyxia-mj'?safe(body.bookId,80):''
+    if(bookId){
+      if(!VALID_ID.test(bookId))return reply({error:'Identifiant de livre invalide'},400)
+      const docs=(character.knowledgeDocs||[]).filter(d=>d.bookId===bookId)
+      if(!docs.length)return reply({error:'Livre absent du cerveau de CE jeu'},404)
+      let deleted=0
+      try{
+        for(const doc of docs){
+          const record=await env.CASHFLOW_KV.get(knowledgeKey(gameId,id,doc.id),'json')
+          if(record?.vectorIds?.length)await env.VECTORIZE_INDEX.deleteByIds(record.vectorIds)
+          await env.CASHFLOW_KV.delete(knowledgeKey(gameId,id,doc.id))
+          character.knowledgeDocs=character.knowledgeDocs.filter(x=>x.id!==doc.id)
+          npcSaveRecord(project,id,character)
+          await saveProject(env,project) // reprise possible si suppression partielle
+          deleted++
+        }
+        return reply({ok:true,removed:deleted})
+      }catch(e){return reply({error:'Retrait incomplet : '+deleted+' partie(s) retirée(s). '+e.message},502)}
+    }
     if(!(character.knowledgeDocs||[]).some(d=>d.id===docId))return reply({error:'Document absent de cette fiche'},404)
     try{
       const record=await env.CASHFLOW_KV.get(knowledgeKey(gameId,id,docId),'json')

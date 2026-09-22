@@ -81,6 +81,7 @@ window.nyxCompileGame=async function(mode){
   clearTimeout(saveTimer);if(!await saveCurrent())throw Error('Impossible de sauvegarder le projet avant de compiler.');status('Lecture de la coque NyXia Game…');
   const template=await fetch('/game-shell-template.zip',{cache:'no-store'});if(!template.ok)throw Error('Coque modèle absente du Labo : /game-shell-template.zip');
   const zip=await JSZip.loadAsync(await template.blob());if(!zip.file('_worker.js')||!zip.file('jeu.html')||!zip.file('wrangler.toml'))throw Error('Coque modèle incomplète : compilation annulée.');
+  if(!(await zip.file('_worker.js').async('string')).includes('NYXIA_MJ_SCOPED_BRAIN_V1'))throw Error('Coque non mise à jour : remplace uniquement _worker.js dans ton game-shell-template.zip par le fichier du correctif NyXia MJ. Tes chat... restent inchangés.');
   let media={files:[],bytes:0};if(mode==='embedded')media=await embedMedia(zip,t.scenes);
   const all=t.scenes.flatMap(s=>(s.slots||[]).filter(m=>allowedMedia(m.url)).map(m=>({sceneId:s.id,kind:m.kind,id:m.id,label:m.label,url:m.url,trigger:m.trigger,playback:m.playback,source:m.source,sourceUrl:m.sourceUrl,credit:m.credit,license:m.license})));
   zip.file('game-manifest.json',JSON.stringify({schemaVersion:2,gameId:id,title:currentProject.title,description:d.packageSubtitle||'',mediaMode:mode,mediaFiles:media.files,mediaCount:all.length,compiledAt:new Date().toISOString()},null,2));

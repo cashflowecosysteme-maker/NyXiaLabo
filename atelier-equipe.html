@@ -502,7 +502,7 @@
   }
   function gameWorkspace(){
     var d=currentProject.data||{}
-    var tabs='<div class="game-tabs">'+gameTabBtn('concept','✨ Concept')+gameTabBtn('bible','🌍 Bible')+gameTabBtn('story','📖 Histoire')+gameTabBtn('media','🎬 Médias')+gameTabBtn('players','🎭 Joueurs')+gameTabBtn('cast','🧙 Personnages IA')+gameTabBtn('package','📦 Compilation ZIP')+'</div>'
+    var tabs='<div class="game-tabs">'+gameTabBtn('concept','✨ Concept')+gameTabBtn('bible','🌍 Bible')+gameTabBtn('story','📖 Histoire')+gameTabBtn('media','🎬 Médias')+gameTabBtn('players','🎭 Joueurs')+gameTabBtn('cast','🧙 Personnages IA')+gameTabBtn('gm','📘 NyXia MJ')+gameTabBtn('package','📦 Compilation ZIP')+'</div>'
     var advanced=(gameTab==='live'||gameTab==='control')?'<div class="tools-line" style="margin:0 0 16px"><button class="btn gold" onclick="setGameTab(\'package\')">← Retour à Compilation ZIP</button><button class="btn" onclick="setGameTab(\'live\')">🎥 Live</button><button class="btn" onclick="setGameTab(\'control\')">🧠 Contrôle</button></div>':''
     return '<div class="hero" style="margin-bottom:16px"><div class="badge">ARCHITECTE NYXIA GAME</div><h3>'+esc(currentProject.title)+'</h3><p>Studio commun pour RPG, ACE, Meurtre & Mystère, soirées immersives et histoires interactives. Les propositions IA ne remplacent jamais silencieusement tes choix.</p></div>'+tabs+advanced+(gameTab==='media'?'<div class="workspace" style="display:block"><div class="panel">'+gameMainPanel(d)+'</div></div>':'<div class="workspace"><div class="panel">'+gameMainPanel(d)+'</div>'+gameSidePanel(d)+'</div>')
   }
@@ -511,6 +511,7 @@
     if(gameTab==='bible')return gameBible(d)
     if(gameTab==='story')return gameStory(d)
     if(gameTab==='cast')return gameAiCharacters(d)
+    if(gameTab==='gm')return gameGmBrain(d)
     if(gameTab==='players')return gamePlayers(d)
     if(gameTab==='rules')return gameRules(d)
     if(gameTab==='materials')return gameMaterials(d)
@@ -520,7 +521,7 @@
     return gamePackage(d)
   }
   function gameSidePanel(d){
-    var sections=[['Concept',d.idea],['Bible',d.worldBible],['Histoire',d.storyStructure||d.scenesQuests],['Médias',d.imageBriefs||d.audioPlan||d.videoPlan],['Joueurs',d.playerPrologue||d.playerBadgeCatalog||(d.playableCharacters||[]).length&&'personnages'||d.mechanics||d.playerMaterials],['Personnages IA',(d.npcCharacters||[]).length?'Fiches personnalisées':d.npcRuntimeJson||''],['Live',d.livePlan],['Contrôle',d.controlReport]]
+    var sections=[['Concept',d.idea],['Bible',d.worldBible],['Histoire',d.storyStructure||d.scenesQuests],['Médias',d.imageBriefs||d.audioPlan||d.videoPlan],['Joueurs',d.playerPrologue||d.playerBadgeCatalog||(d.playableCharacters||[]).length&&'personnages'||d.mechanics||d.playerMaterials],['Personnages IA',(d.npcCharacters||[]).length?'Fiches personnalisées':d.npcRuntimeJson||''],['NyXia MJ',d.gmBrain?.knowledgeDocs?.length?'Livre du jeu injecté':''],['Live',d.livePlan],['Contrôle',d.controlReport]]
     var status=sections.map(function(x){var isConcept=x[0]==='Concept',ready=isConcept?conceptIsApproved(d):!!String(x[1]||'').trim();return '<div '+(isConcept?'id="concept-progress-card" ':'')+'class="game-status '+(ready?'ready':'')+'"><strong>'+(ready?'✓ ':'○ ')+x[0]+(isConcept?(ready?' terminé':' à confirmer'):'')+'</strong>'+(isConcept?(ready?'Validation humaine enregistrée':'Aucune amélioration IA obligatoire'):(ready?'Prêt / en travail':'À produire'))+'</div>'}).join('')
     return '<div class="game-stack">'+aiPanel()+'<div class="panel"><h4>🧭 Avancement</h4><div class="game-status-grid">'+status+'</div><div class="divider"></div><div class="tools-line"><button class="btn gold" onclick="gameAI(\'next\')">✨ Que produire ensuite ?</button><button class="btn" onclick="showView(\'maps\')">🗺️ Cartes</button><button class="btn" onclick="showView(\'visual\')">🎨 Visuels</button><button class="btn" onclick="showView(\'video\')">🎬 Vidéo</button></div></div></div>'
   }
@@ -902,6 +903,101 @@
       '<div class="divider"></div>'+gameMaterials(d)+
       playerBookPreview(d)
   }
+  // Le livre MJ est lu uniquement dans CE projet. Le texte source ne rejoint jamais les données publiques du projet.
+  var gmPendingBook=null;
+  var gmBookBusy=false;
+  function gmBrainDocs(d){return Array.isArray(d.gmBrain?.knowledgeDocs)?d.gmBrain.knowledgeDocs:[]}
+  function gmBookGroups(d){
+    var groups=[],seen=Object.create(null);
+    gmBrainDocs(d).forEach(function(doc){
+      var id=doc.bookId||doc.id;
+      if(!id)return;
+      if(!seen[id]){seen[id]={id:id,title:doc.bookTitle||doc.title||'Livre du MJ',parts:[],expected:Number(doc.bookParts||1),book:!!doc.bookId};groups.push(seen[id])}
+      seen[id].parts.push(doc);
+    });return groups;
+  }
+  function gmSplitBook(source){
+    var rest=String(source||'').replace(/\r\n?/g,'\n').trim(),pieces=[],max=27000;
+    while(rest){
+      if(rest.length<=max){pieces.push(rest);break}
+      var pos=rest.lastIndexOf('\n',max);
+      if(pos<max/2)pos=rest.lastIndexOf(' ',max);
+      if(pos<max/2)pos=max;
+      pieces.push(rest.slice(0,pos).trim());rest=rest.slice(pos).trimStart();
+      if(pieces.length>120)throw Error('Ce livre dépasse la capacité de 120 parties. Aucune injection commencée.');
+    }
+    if(!pieces.length||pieces.length>120)throw Error('Le livre est vide ou dépasse 120 parties.');
+    return pieces;
+  }
+  function gmBookStatus(message){var node=document.getElementById('gm-book-status');if(node)node.textContent=message}
+  function gameGmBrain(d){
+    if(gmPendingBook&&gmPendingBook.projectId!==currentProject.id)gmPendingBook=null;
+    var docs=gmBrainDocs(d),groups=gmBookGroups(d),pending=gmPendingBook;
+    return '<h4>📘 NyXia MJ — livre du maître de jeu</h4>'+ 
+      '<div class="game-note"><b>Une NyXia par jeu.</b> Le livre est injecté uniquement dans le cerveau de NyXia MJ de « '+esc(currentProject.title)+' ». Il ne sera ni ajouté aux cerveaux des autres portails ni transmis automatiquement aux PNJ. Les règles essentielles du jeu restent dans les sections déjà prévues.</div>'+ 
+      '<div class="field"><label>Importer le livre du MJ (.md, .txt, .docx ou .pdf)</label><input id="gm-book-file" type="file" accept=".md,.markdown,.txt,.docx,.pdf" onchange="gmReadBook(this.files);this.value=\'\'"'+(gmBookBusy?' disabled':'')+'></div>'+ 
+      '<div class="tools-line"><button id="gm-inject-btn" class="btn primary" onclick="gmInjectBook()"'+(!pending||gmBookBusy?' disabled':'')+'>🧠 Injecter le livre dans NyXia MJ</button></div>'+ 
+      '<div id="gm-book-status" class="game-note" role="status" aria-live="polite">'+esc(pending?pending.title+' · '+pending.chunks.length+' partie(s) préparée(s) · '+pending.done+' injectée(s).':'Choisis ton livre. Le découpage est automatique ; aucune connaissance ne sera injectée avant ton clic.')+'</div>'+ 
+      '<p class="tiny">Après une injection ou un retrait, ouvre 📦 Compilation et clique « Enregistrer ce jeu dans CASHFLOW_KV » pour que le Worker du jeu retrouve la dernière liste des livres autorisés.</p>'+
+      '<div class="divider"></div><h4>Livres de CE jeu</h4>'+ 
+      (groups.length?groups.map(function(g){var count=g.parts.length,extracts=g.parts.reduce(function(n,doc){return n+Number(doc.parts||0)},0);
+        return '<div class="game-note" style="margin:8px 0"><b>'+esc(g.title)+'</b> · '+count+'/'+g.expected+' partie(s), '+extracts+' extrait(s)'+(count<g.expected?' · ⚠ Injection incomplète':'')+ 
+          '<div class="tools-line" style="margin-top:8px"><button class="btn danger" onclick="gmRemoveBook(\''+g.id+'\','+(g.book?'true':'false')+')">Retirer '+(g.book?'ce livre':'ce document')+'</button></div></div>';
+      }).join(''):'<p class="tiny">Aucun livre du MJ injecté dans ce jeu.</p>')+
+      '<p class="tiny">Après l’injection, utilise « Enregistrer ce jeu dans CASHFLOW_KV » dans 📦 Compilation pour mettre à jour le Worker du jeu. Stockage : KV et Vectorize partagés, séparés par jeu et NyXia MJ.</p>';
+  }
+  async function gmReadBook(files){
+    if(!currentProject||!files?.length||gmBookBusy)return;
+    var file=files[0],projectId=currentProject.id;
+    if(file.size>8*1024*1024)return alert('Ce fichier dépasse 8 Mo : aucun transfert commencé.');
+    gmPendingBook=null;
+    try{
+      gmBookStatus('Lecture de '+file.name+'…');
+      var text=/\.pdf$/i.test(file.name)?await conceptPdfMarkdown(file):await gameReadImportFile(file);
+      if(!currentProject||currentProject.id!==projectId)throw Error('Projet changé pendant la lecture : import annulé.');
+      var chunks=gmSplitBook(text),existing=gmBrainDocs(currentProject.data).length;
+      if(existing+chunks.length>120)throw Error('Le cerveau MJ accepte au maximum 120 parties, '+existing+' déjà enregistrée(s). Aucun transfert commencé.');
+      gmPendingBook={projectId:projectId,title:file.name,bookId:crypto.randomUUID(),chunks:chunks,done:0};
+      renderGame();gmBookStatus(file.name+' lu : '+chunks.length+' partie(s) prêtes. Clique sur Injecter pour confirmer.');
+    }catch(err){gmBookStatus('⚠ '+err.message);alert('Lecture du livre : '+err.message)}
+  }
+  async function gmInjectBook(){
+    var book=gmPendingBook;
+    if(!book||gmBookBusy||!currentProject||currentProject.id!==book.projectId)return;
+    if(!confirm('Injecter « '+book.title+' » dans NyXia MJ de « '+currentProject.title+' » UNIQUEMENT ?'))return;
+    gmBookBusy=true;
+    var button=document.getElementById('gm-inject-btn');if(button)button.disabled=true;
+    try{
+      clearTimeout(saveTimer);saveTimer=null;
+      if(!(await saveCurrent()))throw Error('Sauvegarde du projet impossible : aucune injection lancée.');
+      while(book.done<book.chunks.length){
+        if(currentProject.id!==book.projectId)throw Error('Projet changé : injection arrêtée.');
+        gmBookStatus('Injection '+(book.done+1)+' / '+book.chunks.length+' · '+book.title+'…');
+        var result=await api('/api/atelier/game/npc/knowledge',{method:'POST',body:JSON.stringify({projectId:book.projectId,characterId:'nyxia-mj',title:book.title+' · Partie '+(book.done+1)+'/'+book.chunks.length,bookTitle:book.title,bookId:book.bookId,bookPart:book.done+1,bookParts:book.chunks.length,text:book.chunks[book.done],minimumTrust:0})});
+        if(!result.ok)throw Error(result.error||'Injection refusée.');
+        book.done++;
+      }
+      currentProject=(await api('/api/atelier/projects/'+encodeURIComponent(book.projectId))).project;
+      gmPendingBook=null;renderGame();gmBookStatus('✓ Livre complet injecté dans NyXia MJ de '+currentProject.title+' : '+book.done+' partie(s).');
+    }catch(err){
+      gmBookStatus('⚠ '+err.message+' · '+book.done+' / '+book.chunks.length+' partie(s) enregistrée(s). Tu peux cliquer de nouveau sur Injecter pour reprendre sans doublons.');
+      alert('Livre MJ : '+err.message+'\n'+book.done+' partie(s) enregistrée(s). L’injection peut reprendre ici.');
+    }finally{gmBookBusy=false;var btn=document.getElementById('gm-inject-btn');if(btn)btn.disabled=!gmPendingBook;}
+  }
+  async function gmRemoveBook(id,isBook){
+    if(!currentProject||gmBookBusy||!confirm('Retirer ce livre du cerveau NyXia MJ de « '+currentProject.title+' » ?'))return;
+    var projectId=currentProject.id;
+    try{
+      clearTimeout(saveTimer);saveTimer=null;
+      if(!(await saveCurrent()))throw Error('Impossible de sauvegarder le projet.');
+      var payload={projectId:projectId,characterId:'nyxia-mj'};
+      payload[isBook?'bookId':'documentId']=id;
+      var result=await api('/api/atelier/game/npc/knowledge',{method:'DELETE',body:JSON.stringify(payload)});
+      if(!result.ok)throw Error(result.error||'Suppression refusée.');
+      currentProject=(await api('/api/atelier/projects/'+encodeURIComponent(projectId))).project;
+      renderGame();gmBookStatus('Livre retiré du cerveau de CE jeu uniquement.');
+    }catch(err){alert('Retrait du livre MJ : '+err.message)}
+  }
   // Un seul éditeur : identité + comportement Worker + savoir autorisé par jeu.
   var npcOpenRouterModels=[]
   var npcOpenRouterError=''
@@ -1102,7 +1198,7 @@
           npcField(i,'memoryRules','Mémoire : ce qu’il retient de chaque joueur',c.memoryRules,3)+npcField(i,'deliverables','Objets et médias remis (avec conditions, validées par moteur)',c.deliverables,4)+
           npcDocs(c,i)+'<div class="tools-line" style="margin-top:14px"><button class="btn danger" onclick="npcRemove('+i+')">Supprimer ce PNJ et ses connaissances</button></div></div></details>'
       }).join('')+
-      '<div class="divider"></div><h4>✦ NyXia, maître de jeu</h4><div class="game-note">NyXia garde les règles et la vérité complète du jeu via sa configuration MJ. Son cerveau n’est jamais partagé avec les PNJ ni avec un autre jeu. La configuration de son incarnation dans le portail NyXia Game nécessite le Worker de ce portail.</div>'+
+      '<div class="divider"></div><div class="game-note">📘 Le livre et le cerveau de NyXia MJ sont dans leur propre onglet : <button class="btn gold" onclick="setGameTab(\'gm\')">Ouvrir NyXia MJ</button></div>'+
       '<details style="margin-top:12px"><summary class="btn">📚 Anciens textes et références du jeu (conservés)</summary><div style="margin-top:12px">'+
         gameArea('Ancien casting / source','characters',d.characters,9)+gameArea('Factions, créatures et adversaires','factionsCreatures',d.factionsCreatures,6)+gameArea('Objets, indices, récompenses','itemsRewards',d.itemsRewards,6)+
       '</div></details>'
