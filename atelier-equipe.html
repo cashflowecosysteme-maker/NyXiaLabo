@@ -999,18 +999,6 @@
     }catch(err){alert('Retrait du livre MJ : '+err.message)}
   }
   // Un seul éditeur : identité + comportement Worker + savoir autorisé par jeu.
-  var npcOpenRouterModels=[]
-  var npcOpenRouterError=''
-  var npcModelsLoaded=false
-  async function loadNpcOpenRouterModels(){
-    if(npcModelsLoaded)return
-    npcModelsLoaded=true
-    try{
-      var response=await api('/api/atelier/game/npc/models')
-      npcOpenRouterModels=response.models||[]
-    }catch(e){npcOpenRouterError=e.message;npcModelsLoaded=true}
-    if(currentView==='game'&&gameTab==='cast')renderGame()
-  }
   function npcUpdate(index,field,value){
     if(!currentProject)return
     var list=(currentProject.data.npcCharacters||[]).map(function(c){return Object.assign({},c)})
@@ -1065,14 +1053,6 @@
     return '<div class="field"><label>'+esc(label)+'</label>'+
       (rows?'<textarea rows="'+rows+'" oninput="npcUpdate('+index+',\''+key+'\',this.value)">'+esc(value||'')+'</textarea>':
       '<input value="'+gameRosterAttr(value||'')+'" oninput="npcUpdate('+index+',\''+key+'\',this.value)">')+'</div>'
-  }
-  function npcModelPicker(c,index){
-    var selected=String(c.openRouterModel||'')
-    var choices=npcOpenRouterModels.map(function(model){return '<option value="'+gameRosterAttr(model.id)+'"'+(model.id===selected?' selected':'')+'>'+esc(model.name+' · '+model.id+(model.prompt!==null&&Number(model.prompt)===0?' · entrée gratuite':'') )+'</option>'}).join('')
-    var found=npcOpenRouterModels.some(function(m){return m.id===selected})
-    return '<div class="field"><label>Modèle OpenRouter propre à ce personnage</label><select onchange="npcUpdate('+index+',\'openRouterModel\',this.value)"><option value="">— Choisir le modèle —</option>'+
-      (selected&&!found?'<option value="'+gameRosterAttr(selected)+'" selected>'+esc(selected)+' (enregistré)</option>':'')+choices+'</select>'+
-      (npcOpenRouterError?'<p class="tiny">⚠ '+esc(npcOpenRouterError)+' · le modèle enregistré reste conservé. <button class="btn" onclick="npcModelsLoaded=false;loadNpcOpenRouterModels()">Réessayer</button></p>':'<p class="tiny">Liste des modèles obtenue directement auprès d’OpenRouter ; prix variables. Aucun achat au moment du choix.</p>')+'</div>'
   }
   function npcCharacterPhoto(c,index){
     var url=String(c.portraitUrl||''),good=/^\/game-media\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\/[0-9a-f-]{36}\.(png|jpe?g|webp|gif)$/.test(url)
@@ -1178,7 +1158,6 @@
   }
   function gameAiCharacters(d){
     var list=Array.isArray(d.npcCharacters)?d.npcCharacters:[]
-    if(!npcModelsLoaded)setTimeout(loadNpcOpenRouterModels,0)
     return '<h4>🧙 Personnages IA</h4><div class="game-note">Un seul formulaire par personnage. Chaque cerveau est enfermé dans CE jeu. Les PNJ ne connaissent que leur fiche et leurs documents autorisés ; les décisions sur les conséquences restent au moteur/MJ.</div>'+
       (!list.length&&String(d.npcRuntimeJson||'').trim()?'<div class="game-note">Anciennes fiches détectées : <button class="btn gold" onclick="npcImportLegacy()">Importer mes anciens PNJ dans les nouvelles fiches</button> · leur source est préservée.</div>':'')+
       '<div class="tools-line" style="margin:14px 0"><button class="btn primary" onclick="npcAdd()">+ Ajouter un personnage IA</button><span class="tiny">'+list.length+' personnage(s)</span></div>'+
@@ -1187,7 +1166,7 @@
           '<div class="row">'+npcField(i,'name','Prénom et nom du personnage',name)+npcField(i,'age','Âge',c.age)+'</div>'+
           npcCharacterPhoto(c,i)+'<div class="row">'+npcField(i,'role','Rôle',c.role)+npcField(i,'goals','Objectif du personnage',c.goals)+'</div>'+
           npcField(i,'personality','Description de la personnalité (pour le Worker)',c.personality,6)+
-          '<div class="divider"></div><h4>🤖 Configuration de CE PNJ</h4>'+npcModelPicker(c,i)+npcField(i,'elevenLabsVoiceId','ID de sa voix ElevenLabs',c.elevenLabsVoiceId)+
+          '<div class="divider"></div><h4>🤖 Configuration de CE PNJ</h4>'+npcField(i,'openRouterModel','Identifiant du modèle OpenRouter (à coller directement)',c.openRouterModel)+npcField(i,'elevenLabsVoiceId','ID de sa voix ElevenLabs',c.elevenLabsVoiceId)+
           '<div class="field"><label>Relation de confiance initiale : <b id="npc-trust-'+i+'">'+Number(c.trust??50)+'/100</b></label><input type="range" min="0" max="100" value="'+Number(c.trust??50)+'" oninput="npcUpdate('+i+',\'trust\',Number(this.value));document.getElementById(\'npc-trust-'+i+'\').textContent=this.value+\'/100\'"></div>'+
           npcField(i,'reputation','Réputation du personnage',c.reputation,3)+npcField(i,'relationships','Relations avec les autres personnages',c.relationships,4)+
           npcField(i,'autonomy','Autonomie',c.autonomy,3)+npcField(i,'triggers','Déclencheurs',c.triggers,3)+
