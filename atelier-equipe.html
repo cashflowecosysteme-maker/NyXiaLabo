@@ -373,7 +373,7 @@
   function chooseGame(id){chooseProject('nyxia-game',id,renderGame)}
 
   async function newProject(kind){
-    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',playerPrologue:'',playerSessionInfo:'',playerRules:'',playerHandoutMaterials:'',playerCreationInstructions:'',playerArchetypes:'',playerFactions:'',playerStartingReputation:0,playerReputationRules:'',playerBadgeCatalog:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',aiPlayerPolicy:'',arrivalGuidelines:'',partyRules:{characterChoice:'both',allowSolo:true,allowAiPlayers:true,allowLateJoin:true,gmMode:'human',gmChoices:'both'},playableCharacters:[],factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',sourceDocuments:'',importedSourceNames:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',guidedScenesJson:'',mediaUseFreeAudio:true,mediaUseFreeVideo:true,mediaPaidFallback:false,mediaAllowPaidImages:false,mediaPaidVideoLimit:0,mediaAskVideoApproval:true,mediaUseUserAssets:true,userMediaAssets:[],mediaImageQuality:'low',mediaPaidImageLimit:0,deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
+    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',playerPrologue:'',playerSessionInfo:'',playerRules:'',playerHandoutMaterials:'',playerBadgeCatalog:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',aiPlayerPolicy:'',arrivalGuidelines:'',partyRules:{characterChoice:'both',allowSolo:true,allowAiPlayers:true,allowLateJoin:true,gmMode:'human',gmChoices:'both'},playableCharacters:[],factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',sourceDocuments:'',importedSourceNames:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',guidedScenesJson:'',mediaUseFreeAudio:true,mediaUseFreeVideo:true,mediaPaidFallback:false,mediaAllowPaidImages:false,mediaPaidVideoLimit:0,mediaAskVideoApproval:true,mediaUseUserAssets:true,userMediaAssets:[],mediaImageQuality:'low',mediaPaidImageLimit:0,deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
     var title=prompt('Titre du projet :','Nouveau '+kindLabel(kind))||('Nouveau '+kindLabel(kind))
     try{var d=await api('/api/atelier/projects',{method:'POST',body:JSON.stringify({kind:kind,title:title,data:defaults[kind]||{}})}); currentProject=d.project; await reloadIndex(); showView(({ghostwriting:'ghost',audiobook:'audio','nyxia-game':'game',mystery:'mystery'})[kind]||'home'); toast('Projet créé') }catch(e){alert(e.message)}
   }
@@ -489,14 +489,14 @@
   // ---------------------------------------------------------------------------
   function gameTypeOptions(selected){return ['RPG & Aventure','ACE — Académie des Cadets Enquêteurs','Meurtre & Mystère','Soirée immersive','Histoire interactive'].map(function(x){return '<option'+(selected===x?' selected':'')+'>'+x+'</option>'}).join('')}
   function gameTabBtn(id,label){var approved=id==='concept'&&conceptIsApproved(currentProject&&currentProject.data);return '<button '+(id==='concept'?'id="game-tab-concept" ':'')+'class="game-tab '+(gameTab===id?'active':'')+(approved?' concept-complete':'')+'" onclick="setGameTab(\''+id+'\')">'+(approved?'✓ Concept':label)+'</button>'}
-  function setGameTab(v){gameTab=v;renderGame()}
+  function setGameTab(v){gameTab=(v==='rules'||v==='materials')?'players':v;renderGame()}
   function renderGame(){
     var host=document.getElementById('view-game'),ok=currentProject&&currentProject.kind==='nyxia-game'
     host.innerHTML=projectSelector('nyxia-game','chooseGame')+(ok?gameWorkspace():'<div class="hero"><div class="badge">NYXIA GAME · STUDIO DE PRODUCTION</div><h3>De ton idée au jeu réellement animable.</h3><p>Toi et ton équipe gardez la direction créative. NyXia construit la matière : univers, personnages, structure jouable, règles, documents joueurs, plans médias, conducteur live, contrôle et package final.</p><div class="card-actions"><button class="btn primary" onclick="newProject(\'nyxia-game\')">🎮 Créer mon premier projet</button></div></div>')
   }
   function gameWorkspace(){
     var d=currentProject.data||{}
-    var tabs='<div class="game-tabs">'+gameTabBtn('concept','✨ Concept')+gameTabBtn('bible','🌍 Bible')+gameTabBtn('story','📖 Histoire')+gameTabBtn('players','🎭 Joueurs')+gameTabBtn('rules','⚔️ Règles')+gameTabBtn('materials','🖨️ Matériel')+gameTabBtn('media','🎬 Médias')+gameTabBtn('cast','🧙 Personnages')+gameTabBtn('npcai','🧠 PNJ IA')+gameTabBtn('package','📦 Compilation ZIP')+'</div>'
+    var tabs='<div class="game-tabs">'+gameTabBtn('concept','✨ Concept')+gameTabBtn('bible','🌍 Bible')+gameTabBtn('story','📖 Histoire')+gameTabBtn('media','🎬 Médias')+gameTabBtn('players','🎭 Joueurs')+gameTabBtn('cast','🧙 Personnages')+gameTabBtn('npcai','🧠 PNJ IA')+gameTabBtn('package','📦 Compilation ZIP')+'</div>'
     var advanced=(gameTab==='live'||gameTab==='control')?'<div class="tools-line" style="margin:0 0 16px"><button class="btn gold" onclick="setGameTab(\'package\')">← Retour à Compilation ZIP</button><button class="btn" onclick="setGameTab(\'live\')">🎥 Live</button><button class="btn" onclick="setGameTab(\'control\')">🧠 Contrôle</button></div>':''
     return '<div class="hero" style="margin-bottom:16px"><div class="badge">ARCHITECTE NYXIA GAME</div><h3>'+esc(currentProject.title)+'</h3><p>Studio commun pour RPG, ACE, Meurtre & Mystère, soirées immersives et histoires interactives. Les propositions IA ne remplacent jamais silencieusement tes choix.</p></div>'+tabs+advanced+(gameTab==='media'?'<div class="workspace" style="display:block"><div class="panel">'+gameMainPanel(d)+'</div></div>':'<div class="workspace"><div class="panel">'+gameMainPanel(d)+'</div>'+gameSidePanel(d)+'</div>')
   }
@@ -515,7 +515,7 @@
     return gamePackage(d)
   }
   function gameSidePanel(d){
-    var sections=[['Concept',d.idea],['Bible',d.worldBible],['Structure',d.storyStructure],['Joueurs',d.playerPrologue||d.playerArchetypes||d.playerFactions],['Règles',d.mechanics||d.playerRules],['Matériel',d.playerMaterials||d.hostMaterials||d.playerHandoutMaterials],['Médias',d.imageBriefs||d.audioPlan||d.videoPlan],['Personnages',d.characters],['PNJ IA',d.npcIntelligence||d.npcMemoryRules],['Live',d.livePlan],['Contrôle',d.controlReport]]
+    var sections=[['Concept',d.idea],['Bible',d.worldBible],['Histoire',d.storyStructure||d.scenesQuests],['Médias',d.imageBriefs||d.audioPlan||d.videoPlan],['Joueurs',d.playerPrologue||d.playerBadgeCatalog||(d.playableCharacters||[]).length&&'personnages'||d.mechanics||d.playerMaterials],['Personnages',d.characters],['PNJ IA',d.npcIntelligence||d.npcMemoryRules],['Live',d.livePlan],['Contrôle',d.controlReport]]
     var status=sections.map(function(x){var isConcept=x[0]==='Concept',ready=isConcept?conceptIsApproved(d):!!String(x[1]||'').trim();return '<div '+(isConcept?'id="concept-progress-card" ':'')+'class="game-status '+(ready?'ready':'')+'"><strong>'+(ready?'✓ ':'○ ')+x[0]+(isConcept?(ready?' terminé':' à confirmer'):'')+'</strong>'+(isConcept?(ready?'Validation humaine enregistrée':'Aucune amélioration IA obligatoire'):(ready?'Prêt / en travail':'À produire'))+'</div>'}).join('')
     return '<div class="game-stack">'+aiPanel()+'<div class="panel"><h4>🧭 Avancement</h4><div class="game-status-grid">'+status+'</div><div class="divider"></div><div class="tools-line"><button class="btn gold" onclick="gameAI(\'next\')">✨ Que produire ensuite ?</button><button class="btn" onclick="showView(\'maps\')">🗺️ Cartes</button><button class="btn" onclick="showView(\'visual\')">🎨 Visuels</button><button class="btn" onclick="showView(\'video\')">🎬 Vidéo</button></div></div></div>'
   }
@@ -774,9 +774,6 @@
       gameArea('Arrivée d’un nouveau personnage en cours de partie — intégration narrative sans héritage','arrivalGuidelines',d.arrivalGuidelines,5)+
       '<div class="tools-line"><button class="btn primary" onclick="gameAI(\'characters\')">🧙 Créer / enrichir le casting</button><button class="btn" onclick="gameAI(\'enemies\')">Créer / enrichir adversaires / créatures</button><button class="btn" onclick="gameAI(\'items\')">Créer / enrichir objets / récompenses</button><button class="btn gold" onclick="setGameTab(\'players\')">🎭 Régler la participation</button><button class="btn" onclick="setGameTab(\'npcai\')">🧠 Donner une intelligence aux PNJ</button></div>'
   }
-  function playerSetupHasContent(d){
-    return !![d.playerPrologue,d.playerCreationInstructions,d.playerArchetypes,d.playerFactions,d.playerReputationRules,d.playerBadgeCatalog].some(function(x){return String(x||'').trim()})
-  }
   function playerVisibleContext(){
     var d=currentProject.data||{}
     return {
@@ -806,139 +803,25 @@
     }
   }
 
-  function setPlayerSetupState(type,msg,detail){
-    if(!currentProject)return
-    var d=currentProject.data||{}
-    d.playerSetupState={
-      type:type||'info',
-      message:msg||'',
-      detail:detail||'',
-      at:new Date().toISOString()
-    }
-    markDirty()
-    playerSetupStatus(type,msg,detail,d.playerSetupState.at)
-  }
-  function playerSetupStatus(type,msg,detail,at){
-    var box=document.getElementById('player-setup-status')
-    if(!box)return
-    var icon=type==='working'?'⏳':type==='ok'?'✅':type==='error'?'⚠️':'ℹ️'
-    var title=type==='working'?'NYXIA TRAVAILLE':type==='ok'?'TERMINÉ':type==='error'?'ERREUR':'ÉTAT'
-    var time=''
-    if(at){
-      try{time=new Date(at).toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})}catch(e){}
-    }
-    box.style.display='block'
-    box.style.borderColor=type==='ok'?'rgba(53,214,154,.45)':type==='error'?'rgba(255,98,124,.45)':'rgba(232,184,103,.40)'
-    box.style.background=type==='ok'?'rgba(53,214,154,.08)':type==='error'?'rgba(255,98,124,.08)':'rgba(232,184,103,.07)'
-    box.innerHTML=
-      '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center">'+
-        '<b style="font-size:13px">'+icon+' '+title+'</b>'+
-        (time?'<span class="tiny">'+esc(time)+'</span>':'')+
-      '</div>'+
-      '<div style="font-weight:800;margin-top:7px">'+esc(msg||'')+'</div>'+
-      (detail?'<div class="tiny" style="margin-top:5px;line-height:1.45">'+esc(detail)+'</div>':'')+
-      (type==='working'?'<div class="tiny" style="margin-top:8px;color:#f4d28a"><b>Attends la confirmation ✅ TERMINÉ avant de cliquer à nouveau.</b></div>':'')
-  }
-  function renderStoredPlayerSetupState(d){
-    var s=d&&d.playerSetupState
-    if(!s)return '<div id="player-setup-status" class="game-note" style="display:block;margin-bottom:14px"><b>ℹ️ ÉTAT</b><div class="tiny" style="margin-top:5px">Aucune génération lancée pour le moment.</div></div>'
-    var type=s.type||'info'
-    var icon=type==='working'?'⏳':type==='ok'?'✅':type==='error'?'⚠️':'ℹ️'
-    var title=type==='working'?'NYXIA TRAVAILLE':type==='ok'?'TERMINÉ':type==='error'?'ERREUR':'ÉTAT'
-    var time=''
-    try{time=new Date(s.at||'').toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})}catch(e){}
-    var border=type==='ok'?'rgba(53,214,154,.45)':type==='error'?'rgba(255,98,124,.45)':'rgba(232,184,103,.40)'
-    var bg=type==='ok'?'rgba(53,214,154,.08)':type==='error'?'rgba(255,98,124,.08)':'rgba(232,184,103,.07)'
-    return '<div id="player-setup-status" class="game-note" style="display:block;margin-bottom:14px;border-color:'+border+';background:'+bg+'">'+
-      '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><b style="font-size:13px">'+icon+' '+title+'</b>'+(time?'<span class="tiny">'+esc(time)+'</span>':'')+'</div>'+
-      '<div style="font-weight:800;margin-top:7px">'+esc(s.message||'')+'</div>'+
-      (s.detail?'<div class="tiny" style="margin-top:5px;line-height:1.45">'+esc(s.detail)+'</div>':'')+
-      (type==='working'?'<div class="tiny" style="margin-top:8px;color:#f4d28a"><b>Attends la confirmation ✅ TERMINÉ avant de cliquer à nouveau.</b></div>':'')+
-      '</div>'
-  }
-  function playerSetupBusy(on,activeId){
-    ['player-setup-all-btn','player-prologue-btn'].forEach(function(id){
-      var b=document.getElementById(id)
-      if(b)b.disabled=!!on
-    })
-    var active=document.getElementById(activeId)
-    if(active){
-      if(on){
-        active.dataset.originalText=active.textContent
-        active.textContent='⏳ NyXia travaille…'
-      }else if(active.dataset.originalText){
-        active.textContent=active.dataset.originalText
-      }
-    }
-  }
+  // Seul le prologue peut encore être préparé automatiquement : aucun autre champ supprimé n'est recréé.
   async function generatePlayerPrologueOnly(){
-    if(!currentProject)return
-    var d=currentProject.data||{},tool=currentAiTool()
-    if(!tool){alert('Aucun modèle GPT n’est sélectionné ou disponible.');return}
-    if(String(d.playerPrologue||'').trim()&&!confirm('Le prologue contient déjà du texte. Le remplacer par une nouvelle version créée par NyXia ?'))return
+    if(!currentProject||currentProject.kind!=='nyxia-game')return
+    var projectId=currentProject.id,d=currentProject.data||{},tool=currentAiTool()
+    if(!tool){alert('Choisis un modèle dans la table de travail IA.');return}
+    if(String(d.playerPrologue||'').trim()&&!confirm('Remplacer le prologue déjà rédigé ?'))return
+    var button=document.getElementById('player-prologue-btn')
+    if(button){button.disabled=true;button.textContent='⏳ Préparation du prologue…'}
     var ctx=JSON.stringify(playerVisibleContext(),null,2)
-    var prompt='À partir de TOUT le dossier ci-dessous, rédige le PROLOGUE / CONTEXTE D’ENTRÉE destiné aux joueurs avant la création de leur personnage. Le texte doit être immersif, clair et directement jouable. Longueur cible : 250 à 450 mots. Il doit expliquer ce que le monde sait publiquement, ce qui vient de se produire avant l’arrivée des joueurs, pourquoi leurs personnages sont concernés et quelle tension les appelle dans l’histoire. IMPORTANT : ne révèle AUCUNE solution, fin, vérité cachée, secret de PNJ, coupable, twist, information réservée au MJ ni connaissance que les personnages ne devraient pas avoir au départ. Tu peux utiliser ces informations pour comprendre la cohérence du jeu, mais tu dois filtrer strictement ce qui est visible aux joueurs. Ne parle pas de "dossier", "scénario", "acte" ou "mécanique". Écris directement le texte final, sans titre technique ni commentaire.\n\nDOSSIER COMPLET:\n'+ctx
-    playerSetupBusy(true,'player-prologue-btn')
-    setPlayerSetupState('working','NyXia prépare le prologue…','Lecture de la Bible, de l’histoire, des personnages et des factions. Ne ferme pas cette page.')
-    try{await saveCurrent()}catch(_saveStart){}
+    var prompt='Rédige UNIQUEMENT le prologue public (250 à 450 mots) destiné aux joueurs, à partir du dossier suivant. Ne révèle aucun secret, solution, coupable, dénouement ni information réservée au maître de jeu. Ne modifie aucun autre champ. Réponds seulement avec le texte du prologue.\n\nDOSSIER :\n'+ctx
     try{
       var out=await runAIText(gamePromptBase(),prompt,tool.id)
-      setPlayerSetupState('working','Texte reçu. NyXia l’enregistre…','Le prologue va apparaître automatiquement dans le champ juste en dessous.')
-      d.playerPrologue=out
-      markDirty()
-      await saveCurrent()
-      renderGame()
-      setTimeout(function(){
-        setPlayerSetupState('ok','Prologue terminé ✓','Le prologue est enregistré dans ton projet. Tu peux maintenant le lire ou le modifier.')
-      },60)
-      toast('✅ Prologue joueur créé')
-    }catch(e){
-      setPlayerSetupState('error','La création du prologue a échoué.',e.message||String(e))
-      try{await saveCurrent()}catch(_saveErr){}
-      alert('Prologue impossible : '+e.message)
-    }finally{
-      playerSetupBusy(false,'player-prologue-btn')
-    }
-  }
-
-  async function generateCompletePlayerSetup(){
-    if(!currentProject)return
-    var d=currentProject.data||{},tool=currentAiTool()
-    if(!tool){alert('Aucun modèle GPT n’est sélectionné ou disponible.');return}
-    if(playerSetupHasContent(d)&&!confirm('Une partie de l’entrée joueur contient déjà du contenu. NyXia va remplacer les champs Joueurs par une version complète et cohérente. Continuer ?'))return
-    var ctx=JSON.stringify(playerVisibleContext(),null,2)
-    var prompt='Prépare toute l’ENTRÉE JOUEUR de ce NyXia Game à partir de TOUT le dossier ci-dessous. Réponds UNIQUEMENT avec un JSON valide, sans markdown, de forme exacte : {"prologue":"...","creationInstructions":"...","archetypes":"...","factions":"...","startingReputation":0,"reputationRules":"...","badgeCatalog":"..."}. RÈGLES : 1) prologue = 250 à 450 mots, immersif, public, sans spoiler; 2) creationInstructions = instructions simples pour créer son PJ, incluant nom, rôle, motivation, force, faiblesse, secret personnel, lien au monde et portrait facultatif; 3) archetypes = un rôle jouable par ligne, adaptés à CE jeu; 4) factions = une faction jouable par ligne, uniquement celles qui peuvent réellement accueillir un PJ; 5) startingReputation = nombre entier entre -100 et 100; 6) reputationRules = règles claires de montée/descente de réputation et conséquences; 7) badgeCatalog = une ligne par badge au format emoji | Nom | description. Tu as accès aux secrets, fins et vérités cachées uniquement pour préserver la cohérence : NE LES RÉVÈLE JAMAIS dans le contenu visible au joueur. Ne transforme jamais un PNJ en personnage joueur sauf si le dossier dit explicitement que ce rôle est jouable.\n\nDOSSIER COMPLET:\n'+ctx
-    playerSetupBusy(true,'player-setup-all-btn')
-    setPlayerSetupState('working','NyXia travaille sur toute l’entrée joueur…','Étape 1/3 · Analyse du jeu complet et séparation des informations publiques et secrètes. Ne ferme pas cette page.')
-    try{await saveCurrent()}catch(_saveStart){}
-    try{
-      var out=await runAIText(gamePromptBase(),prompt,tool.id)
-      setPlayerSetupState('working','NyXia a terminé la rédaction.','Étape 2/3 · Vérification du prologue, des rôles, factions, réputation et badges.')
-      var obj=parseJsonLoose(out)
-      if(!obj||typeof obj!=='object')throw new Error('Réponse structurée invalide.')
-      d.playerPrologue=String(obj.prologue||'').trim()
-      d.playerCreationInstructions=String(obj.creationInstructions||'').trim()
-      d.playerArchetypes=String(obj.archetypes||'').trim()
-      d.playerFactions=String(obj.factions||'').trim()
-      var rep=Number(obj.startingReputation)
-      d.playerStartingReputation=Number.isFinite(rep)?Math.max(-100,Math.min(100,Math.round(rep))):0
-      d.playerReputationRules=String(obj.reputationRules||'').trim()
-      d.playerBadgeCatalog=String(obj.badgeCatalog||'').trim()
-      setPlayerSetupState('working','Contenu validé. Enregistrement…','Étape 3/3 · Sauvegarde dans ton projet.')
-      markDirty()
-      await saveCurrent()
-      renderGame()
-      setTimeout(function(){
-        setPlayerSetupState('ok','Entrée joueur terminée ✓','Prologue, instructions, archétypes, factions, réputation et badges sont enregistrés. Tu peux maintenant les relire juste en dessous.')
-      },60)
-      toast('✅ Entrée joueur complète créée')
-    }catch(e){
-      setPlayerSetupState('error','La préparation de l’entrée joueur a échoué.',e.message||String(e))
-      try{await saveCurrent()}catch(_saveErr){}
-      alert('Création de l’entrée joueur impossible : '+e.message)
-    }finally{
-      playerSetupBusy(false,'player-setup-all-btn')
-    }
+      if(!String(out||'').trim())throw new Error('Aucun prologue reçu.')
+      if(!currentProject||currentProject.id!==projectId)throw new Error('Le projet a changé : aucun texte remplacé.')
+      currentProject.data.playerPrologue=String(out).trim()
+      if(!(await saveCurrent()))throw new Error('Sauvegarde non confirmée : vérifie le prologue avant de fermer.')
+      renderGame();toast('Prologue proposé et sauvegardé : relis-le avant de partager le PDF.')
+    }catch(e){alert('Prologue non terminé : '+e.message)}
+    finally{if(button&&button.isConnected){button.disabled=false;button.textContent='✍️ Générer le prologue'}}
   }
 
   function gameRosterSave(index,key,value){
@@ -948,64 +831,82 @@
     setData('playableCharacters',list)
   }
   function gameRosterAdd(){
-    var d=currentProject.data||{},list=Array.isArray(d.playableCharacters)?d.playableCharacters.slice():[]
-    list.push({id:'pj-'+(Date.now().toString(36))+'-'+(list.length+1),name:'',archetype:'',faction:'',publicBio:'',
-      portraitUrl:'',strength:'',weakness:'',motivation:'',secret:'',aiInstructions:'',knowledgeIds:[]})
+    if(!currentProject)return
+    var list=Array.isArray(currentProject.data.playableCharacters)?currentProject.data.playableCharacters.slice():[]
+    list.push({id:'pj-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),name:'',personality:'',playerInfo:'',portraitUrl:'',portraitName:'',reputation:'',relationships:''})
     setData('playableCharacters',list);renderGame()
   }
   function gameRosterRemove(index){
-    if(!confirm('Retirer cette fiche du projet ?'))return
-    var list=(currentProject.data.playableCharacters||[]).slice();list.splice(index,1)
-    setData('playableCharacters',list);renderGame()
+    if(!currentProject||!confirm('Supprimer cette fiche de personnage jouable ?'))return
+    var list=(currentProject.data.playableCharacters||[]).slice()
+    list.splice(index,1);setData('playableCharacters',list);renderGame()
   }
+  function gameRosterAttr(value){return esc(value==null?'':value).replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
   function gameRosterForm(d){
     var list=Array.isArray(d.playableCharacters)?d.playableCharacters:[]
-    var fields=[['name','Nom du personnage'],['archetype','Rôle / archétype'],['faction','Faction'],
-      ['publicBio','Présentation publique'],['portraitUrl','Adresse du portrait (média approuvé)'],
-      ['strength','Force'],['weakness','Faiblesse'],['motivation','Motivation'],
-      ['secret','Secret individuel — privé'],['aiInstructions','Instructions / personnalité du joueur IA — privées'],
-      ['knowledgeIds','Références de connaissances autorisées — identifiants, un par ligne']]
-    return '<div class="divider"></div><h4>🎭 Distribution prédéfinie · joueurs humains ou IA</h4>'+
-      '<div class="game-note">Ajoute autant de fiches de personnages prévus que nécessaire. Les joueurs peuvent aussi créer un PJ original, selon l’option choisie ci-dessous. Les secrets et les consignes IA restent privés côté serveur. Une fiche seule n’active pas la recherche vectorielle.</div>'+
-      list.map(function(c,i){return '<details style="margin:10px 0;border:1px solid rgba(167,139,250,.28);padding:12px;border-radius:12px"><summary><b>'+esc(c.name||'Personnage '+(i+1))+'</b> · fiche '+(i+1)+'</summary>'+fields.map(function(f){
-        var key=f[0],val=key==='knowledgeIds'?(Array.isArray(c[key])?c[key].join('\n'):''):String(c[key]||'');
-        var handler=key==='knowledgeIds'?'this.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean)':'this.value';
-        return '<div class="field"><label>'+f[1]+'</label><textarea rows="'+(['secret','aiInstructions','publicBio'].includes(key)?4:2)+'" oninput="gameRosterSave('+i+',\''+key+'\','+handler+')">'+esc(val)+'</textarea></div>'
-      }).join('')+'<button class="btn" onclick="gameRosterRemove('+i+')">Retirer cette fiche</button></details>'}).join('')+
-      '<button class="btn primary" onclick="gameRosterAdd()">+ Ajouter un personnage · '+list.length+' fiche(s)</button>'
+    return '<div class="divider"></div><h4>🎭 Personnages jouables</h4>'+
+      list.map(function(c,i){
+        var name=String(c.name||'').trim(),url=String(c.portraitUrl||'')
+        var portrait=/^\/game-media\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\/[0-9a-f-]{36}\.(png|jpe?g|webp|gif)$/.test(url)
+        return '<details open class="chapter" style="margin:14px 0;padding:16px"><summary><b>'+esc(name||'Nouveau personnage '+(i+1))+'</b></summary>'+
+          '<div class="field" style="margin-top:12px"><label>Prénom et nom du personnage</label><input value="'+gameRosterAttr(name)+'" oninput="gameRosterSave('+i+',\'name\',this.value)"></div>'+
+          gameRosterArea(i,'personality','Description de la personnalité du personnage',c.personality,4)+
+          '<div class="field"><label>Photo du personnage</label>'+
+          (portrait?'<div style="margin:8px 0"><img alt="Portrait de '+gameRosterAttr(name||'ce personnage')+'" src="'+gameRosterAttr(url)+'" style="max-width:180px;max-height:200px;object-fit:contain;border-radius:12px;border:1px solid var(--line)"><div class="tiny">'+esc(c.portraitName||'Portrait enregistré')+'</div></div>':'<p class="tiny">Aucune photo téléversée.</p>')+
+          '<label class="btn gold" style="display:inline-block;cursor:pointer">📷 '+(portrait?'Remplacer la photo':'Téléverser la photo')+'<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none" onchange="uploadGameRosterPortrait(this.files,'+i+');this.value=\'\'"></label> '+
+          (portrait?'<button class="btn danger" type="button" onclick="removeGameRosterPortrait('+i+')">Retirer la photo</button>':'')+
+          '<div id="roster-upload-status-'+i+'" class="tiny" role="status" aria-live="polite"></div></div>'+
+          gameRosterArea(i,'playerInfo','Information utile au joueur pour jouer ce personnage',c.playerInfo||c.publicBio||'',6)+
+          gameRosterArea(i,'reputation','Réputation de ce personnage',c.reputation,3)+
+          gameRosterArea(i,'relationships','Relation de ce personnage avec les autres personnages',c.relationships,5)+
+          '<button class="btn danger" type="button" onclick="gameRosterRemove('+i+')">Supprimer ce personnage</button></details>'
+      }).join('')+
+      '<button class="btn primary" type="button" onclick="gameRosterAdd()">+ Ajout de Personnage jouable</button>'
   }
-  function gamePartyRules(d){
-    var r=d.partyRules||{},mode=r.characterChoice||'both',gm=r.gmMode||'human',availability=r.gmChoices||'both'
-    var selector=function(label,key,current,options){return '<div class="field"><label>'+label+'</label><select onchange="setGamePartyRule(\''+key+'\',this.value)">'+options.map(function(o){return '<option value="'+o[0]+'"'+(current===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></div>'}
-    var tick=function(key,label,help){return '<label class="game-note" style="display:block"><input type="checkbox" style="width:auto;margin-right:8px" '+(r[key]!==false?'checked':'')+' onchange="setGamePartyRule(\''+key+'\',this.checked)"><b>'+label+'</b><div class="tiny">'+help+'</div></label>'}
-    return '<div class="divider"></div><h4>👥 Participation universelle · règles du jeu</h4>'+ 
-      '<div class="game-note">Chaque partie conserve ses scènes, indices et décisions quand quelqu’un part. Le nouvel arrivant crée son personnage indépendant et reçoit uniquement les informations de sa propre entrée. Un PJ IA est un participant; un PNJ IA est un personnage du scénario.</div>'+ 
-      '<div class="row">'+selector('Création des personnages joueurs','characterChoice',mode,[['both','Création libre + distribution prédéfinie'],['create','Création libre uniquement'],['roster','Fiches prédéfinies au départ (nouveau personnage autorisé en arrivée tardive)']])+selector('MJ par défaut','gmMode',gm,[['human','MJ humain'],['ai','MJ IA OpenRouter']])+selector('Choix proposé à l’organisateur','gmChoices',availability,[['both','MJ humain ou IA'],['human','MJ humain uniquement'],['ai','MJ IA uniquement']])+'</div>'+ 
-      '<div class="row">'+tick('allowSolo','Partie solo autorisée','Une personne peut jouer seule et inviter des compagnons IA.')+tick('allowAiPlayers','Compagnons joueurs IA autorisés','Le MJ peut ajouter ou retirer des joueurs IA, distincts des PNJ.')+'</div>'+ 
-      tick('allowLateJoin','Accepter un nouvel humain en cours de partie','Il rejoint la scène actuelle et crée un nouveau personnage; aucune identité, possession, progression personnelle ou secret de l’ancien joueur ne lui est transféré.')+
-      '<div class="game-note">Capacité simultanée : <b>'+esc(d.playerCount||8)+' participants</b> selon le champ « Joueurs » du Concept. Ce nombre concerne les places pendant la partie, PAS le nombre de personnages que tu peux écrire.</div>'
+  function gameRosterArea(index,key,label,value,rows){
+    return '<div class="field"><label>'+label+'</label><textarea rows="'+rows+'" oninput="gameRosterSave('+index+',\''+key+'\',this.value)">'+esc(value||'')+'</textarea></div>'
   }
-  function setGamePartyRule(key,value){
-    if(!currentProject||currentProject.kind!=='nyxia-game')return
-    var data=currentProject.data||{},rules=Object.assign({},data.partyRules||{})
-    rules[key]=value;setData('partyRules',rules)
+  async function uploadGameRosterPortrait(files,index){
+    if(!files||!files.length||!currentProject)return
+    var file=files[0],projectId=currentProject.id,character=(currentProject.data.playableCharacters||[])[index]
+    if(!character)return
+    if(!/\.(png|jpe?g|webp|gif)$/i.test(file.name)||!/^image\/(png|jpeg|webp|gif)$/.test(file.type))return alert('Choisis un portrait PNG, JPG, WEBP ou GIF.')
+    if(file.size>8*1024*1024||!file.size)return alert('Le portrait doit peser entre 1 octet et 8 Mo.')
+    var status=document.getElementById('roster-upload-status-'+index)
+    if(status)status.textContent='Téléversement de la photo…'
+    try{
+      // La fiche doit exister côté serveur avant de déposer le portrait dans le R2 privé du Labo.
+      clearTimeout(saveTimer);saveTimer=null
+      if(!(await saveCurrent()))throw new Error('Enregistrement du personnage impossible.')
+      var form=new FormData()
+      form.append('projectId',projectId);form.append('characterId',character.id);form.append('file',file,file.name)
+      var response=await fetch('/api/game/media/player-portrait',{method:'POST',headers:{Authorization:'Bearer '+token},body:form})
+      var result=await response.json().catch(function(){return {error:'Réponse invalide du serveur'}})
+      if(!response.ok||!result.ok||!/^\/game-media\//.test(result.url||''))throw new Error(result.error||'Le transfert a échoué.')
+      var check=await fetch(result.url,{method:'HEAD',headers:{Authorization:'Bearer '+token},cache:'no-store'})
+      if(!check.ok||Number(check.headers.get('content-length'))!==file.size)throw new Error('La photo n’a pas pu être vérifiée après son transfert.')
+      if(!currentProject||currentProject.id!==projectId)throw new Error('Projet changé : photo conservée dans le stockage, mais fiche non reliée.')
+      var list=(currentProject.data.playableCharacters||[]).slice(),position=list.findIndex(function(c){return c.id===character.id})
+      if(position<0)throw new Error('Personnage introuvable après transfert.')
+      list[position]=Object.assign({},list[position],{portraitUrl:result.url,portraitName:file.name})
+      currentProject.data.playableCharacters=list
+      if(!(await saveCurrent()))throw new Error('Photo téléversée, mais la fiche n’a pas été enregistrée.')
+      renderGame();toast('Photo enregistrée pour '+(character.name||'le personnage'))
+    }catch(e){if(status&&status.isConnected)status.textContent='⚠ '+e.message;alert('Portrait : '+e.message)}
+  }
+  function removeGameRosterPortrait(index){
+    if(!currentProject||!confirm('Retirer la photo de cette fiche ?'))return
+    gameRosterSave(index,'portraitUrl','');gameRosterSave(index,'portraitName','');renderGame()
   }
   function gamePlayers(d){
-    setTimeout(function(){if(d.playerSetupState&&d.playerSetupState.type==='working')playerSetupBusy(true,'')},0)
-    return '<h4>🎭 Personnages joueurs — entrée dans l’histoire</h4>'+
-      '<div class="game-note"><b>NyXia peut préparer cette section pour toi.</b> Elle utilise la Bible, l’histoire, les scènes, les personnages, les factions et même les secrets/fins pour comprendre la cohérence — mais elle filtre automatiquement tout ce que le joueur ne doit pas savoir.</div>'+
-      '<div class="tools-line" style="margin:12px 0 10px"><button id="player-setup-all-btn" class="btn gold" style="font-size:14px;padding:12px 16px" onclick="generateCompletePlayerSetup()">✨ NyXia prépare toute l’entrée joueur</button><button id="player-prologue-btn" class="btn primary" onclick="generatePlayerPrologueOnly()">✍️ Générer seulement le prologue</button></div>'+renderStoredPlayerSetupState(d)+
-      '<div class="game-note"><b>Humain, PJ et PNJ sont trois concepts distincts.</b> Chaque personne qui arrive peut créer son propre PJ; les personnages jouables attribués à l’IA ne deviennent pas des PNJ. Aucun nouvel arrivant n’hérite automatiquement des données d’un joueur parti.</div>'+
-      gamePartyRules(d)+gameRosterForm(d)+
+    return '<h4>🎭 Joueurs</h4>'+
       gameArea('Prologue / contexte d’entrée — généré à partir du jeu, sans spoiler','playerPrologue',d.playerPrologue,12)+
-      gameArea('Instructions de création visibles par le joueur — limites, ton, éléments à respecter','playerCreationInstructions',d.playerCreationInstructions,7)+
-      '<div class="row"><div class="field"><label>Réputation de départ dans sa faction</label><input type="number" min="-100" max="100" value="'+esc(d.playerStartingReputation==null?0:d.playerStartingReputation)+'" oninput="setData(\'playerStartingReputation\',Number(this.value)||0)"></div><div class="field"><label>Portrait</label><div class="lockline">🖼️ Le joueur pourra téléverser une image facultative. Elle sera réduite automatiquement avant d’être conservée dans la session.</div></div></div>'+
-      gameArea('Archétypes / rôles proposés — un par ligne','playerArchetypes',d.playerArchetypes,7)+
-      gameArea('Factions proposées — une par ligne','playerFactions',d.playerFactions,7)+
-      gameArea('Règles de réputation — ce qui fait monter / descendre la réputation et les conséquences','playerReputationRules',d.playerReputationRules,9)+
-      gameArea('Catalogue de badges — une ligne par badge : emoji | Nom | description','playerBadgeCatalog',d.playerBadgeCatalog,9)+
-      '<div class="game-note"><b>Confidentialité :</b> le secret du PJ est visible par le joueur et l’animateur. Il n’est jamais transmis automatiquement aux PNJ IA. Les PNJ ne reçoivent que l’identité publique, la faction, la réputation, les badges et les éléments publics du personnage.</div>'+
-      '<div class="tools-line"><button class="btn gold" onclick="setGameTab(\'live\')">🎥 Tester côté joueur</button><button class="btn" onclick="setGameTab(\'materials\')">🖨️ Préparer les fiches joueurs</button></div>'
+      '<div class="tools-line"><button id="player-prologue-btn" class="btn gold" type="button" onclick="generatePlayerPrologueOnly()">✍️ Générer le prologue</button></div>'+
+      gameArea('Catalogue de badges — une ligne par badge : emoji | Nom | description','playerBadgeCatalog',d.playerBadgeCatalog,8)+
+      gameRosterForm(d)+
+      '<div class="divider"></div>'+gameRules(d)+
+      '<div class="divider"></div>'+gameMaterials(d)+
+      playerBookPreview(d)
   }
   function npcRuntimeState(d){
     var raw=String(d.npcRuntimeJson||'').trim(),valid=false,count=0
@@ -1107,7 +1008,7 @@
       '</details>'
   }
   function gameRules(d){return '<h4>⚔️ Mécaniques de jeu</h4><div class="game-note">Les règles complètes restent dans le dossier du MJ. Seul le champ public séparé ci-dessous sera repris dans le Cahier du joueur après ta validation.</div>'+gameArea('Boucle de jeu / règles principales','mechanics',d.mechanics,12)+gameArea('Règles PUBLIQUES du Cahier du joueur — relire avant diffusion','playerRules',d.playerRules,9)+gameArea('Combat / conflits / dés / résolution','combatRules',d.combatRules,10)+gameArea('Progression / réputation / inventaire / ressources','progression',d.progression,9)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'rules\')">⚔️ Concevoir les règles</button><button class="btn" onclick="gameAI(\'combat\')">Concevoir les combats</button><button class="btn" onclick="gameAI(\'balance\')">Tester l’équilibre</button></div>'}
-  function gameMaterials(d){return '<h4>🖨️ Matériel réellement nécessaire</h4><div class="game-note">Ici NyXia pense comme une directrice de production : pas seulement « raconter l’histoire », mais lister et rédiger ce qu’il faut pour pouvoir animer la soirée ou jouer.</div>'+gameArea('Matériel joueurs — fiches, cartes, indices, QR, aides de jeu, imprimables','playerMaterials',d.playerMaterials,13)+gameArea('Matériel animateur / MJ — conducteur, solutions, timing, secrets, feuilles de contrôle','hostMaterials',d.hostMaterials,13)+gameArea('Informations PRATIQUES publiques — horaires, lieu ou lien et déroulement de la soirée','playerSessionInfo',d.playerSessionInfo,6)+gameArea('Matériel PUBLIC du Cahier du joueur — uniquement les éléments partageables','playerHandoutMaterials',d.playerHandoutMaterials,9)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'materials\')">🖨️ Faire la liste complète du matériel</button><button class="btn" onclick="gameAI(\'playerdocs\')">Rédiger les documents joueurs</button><button class="btn" onclick="gameAI(\'hostdocs\')">Rédiger le dossier animateur</button></div>'+playerBookPreview(d)}
+  function gameMaterials(d){return '<h4>🖨️ Matériel réellement nécessaire</h4><div class="game-note">Ici NyXia pense comme une directrice de production : pas seulement « raconter l’histoire », mais lister et rédiger ce qu’il faut pour pouvoir animer la soirée ou jouer.</div>'+gameArea('Matériel joueurs — fiches, cartes, indices, QR, aides de jeu, imprimables','playerMaterials',d.playerMaterials,13)+gameArea('Matériel animateur / MJ — conducteur, solutions, timing, secrets, feuilles de contrôle','hostMaterials',d.hostMaterials,13)+gameArea('Informations PRATIQUES publiques — horaires, lieu ou lien et déroulement de la soirée','playerSessionInfo',d.playerSessionInfo,6)+gameArea('Matériel PUBLIC du Cahier du joueur — uniquement les éléments partageables','playerHandoutMaterials',d.playerHandoutMaterials,9)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'materials\')">🖨️ Faire la liste complète du matériel</button><button class="btn" onclick="gameAI(\'playerdocs\')">Rédiger les documents joueurs</button><button class="btn" onclick="gameAI(\'hostdocs\')">Rédiger le dossier animateur</button></div>'}
   function prodTick(key,label,d,help){
     return '<label style="display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid rgba(167,139,250,.12);border-radius:12px;background:rgba(255,255,255,.03)"><input type="checkbox" '+((d[key]===false)?'':'checked')+' onchange="setData(\''+key+'\',this.checked)"><span><b>'+label+'</b>'+(help?'<div class="tiny" style="margin-top:2px">'+help+'</div>':'')+'</span></label>'
   }
@@ -2667,7 +2568,7 @@
       gameArea('Notes de publication / fiche Boutique','packageNotes',d.packageNotes,6)+
       '<div class="row three"><div class="field"><label>Sous-titre client</label><input value="'+esc(d.packageSubtitle||'')+'" oninput="setData(\'packageSubtitle\',this.value)"></div><div class="field"><label>Version</label><input value="'+esc(d.productVersion||'1.0')+'" oninput="setData(\'productVersion\',this.value)"></div><div class="field"><label>Image couverture URL</label><input value="'+esc(d.coverUrl||'')+'" oninput="setData(\'coverUrl\',this.value)"></div></div>'+ 
       '<div class="game-status-grid"><div class="game-status '+(guidedCount?'ready':'')+'"><strong>'+(guidedCount?'✓ Conducteur guidé prêt':'Conducteur à finaliser')+'</strong>'+(guidedCount?guidedCount+' scène(s) préparée(s)':'NyXia transformera automatiquement le dossier en étapes simples pour l’animateur.')+'</div><div class="game-status '+(String(d.npcRuntimeJson||'').trim()?'ready':'')+'"><strong>'+(String(d.npcRuntimeJson||'').trim()?'✓ PNJ runtime prêts':'PNJ runtime à compléter')+'</strong>Les PNJ IA restent une capacité complète du jeu.</div><div class="game-status '+(map?'ready':'')+'"><strong>'+(map?'✓ Cartographie liée':'Cartographie optionnelle')+'</strong>Azgaar reste disponible sans réduction de capacité.</div></div>'+ 
-      '<div class="tools-line" style="margin-top:16px"><button class="btn primary" style="font-size:14px;padding:12px 18px" onclick="packageNyxiaGame()">📁 Archive de production (non jouable)</button><button class="btn gold" onclick="setGameTab(\'materials\')">📘 Préparer le Cahier du joueur</button></div>'+
+      '<div class="tools-line" style="margin-top:16px"><button class="btn primary" style="font-size:14px;padding:12px 18px" onclick="packageNyxiaGame()">📁 Archive de production (non jouable)</button><button class="btn gold" onclick="setGameTab(\'players\')">📘 Préparer le Cahier du joueur</button></div>'+
       '<div class="tools-line" style="margin-top:10px"><button class="btn gold" style="font-size:14px;padding:12px 18px" onclick="finalizeAndTestAsBuyer()" '+(clientReady?'':'disabled title="Médias, couverture et conducteur doivent être prêts et disponibles en ligne"')+'>✨ Finaliser et tester comme acheteuse</button></div>'+ 
       '<div class="tiny" style="margin-top:8px">'+(clientReady?'Conditions de prépublication réunies dans le dossier : exécuter ensuite le test réel de bibliothèque et des scènes.':'Blocages à résoudre : médias manquants / fichiers seulement locaux / couverture absente / conducteur absent. Aucun test client promis avant cela.')+'</div>'+ 
       '<div class="tools-line" style="margin-top:14px"><button class="btn" onclick="setGameTab(\'live\')">🎥 Ouvrir Live</button><button class="btn" onclick="setGameTab(\'control\')">🧠 Ouvrir Contrôle</button></div>'+
@@ -2766,7 +2667,7 @@
 
   function gameContext(){
     var d=currentProject.data||{}
-    return {title:currentProject.title,client:currentProject.client||'',gameType:d.gameType,audience:d.audience,playMode:d.playMode,playerCount:d.playerCount,duration:d.duration,genre:d.genre,tone:d.tone,difficulty:d.difficulty,partyRules:d.partyRules||{},aiPlayerPolicy:d.aiPlayerPolicy||'',arrivalGuidelines:d.arrivalGuidelines||'',conceptValidation:{completed:conceptIsApproved(d),completedAt:d.conceptCompletedAt||null,approvedBy:conceptIsApproved(d)?'humain':'non confirmé'},intensity:{horror:d.horror,violence:d.violence,sensuality:d.sensuality,romance:d.romance,language:d.language,psychological:d.psychological},idea:d.idea,creatorIntent:d.creatorIntent,lockedCanon:d.lockedCanon,worldBible:d.worldBible,storyStructure:d.storyStructure,scenesQuests:d.scenesQuests,endings:d.endings,characters:d.characters,playerPrologue:d.playerPrologue,playerCreationInstructions:d.playerCreationInstructions,playerArchetypes:d.playerArchetypes,playerFactions:d.playerFactions,playerStartingReputation:d.playerStartingReputation,playerReputationRules:d.playerReputationRules,playerBadgeCatalog:d.playerBadgeCatalog,npcIntelligence:d.npcIntelligence,npcMemoryRules:d.npcMemoryRules,npcRelationshipRules:d.npcRelationshipRules,npcAutonomyRules:d.npcAutonomyRules,npcVoicePlan:d.npcVoicePlan,npcTestName:d.npcTestName,npcRuntimeJson:d.npcRuntimeJson,npcModel:d.npcModel,factionsCreatures:d.factionsCreatures,itemsRewards:d.itemsRewards,mechanics:d.mechanics,combatRules:d.combatRules,progression:d.progression,playerMaterials:d.playerMaterials,hostMaterials:d.hostMaterials,livePlan:d.livePlan,imageBriefs:d.imageBriefs,audioPlan:d.audioPlan,videoPlan:d.videoPlan,mapPlan:d.mapPlan,controlReport:d.controlReport,sourceDocuments:d.sourceDocuments||'',guidedScenesJson:d.guidedScenesJson||'',playableCharacters:d.playableCharacters||[]}
+    return {title:currentProject.title,client:currentProject.client||'',gameType:d.gameType,audience:d.audience,playMode:d.playMode,playerCount:d.playerCount,duration:d.duration,genre:d.genre,tone:d.tone,difficulty:d.difficulty,partyRules:d.partyRules||{},aiPlayerPolicy:d.aiPlayerPolicy||'',arrivalGuidelines:d.arrivalGuidelines||'',conceptValidation:{completed:conceptIsApproved(d),completedAt:d.conceptCompletedAt||null,approvedBy:conceptIsApproved(d)?'humain':'non confirmé'},intensity:{horror:d.horror,violence:d.violence,sensuality:d.sensuality,romance:d.romance,language:d.language,psychological:d.psychological},idea:d.idea,creatorIntent:d.creatorIntent,lockedCanon:d.lockedCanon,worldBible:d.worldBible,storyStructure:d.storyStructure,scenesQuests:d.scenesQuests,endings:d.endings,characters:d.characters,playerPrologue:d.playerPrologue,playerBadgeCatalog:d.playerBadgeCatalog,playerRules:d.playerRules,playerSessionInfo:d.playerSessionInfo,playerHandoutMaterials:d.playerHandoutMaterials,npcIntelligence:d.npcIntelligence,npcMemoryRules:d.npcMemoryRules,npcRelationshipRules:d.npcRelationshipRules,npcAutonomyRules:d.npcAutonomyRules,npcVoicePlan:d.npcVoicePlan,npcTestName:d.npcTestName,npcRuntimeJson:d.npcRuntimeJson,npcModel:d.npcModel,factionsCreatures:d.factionsCreatures,itemsRewards:d.itemsRewards,mechanics:d.mechanics,combatRules:d.combatRules,progression:d.progression,playerMaterials:d.playerMaterials,hostMaterials:d.hostMaterials,livePlan:d.livePlan,imageBriefs:d.imageBriefs,audioPlan:d.audioPlan,videoPlan:d.videoPlan,mapPlan:d.mapPlan,controlReport:d.controlReport,sourceDocuments:d.sourceDocuments||'',guidedScenesJson:d.guidedScenesJson||'',playableCharacters:d.playableCharacters||[]}
   }
   function gamePromptBase(){return 'Tu travailles dans NyXiaLabo avec une équipe humaine qui garde la direction créative. Adapte le jeu à l’âge choisi dans le Concept (de 5 ans à 18 ans et plus). Respecte les niveaux d’intensité demandés et n’ajoute aucun contenu inadapté au public sélectionné. La sensualité peut être forte et romantique sans devenir pornographique explicite. L’horreur peut être sombre et dérangeante selon le niveau choisi. Ne modifie jamais les faits du CANON VERROUILLÉ. Si conceptValidation.completed est vrai, le Concept a été déclaré terminé par la créatrice : prends-le comme base pour les étapes suivantes, ne propose une réécriture que si elle te le demande explicitement. Pour les PNJ IA, la Bible + le Canon + l’état du moteur sont l’autorité de vérité : un PNJ peut mentir en personnage mais ne peut pas inventer un nouveau fait canonique, accéder à une connaissance interdite ni modifier l’état du jeu. Ton travail doit produire du matériel réellement jouable et exploitable, pas seulement une belle histoire. Quand une information manque, propose une solution éditoriale au lieu de bloquer.'}
   async function gameAI(mode){
@@ -2933,7 +2834,7 @@
 
   function gameManifest(){var d=currentProject.data||{};return {format:'NyXia Game Package',ngpVersion:'1.3',id:currentProject.id,title:currentProject.title,author:'NyXia Game',createdAt:currentProject.createdAt,updatedAt:currentProject.updatedAt,game:{type:d.gameType,audience:d.audience||'16+',playMode:d.playMode,players:d.playerCount,duration:d.duration,genre:d.genre,tone:d.tone,difficulty:d.difficulty},intensity:{horror:d.horror,violence:d.violence,sensuality:d.sensuality,romance:d.romance,language:d.language,psychological:d.psychological},hasCartography:!!d.cartography,hasIntelligentNPCs:!!String(d.npcIntelligence||'').trim(),hasLiveMode:true,partyRules:d.partyRules||{},hasAutomatedProduction:!!String(d.productionAssetsJson||'').trim()}}
   function gameNpcRuntimeConfig(){var d=currentProject.data||{};return {format:'NyXia NPC Runtime',version:'1.0',truthAuthority:['lockedCanon','worldBible','engineGameState'],policy:{npcMayLieInCharacter:true,npcMayHaveFalseBeliefs:true,npcMayInventCanon:false,npcMayReadForbiddenKnowledge:false,npcMayMutateWorldState:false,engineValidatesStateChanges:true,gmMayOverride:true,memoryDoesNotEqualTruth:true},sources:{lockedCanon:d.lockedCanon||'',worldBible:d.worldBible||'',characters:d.characters||'',intelligence:d.npcIntelligence||'',memoryRules:d.npcMemoryRules||'',relationshipRules:d.npcRelationshipRules||'',autonomyRules:d.npcAutonomyRules||'',voicePlan:d.npcVoicePlan||'',runtimeJson:d.npcRuntimeJson||'',model:d.npcModel||''}}}
-  function gameLiveRuntimeConfig(){var d=currentProject.data||{};return {format:'NyXia Game Live Runtime',version:'1.1',defaultAudience:d.audience||'16+',partyRules:d.partyRules||{},teams:String(d.liveTeams||'').split(/[\n,;]+/).map(function(x){return x.trim()}).filter(Boolean),supports:{zoomBreakouts:true,digitalDice:true,physicalDice:true,teamClues:true,npcAI:true,playerDecisions:true,playerCharacters:true,playerPortraits:true,badges:true,factionReputation:true,media:true},playerSetup:{prologue:d.playerPrologue||'',creationInstructions:d.playerCreationInstructions||'',archetypes:String(d.playerArchetypes||'').split(/\r?\n/).map(function(x){return x.trim()}).filter(Boolean),factions:String(d.playerFactions||'').split(/\r?\n/).map(function(x){return x.trim()}).filter(Boolean),startingReputation:Number(d.playerStartingReputation)||0,reputationRules:d.playerReputationRules||'',badgeCatalog:d.playerBadgeCatalog||''},source:{livePlan:d.livePlan||'',storyStructure:d.storyStructure||'',scenesQuests:d.scenesQuests||''}}}
+  function gameLiveRuntimeConfig(){var d=currentProject.data||{};return {format:'NyXia Game Live Runtime',version:'1.1',defaultAudience:d.audience||'16+',partyRules:d.partyRules||{},teams:String(d.liveTeams||'').split(/[\n,;]+/).map(function(x){return x.trim()}).filter(Boolean),supports:{zoomBreakouts:true,digitalDice:true,physicalDice:true,teamClues:true,npcAI:true,playerDecisions:true,playerCharacters:true,playerPortraits:true,badges:true,factionReputation:true,media:true},playerSetup:{prologue:d.playerPrologue||'',badgeCatalog:d.playerBadgeCatalog||'',playableCharacters:d.playableCharacters||[]},source:{livePlan:d.livePlan||'',storyStructure:d.storyStructure||'',scenesQuests:d.scenesQuests||''}}}
   async function packageNyxiaGame(){
     if(!window.JSZip){alert('JSZip indisponible.');return}
     try{
@@ -2942,7 +2843,7 @@
       if(String(d.sourceDocuments||'').trim())zip.file('00-sources-originales.md',String(d.sourceDocuments))
       zip.file('01-concept.md',mdSection('Concept',d.idea)+'\n'+mdSection('Intention créative',d.creatorIntent)+'\n'+mdSection('Canon verrouillé',d.lockedCanon))
       zip.file('02-bible.md',mdSection('Bible du monde',d.worldBible));zip.file('03-histoire.md',mdSection('Structure',d.storyStructure)+'\n'+mdSection('Scènes et quêtes',d.scenesQuests)+'\n'+mdSection('Fins',d.endings))
-      zip.file('04-personnages.md',mdSection('Personnages',d.characters)+'\n'+mdSection('Factions et créatures',d.factionsCreatures)+'\n'+mdSection('Objets et récompenses',d.itemsRewards)+'\n'+mdSection('Arrivée d’un nouveau personnage',d.arrivalGuidelines));zip.file('04b-personnages-joueurs.md',mdSection('Prologue joueur',d.playerPrologue)+'\n'+mdSection('Instructions de création',d.playerCreationInstructions)+'\n'+mdSection('Archétypes',d.playerArchetypes)+'\n'+mdSection('Factions',d.playerFactions)+'\n'+mdSection('Réputation',d.playerReputationRules)+'\n'+mdSection('Badges',d.playerBadgeCatalog))
+      zip.file('04-personnages.md',mdSection('Personnages',d.characters)+'\n'+mdSection('Factions et créatures',d.factionsCreatures)+'\n'+mdSection('Objets et récompenses',d.itemsRewards)+'\n'+mdSection('Arrivée d’un nouveau personnage',d.arrivalGuidelines));zip.file('04b-personnages-joueurs.md',mdSection('Prologue joueur',d.playerPrologue)+'\n'+mdSection('Badges',d.playerBadgeCatalog)+'\n'+mdSection('Fiches jouables',JSON.stringify(d.playableCharacters||[],null,2)))
       zip.file('05-pnj-ia.md',mdSection('Intelligence PNJ',d.npcIntelligence)+'\n'+mdSection('Mémoire',d.npcMemoryRules)+'\n'+mdSection('Relations',d.npcRelationshipRules)+'\n'+mdSection('Autonomie',d.npcAutonomyRules)+'\n'+mdSection('Voix',d.npcVoicePlan)+'\n'+mdSection('Compagnons PJ IA distincts des PNJ',d.aiPlayerPolicy)+'\n'+mdSection('Runtime JSON',d.npcRuntimeJson))
       zip.file('06-regles.md',mdSection('Mécaniques',d.mechanics)+'\n'+mdSection('Combat',d.combatRules)+'\n'+mdSection('Progression',d.progression))
       zip.file('07-materiel.md',mdSection('Joueurs',d.playerMaterials)+'\n'+mdSection('Animateur / MJ',d.hostMaterials))
@@ -2992,76 +2893,92 @@
   }
   function gamePdfLines(doc,title,text,y){if(!String(text||'').trim())return y;doc.setFont(undefined,'bold');doc.setFontSize(13);if(y>270){doc.addPage();y=20}doc.text(title,18,y);y+=7;doc.setFont(undefined,'normal');doc.setFontSize(10);var lines=doc.splitTextToSize(String(text),175);lines.forEach(function(line){if(y>282){doc.addPage();y=20}doc.text(line,18,y);y+=5});return y+5}
 
-  // Le cahier utilise une liste blanche de champs destinés à TOUS les joueurs.
-  // Jamais de canon, solutions, secrets individuels, fiches PNJ ou matériel du MJ.
+  // Contenu du cahier : liste blanche. Les champs du MJ, le canon et les anciens champs retirés sont exclus.
   function playerBookSections(d){
-    return [
-      ['Prologue de l’univers',d.playerPrologue],
-      ['Informations pratiques de la soirée',d.playerSessionInfo],
-      ['Préparer ou créer son personnage',d.playerCreationInstructions],
-      ['Archétypes accessibles aux joueurs',d.playerArchetypes],
-      ['Factions accessibles aux joueurs',d.playerFactions],
-      ['Règles destinées aux joueurs',d.playerRules],
-      ['Matériel et imprimables publics',d.playerHandoutMaterials]
-    ].filter(function(item){return String(item[1]||'').trim()})
-  }
-  function playerBookMissing(d){
-    return [
-      ['Prologue',d.playerPrologue],
-      ['Informations pratiques',d.playerSessionInfo],
-      ['Règles publiques',d.playerRules],
-      ['Matériel public',d.playerHandoutMaterials]
-    ].filter(function(item){return !String(item[1]||'').trim()}).map(function(item){return item[0]})
+    var sections=[]
+    function add(title,text,photo){if(String(text||'').trim()||photo)sections.push({title:title,text:String(text||''),portraitUrl:photo||''})}
+    add('Prologue / contexte d’entrée',d.playerPrologue)
+    add('Catalogue de badges',d.playerBadgeCatalog)
+    ;(d.playableCharacters||[]).forEach(function(c,i){
+      var details=[['Personnalité',c.personality],['Informations pour jouer',c.playerInfo||c.publicBio],['Réputation',c.reputation],['Relations avec les autres personnages',c.relationships]].filter(function(x){return String(x[1]||'').trim()}).map(function(x){return x[0]+' : '+x[1]}).join('\n\n')
+      add('Personnage jouable '+(i+1)+' — '+(c.name||'Sans nom'),details,c.portraitUrl)
+    })
+    add('Règles du jeu (version publique)',d.playerRules)
+    add('Informations pratiques',d.playerSessionInfo)
+    add('Matériel destiné aux joueurs',d.playerHandoutMaterials)
+    return sections
   }
   function playerBookPreview(d){
-    var sections=playerBookSections(d),missing=playerBookMissing(d)
-    return '<div class="divider"></div><h4>📘 Cahier du joueur · aperçu public</h4>'+
-      (missing.length?'<div class="game-note">Champs à remplir avant export : <b>'+esc(missing.join(' · '))+'</b>.</div>':'<div class="game-note">Les quatre sections essentielles sont prêtes. Relis le texte avant tout partage.</div>')+
-      '<details style="border:1px solid rgba(167,139,250,.28);border-radius:12px;padding:12px;margin:12px 0">'+
-      '<summary class="btn gold" style="display:inline-block;cursor:pointer">👁️ Voir exactement les '+sections.length+' sections du PDF</summary>'+
-      sections.map(function(x){return '<div style="margin-top:14px"><b>'+esc(x[0])+'</b><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:12px;color:var(--muted)">'+esc(x[1])+'</pre></div>'}).join('')+
-      '</details><label class="game-note" style="display:block;margin:12px 0"><input id="player-book-reviewed" type="checkbox" style="width:auto;margin-right:8px">J’ai relu les textes publics : aucun secret du MJ ni information réservée à un personnage.</label>'+
-      '<div class="tools-line"><button class="btn gold" onclick="exportPlayerBookPDF()"'+(missing.length?' disabled title="Complète les sections essentielles"':'')+'>⬇ Télécharger le Cahier du joueur (PDF)</button><button class="btn" onclick="setGameTab(\'media\')">🎬 Continuer vers Médias →</button></div>'
+    var sections=playerBookSections(d)
+    return '<div class="divider"></div><h4>📘 Cahier du joueur</h4>'+
+      '<div class="game-note">PDF à télécharger et à déposer ensuite dans la formation NyXia du jeu. Seuls les champs destinés aux joueurs seront intégrés : le matériel MJ, les solutions et les notes privées en sont exclus. Vérifie que les relations et la réputation des personnages peuvent être partagées.</div>'+
+      '<details style="margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:12px"><summary class="btn gold" style="display:inline-block;cursor:pointer">👁️ Aperçu du contenu ('+sections.length+' section(s))</summary>'+
+      sections.map(function(item){return '<div style="margin-top:12px"><b>'+esc(item.title)+'</b>'+(item.portraitUrl?'<div class="tiny">📷 Portrait joint si accessible</div>':'')+'<p style="white-space:pre-wrap;color:var(--muted)">'+esc(item.text)+'</p></div>'}).join('')+'</details>'+
+      '<button class="btn primary" type="button" onclick="exportPlayerBookPDF()"'+(!sections.length?' disabled title="Rédige un prologue ou ajoute du contenu"':'')+'>⬇ Télécharger le Cahier du joueur (PDF)</button>'
   }
-  function exportPlayerBookPDF(){
-    if(!currentProject||currentProject.kind!=='nyxia-game')return
-    var d=currentProject.data||{},missing=playerBookMissing(d)
-    if(missing.length){alert('Complète le Cahier du joueur : '+missing.join(', '));return}
-    var approved=document.getElementById('player-book-reviewed')
-    if(!approved||!approved.checked){alert('Dans Matériel, ouvre l’aperçu, relis le Cahier du joueur puis coche la case de validation avant de télécharger.');return}
-    if(!window.jspdf||!window.jspdf.jsPDF){alert('La bibliothèque PDF n’est pas chargée. Vérifie ta connexion et réessaie.');return}
-    var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'}),y=22
-    function appendText(value,fontSize,bold,lineHeight){
-      doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(fontSize)
-      String(value||'').replace(/\r\n?/g,'\n').split('\n').forEach(function(paragraph){
-        var lines=doc.splitTextToSize(paragraph||' ',174)
-        lines.forEach(function(line){
-          if(y+lineHeight>279){doc.addPage();y=20}
-          doc.text(line,18,y);y+=lineHeight
-        })
-        y+=paragraph.trim()?1:0
+  async function gamePortraitPdfImage(url){
+    if(!/^\/game-media\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\/[0-9a-f-]{36}\.(png|jpe?g|webp|gif)$/.test(String(url||'')))return null
+    var response=await fetch(url,{headers:{Authorization:'Bearer '+token},cache:'no-store'})
+    if(!response.ok)throw new Error('Portrait indisponible ('+response.status+').')
+    var blob=await response.blob()
+    if(!/^image\/(png|jpeg|webp|gif)$/.test(blob.type)||blob.size>8*1024*1024)throw new Error('Format du portrait non pris en charge.')
+    var objectUrl=URL.createObjectURL(blob)
+    try{
+      return await new Promise(function(resolve,reject){
+        var img=new Image()
+        img.onload=function(){
+          try{
+            var canvas=document.createElement('canvas'),scale=Math.min(1,1200/Math.max(img.naturalWidth,img.naturalHeight))
+            canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale))
+            canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height)
+            resolve({data:canvas.toDataURL('image/png'),ratio:canvas.width/canvas.height})
+          }catch(e){reject(e)}
+        }
+        img.onerror=function(){reject(new Error('Image illisible.'))};img.src=objectUrl
       })
-    }
-    var title=String(currentProject.title||'NyXia Game').trim()||'NyXia Game'
-    appendText(title,20,true,10);y+=3
-    appendText('Cahier du joueur',15,true,8)
-    var info=[d.gameType,d.playMode,d.duration,d.playerCount?d.playerCount+' joueurs':''].filter(Boolean).join(' | ')
-    if(info)appendText(info,10,false,5)
-    y+=9
-    playerBookSections(d).forEach(function(section){
-      if(y+18>279){doc.addPage();y=20}
-      appendText(section[0],13,true,7);y+=2
-      appendText(section[1],10,false,5);y+=8
-    })
-    var pages=doc.getNumberOfPages()
-    for(var i=1;i<=pages;i++){
-      doc.setPage(i);doc.setFont('helvetica','normal');doc.setFontSize(9)
-      doc.text('Cahier du joueur | '+i+' / '+pages,18,289)
-    }
-    doc.save(safeName(title)+'-cahier-du-joueur.pdf')
+    }finally{URL.revokeObjectURL(objectUrl)}
+  }
+  async function exportPlayerBookPDF(){
+    if(!currentProject||currentProject.kind!=='nyxia-game')return
+    if(!window.jspdf||!window.jspdf.jsPDF)return alert('Bibliothèque PDF indisponible : vérifie ta connexion.')
+    var projectId=currentProject.id,d=currentProject.data||{},sections=playerBookSections(d)
+    if(!sections.length)return alert('Ajoute au moins un élément au Cahier du joueur.')
+    var button=document.querySelector('button[onclick="exportPlayerBookPDF()"]')
+    if(button){button.disabled=true;button.textContent='📘 Création du PDF…'}
+    try{
+      var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'}),y=22
+      function text(value,size,bold,lineHeight){
+        doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size)
+        String(value||'').replace(/\r\n?/g,'\n').split('\n').forEach(function(paragraph){
+          doc.splitTextToSize(paragraph||' ',174).forEach(function(line){
+            if(y+lineHeight>278){doc.addPage();y=20}
+            doc.text(line,18,y);y+=lineHeight
+          });y+=paragraph.trim()?1:0
+        })
+      }
+      text(String(currentProject.title||'NyXia Game'),20,true,10);text('Cahier du joueur',15,true,8)
+      text([d.gameType,d.playMode,d.duration,d.playerCount?d.playerCount+' joueurs':''].filter(Boolean).join(' · '),10,false,5);y+=10
+      for(var section of sections){
+        if(!currentProject||currentProject.id!==projectId)throw new Error('Le projet a changé pendant l’export.')
+        if(y+24>275){doc.addPage();y=20}
+        text(section.title,13,true,7);y+=2
+        if(section.portraitUrl){
+          try{
+            var image=await gamePortraitPdfImage(section.portraitUrl)
+            if(image){var w=Math.min(55,75*image.ratio),h=w/image.ratio;if(h>75){h=75;w=h*image.ratio}
+              if(y+h>274){doc.addPage();y=20}doc.addImage(image.data,'PNG',18,y,w,h);y+=h+5}
+          }catch(e){text('Portrait non intégré : '+e.message,9,false,5)}
+        }
+        text(section.text,10,false,5);y+=8
+      }
+      var pages=doc.getNumberOfPages()
+      for(var page=1;page<=pages;page++){doc.setPage(page);doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text('Cahier du joueur · '+page+' / '+pages,18,289)}
+      doc.save(safeName(currentProject.title)+'-cahier-du-joueur.pdf')
+    }catch(e){alert('Export du Cahier du joueur : '+e.message)}
+    finally{if(button&&button.isConnected){button.disabled=false;button.textContent='⬇ Télécharger le Cahier du joueur (PDF)'}}
   }
 
-  function exportGamePDF(){if(!window.jspdf||!currentProject)return;var d=currentProject.data||{},doc=new window.jspdf.jsPDF(),y=20;doc.setFontSize(20);doc.text(currentProject.title,18,y);y+=9;doc.setFontSize(10);doc.text((d.gameType||'NyXia Game')+' · '+(d.audience||'16+')+' · '+(d.playerCount||'')+' joueurs · '+(d.duration||''),18,y);y+=12;[['Idée',d.idea],['Intention créative',d.creatorIntent],['Canon verrouillé',d.lockedCanon],['Bible du monde',d.worldBible],['Structure jouable',d.storyStructure],['Scènes / quêtes',d.scenesQuests],['Personnages',d.characters],['Parcours personnages joueurs',[(d.playerPrologue||''),(d.playerCreationInstructions||''),(d.playerArchetypes||''),(d.playerFactions||''),(d.playerReputationRules||''),(d.playerBadgeCatalog||'')].filter(Boolean).join('\n\n')],['Intelligence PNJ',[(d.npcIntelligence||''),(d.npcMemoryRules||''),(d.npcRelationshipRules||''),(d.npcAutonomyRules||''),(d.npcVoicePlan||'')].filter(Boolean).join('\n\n')],['Factions / créatures',d.factionsCreatures],['Mécaniques',d.mechanics],['Combat',d.combatRules],['Matériel joueurs',d.playerMaterials],['Dossier animateur',d.hostMaterials],['Plan média',[(d.imageBriefs||''),(d.audioPlan||''),(d.videoPlan||''),(d.mapPlan||'')].filter(Boolean).join('\n\n')],['Plan Live',d.livePlan],['NyXia Contrôle',d.controlReport]].forEach(function(x){y=gamePdfLines(doc,x[0],x[1],y)});doc.save(safeName(currentProject.title)+'-dossier-production.pdf')}
+  function exportGamePDF(){if(!window.jspdf||!currentProject)return;var d=currentProject.data||{},doc=new window.jspdf.jsPDF(),y=20;doc.setFontSize(20);doc.text(currentProject.title,18,y);y+=9;doc.setFontSize(10);doc.text((d.gameType||'NyXia Game')+' · '+(d.audience||'16+')+' · '+(d.playerCount||'')+' joueurs · '+(d.duration||''),18,y);y+=12;[['Idée',d.idea],['Intention créative',d.creatorIntent],['Canon verrouillé',d.lockedCanon],['Bible du monde',d.worldBible],['Structure jouable',d.storyStructure],['Scènes / quêtes',d.scenesQuests],['Personnages',d.characters],['Parcours personnages joueurs',[(d.playerPrologue||''),(d.playerBadgeCatalog||''),JSON.stringify(d.playableCharacters||[],null,2)].filter(Boolean).join('\n\n')],['Intelligence PNJ',[(d.npcIntelligence||''),(d.npcMemoryRules||''),(d.npcRelationshipRules||''),(d.npcAutonomyRules||''),(d.npcVoicePlan||'')].filter(Boolean).join('\n\n')],['Factions / créatures',d.factionsCreatures],['Mécaniques',d.mechanics],['Combat',d.combatRules],['Matériel joueurs',d.playerMaterials],['Dossier animateur',d.hostMaterials],['Plan média',[(d.imageBriefs||''),(d.audioPlan||''),(d.videoPlan||''),(d.mapPlan||'')].filter(Boolean).join('\n\n')],['Plan Live',d.livePlan],['NyXia Contrôle',d.controlReport]].forEach(function(x){y=gamePdfLines(doc,x[0],x[1],y)});doc.save(safeName(currentProject.title)+'-dossier-production.pdf')}
 
   function renderGhost(){
     var host=document.getElementById('view-ghost'); var ok=currentProject&&currentProject.kind==='ghostwriting';
