@@ -231,6 +231,25 @@ async function hearNpc(){
     slot.innerHTML='<audio controls autoplay style="width:100%" src="'+npcAudioUrl+'"></audio>'
   }catch(e){slot.textContent='⚠ '+e.message}
 }
+// URL fournie seulement après validation par le Worker; aucun HTML reçu de l'IA n'est exécuté.
+function npcRenderAttachments(items){
+  const target=document.getElementById('npcreply');if(!target||!Array.isArray(items))return;
+  items.slice(0,4).forEach(item=>{
+    const kind=String(item.kind||''),raw=String(item.url||'');let url='';
+    if(raw){try{const u=new URL(raw);if(u.protocol!=='https:'||u.username||u.password) return;url=u.href}catch(_){return}}
+    const box=document.createElement('div');box.className='npcReply';box.style.marginTop='10px';
+    const title=document.createElement('strong');title.textContent='🎒 '+String(item.title||'Objet reçu');box.appendChild(title);
+    if(item.description){const desc=document.createElement('p');desc.textContent=String(item.description);box.appendChild(desc)}
+    if(url){let node;
+      if(kind==='image'){node=document.createElement('img');node.src=url;node.alt=String(item.title||'Image');node.style.cssText='display:block;max-width:100%;max-height:400px;margin-top:8px'}
+      else if(kind==='audio'){node=document.createElement('audio');node.src=url;node.controls=true;node.style.maxWidth='100%'}
+      else if(kind==='video'){node=document.createElement('video');node.src=url;node.controls=true;node.playsInline=true;node.style.cssText='display:block;max-width:100%;max-height:400px'}
+      else {node=document.createElement('a');node.href=url;node.target='_blank';node.rel='noopener noreferrer';node.textContent='Ouvrir '+(kind==='pdf'?'le PDF':'le fichier')}
+      box.appendChild(node);
+    }
+    target.appendChild(box);
+  });
+}
 async function askNpc(){
   const msg=document.getElementById('npcmsg'),reply=document.getElementById('npcreply')
   if(!msg?.value.trim())return
@@ -240,6 +259,7 @@ async function askNpc(){
     const r=await api('/api/game/live/npc-chat',{method:'POST',body:JSON.stringify({code,playerToken:token,message:msg.value})})
     reply.innerHTML='<div class="npcReply">'+esc(r.reply)+'</div>'+
       (r.hasVoice?'<button type="button" class="btn" onclick="hearNpc()">🔊 Écouter sa voix ElevenLabs</button><div id="npc-audio"></div>':'')
+    npcRenderAttachments(r.attachments)
     msg.value=''
   }catch(e){reply.innerHTML='<div class="mut">'+esc(e.message)+'</div>'}
 }

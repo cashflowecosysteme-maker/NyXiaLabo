@@ -1016,7 +1016,7 @@
       autonomy:c.autonomy||'',triggers:c.triggers||'',allowedActions:c.allowedActions||'',forbiddenActions:c.forbiddenActions||'',
       tone:c.tone||'',vocabulary:c.vocabulary||'',attitude:c.attitude||'',
       knowledge:c.knowledge||'',ignorance:c.ignorance||'',secrets:c.secrets||'',revealConditions:c.revealConditions||'',
-      memoryRules:c.memoryRules||'',deliverables:c.deliverables||'',knowledgeDocs:c.knowledgeDocs||[]}
+      memoryRules:c.memoryRules||'',deliverables:c.deliverables||'',items:Array.isArray(c.items)?c.items:[],knowledgeDocs:c.knowledgeDocs||[]}
   }
   function npcRuntimeRefresh(){
     if(currentProject){var d=currentProject.data||{},list=Array.isArray(d.npcCharacters)?d.npcCharacters:[]
@@ -1026,7 +1026,7 @@
   function npcAdd(){
     if(!currentProject)return
     var list=(currentProject.data.npcCharacters||[]).slice()
-    list.push({id:'npc-'+crypto.randomUUID().replace(/-/g,'').slice(0,25),name:'',firstName:'',lastName:'',age:'',role:'',goals:'',personality:'',portraitUrl:'',portraitName:'',openRouterModel:'',elevenLabsVoiceId:'',trust:50,secretMinimumTrust:100,reputation:'',relationships:'',autonomy:'',triggers:'',allowedActions:'',forbiddenActions:'',tone:'',vocabulary:'',attitude:'',knowledge:'',ignorance:'',secrets:'',revealConditions:'',memoryRules:'',deliverables:'',knowledgeDocs:[]})
+    list.push({id:'npc-'+crypto.randomUUID().replace(/-/g,'').slice(0,25),name:'',firstName:'',lastName:'',age:'',role:'',goals:'',personality:'',portraitUrl:'',portraitName:'',openRouterModel:'',elevenLabsVoiceId:'',trust:50,secretMinimumTrust:100,reputation:'',relationships:'',autonomy:'',triggers:'',allowedActions:'',forbiddenActions:'',tone:'',vocabulary:'',attitude:'',knowledge:'',ignorance:'',secrets:'',revealConditions:'',memoryRules:'',deliverables:'',items:[],knowledgeDocs:[]})
     setData('npcCharacters',list);npcRuntimeRefresh();renderGame()
   }
   async function npcRemove(index){
@@ -1053,6 +1053,55 @@
     return '<div class="field"><label>'+esc(label)+'</label>'+
       (rows?'<textarea rows="'+rows+'" oninput="npcUpdate('+index+',\''+key+'\',this.value)">'+esc(value||'')+'</textarea>':
       '<input value="'+gameRosterAttr(value||'')+'" oninput="npcUpdate('+index+',\''+key+'\',this.value)">')+'</div>'
+  }
+  // Une fiche par objet, aucune URL privée n'est ajoutée directement aux instructions du modèle.
+  function npcItemUpdate(index,itemIndex,key,value){
+    if(!currentProject)return;
+    var list=(currentProject.data.npcCharacters||[]).slice(),npc=list[index];if(!npc)return;
+    var items=Array.isArray(npc.items)?npc.items.slice():[],item=items[itemIndex];if(!item)return;
+    if(key==='url'&&String(value||'').trim()){
+      try{var u=new URL(String(value).trim());if(u.protocol!=='https:'||u.username||u.password||u.port)throw Error('URL HTTPS requise');value=u.href}
+      catch(e){alert('Entre une URL HTTPS valide, sans identifiants.');renderGame();return}
+    }
+    if(key==='minimumTrust')value=Math.max(0,Math.min(100,Math.round(Number(value)||0)));
+    items[itemIndex]=Object.assign({},item,{[key]:value});list[index]=Object.assign({},npc,{items:items});setData('npcCharacters',list);npcRuntimeRefresh();
+    if(key==='kind')renderGame();
+  }
+  function npcAddItem(index){
+    if(!currentProject)return;var list=(currentProject.data.npcCharacters||[]).slice(),npc=list[index];if(!npc)return;
+    var items=Array.isArray(npc.items)?npc.items.slice():[];
+    items.push({id:'objet-'+crypto.randomUUID().replace(/-/g,'').slice(0,24),title:'',kind:'object',description:'',url:'',minimumTrust:0,requiredScene:'',requiredEvent:'',grantOnce:true});
+    list[index]=Object.assign({},npc,{items:items});setData('npcCharacters',list);npcRuntimeRefresh();renderGame();
+  }
+  function npcRemoveItem(index,itemIndex){
+    if(!currentProject)return;var list=(currentProject.data.npcCharacters||[]).slice(),npc=list[index];if(!npc)return;
+    var items=Array.isArray(npc.items)?npc.items.slice():[];if(!items[itemIndex]||!confirm('Retirer cet objet de ce personnage ?'))return;
+    items.splice(itemIndex,1);list[index]=Object.assign({},npc,{items:items});setData('npcCharacters',list);npcRuntimeRefresh();renderGame();
+  }
+  function npcItemsEditor(c,index){
+    var items=Array.isArray(c.items)?c.items:[],kinds=[['object','🎒 Objet'],['image','🖼️ Image'],['audio','🎵 MP3 / audio'],['video','🎥 Vidéo'],['pdf','📄 PDF']];
+    var out='<div class="divider"></div><h4>🎒 Objets et médias remis</h4><p class="tiny">Ajoute chaque objet séparément. Les URL restent externes. Le moteur doit vérifier les conditions avant toute remise.</p>';
+    if(!items.length)out+='<div class="game-note">Aucun objet ou média configuré pour ce personnage.</div>';
+    out+=items.map(function(item,j){
+      var kind=kinds.some(function(pair){return pair[0]===item.kind})?item.kind:'object';
+      var url=String(item.url||'');var valid=/^https:\/\//i.test(url);
+      var opt=kinds.map(function(pair){return '<option value="'+pair[0]+'"'+(kind===pair[0]?' selected':'')+'>'+pair[1]+'</option>'}).join('');
+      var q=function(key){return 'npcItemUpdate('+index+','+j+',\''+key+'\',this.value)'};
+      return '<div class="game-note" style="margin:10px 0;padding:14px;border:1px solid rgba(167,139,250,.35)"><b>Objet / média '+(j+1)+'</b>'+
+        '<div class="row"><div class="field"><label>Nom</label><input value="'+gameRosterAttr(item.title||'')+'" placeholder="Ex. Livre inachevé" oninput="'+q('title')+'"></div>'+
+        '<div class="field"><label>Type</label><select onchange="'+q('kind')+'">'+opt+'</select></div></div>'+
+        '<div class="field"><label>Description de ce que reçoit le joueur</label><textarea rows="2" oninput="'+q('description')+'">'+esc(item.description||'')+'</textarea></div>'+
+        '<div class="field"><label>URL HTTPS du '+(kind==='object'?'fichier (facultative pour un objet virtuel)':kind==='audio'?'MP3 / audio':kind)+'</label><input type="url" value="'+gameRosterAttr(url)+'" placeholder="https://exemple.com/mon-media.mp3" onchange="'+q('url')+'">'+
+        (valid?'<a href="'+gameRosterAttr(url)+'" target="_blank" rel="noopener noreferrer" class="tiny">Ouvrir le fichier ↗</a>':'<span class="tiny">'+(kind==='object'?'URL facultative.':'URL requise pour remettre ce média.')+'</span>')+'</div>'+
+        '<div class="row"><div class="field"><label>Confiance minimale (0 à 100)</label><input type="number" min="0" max="100" value="'+gameRosterAttr(item.minimumTrust??0)+'" onchange="'+q('minimumTrust')+'"></div>'+
+        '<div class="field"><label>ID de la scène requise (facultatif)</label><input value="'+gameRosterAttr(item.requiredScene||'')+'" placeholder="acte-01-scene-02" oninput="'+q('requiredScene')+'"></div></div>'+
+        '<div class="field"><label>Événement requis (facultatif)</label><input value="'+gameRosterAttr(item.requiredEvent||'')+'" placeholder="porte_ouverte" oninput="'+q('requiredEvent')+'"></div>'+
+        '<label style="display:flex;gap:9px;align-items:center;margin:8px 0"><input type="checkbox"'+(item.grantOnce!==false?' checked':'')+' onchange="npcItemUpdate('+index+','+j+',\'grantOnce\',this.checked)">Remettre une seule fois par joueur</label>'+
+        '<button class="btn danger" onclick="npcRemoveItem('+index+','+j+')">Retirer cet objet / média</button></div>';
+    }).join('');
+    out+='<div class="tools-line"><button class="btn gold" onclick="npcAddItem('+index+')">+ Ajouter un objet ou un média</button></div>';
+    if(String(c.deliverables||'').trim())out+='<details style="margin-top:12px"><summary>Anciennes notes conservées — non automatisées</summary><div class="game-note">'+esc(c.deliverables)+'</div></details>';
+    return out;
   }
   function npcCharacterPhoto(c,index){
     var url=String(c.portraitUrl||''),good=/^\/game-media\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\/[0-9a-f-]{36}\.(png|jpe?g|webp|gif)$/.test(url)
@@ -1151,7 +1200,7 @@
     if((d.npcCharacters||[]).length)return alert('Des fiches IA existent déjà : import automatique refusé pour éviter les doublons.')
     if(!confirm('Importer '+list.length+' ancien(s) PNJ dans le nouveau formulaire, sans supprimer leur source ?'))return
     var output=list.map(function(x){var name=String(x.name||x.nom||'').trim()
-      return {id:/^[a-zA-Z0-9_-]{1,120}$/.test(x.id||'')?x.id:'npc-'+crypto.randomUUID().replace(/-/g,'').slice(0,25),name:name,age:x.age||'',role:x.role||'',goals:Array.isArray(x.goals)?x.goals.join('\n'):x.goals||'',personality:x.personality||'',portraitUrl:x.portraitUrl||'',trust:Number(x.trust??50),secretMinimumTrust:100,reputation:x.reputation||'',relationships:typeof x.relationships==='string'?x.relationships:JSON.stringify(x.relationships||{}),autonomy:typeof x.autonomy==='string'?x.autonomy:JSON.stringify(x.autonomy||{}),triggers:Array.isArray(x.emotionalTriggers)?x.emotionalTriggers.join('\n'):x.triggers||'',allowedActions:x.allowedActions||'',forbiddenActions:x.forbiddenActions||'',tone:x.tone||'',vocabulary:x.vocabulary||'',attitude:x.attitude||'',knowledge:Array.isArray(x.knowledge)?x.knowledge.join('\n'):x.knowledge||'',ignorance:Array.isArray(x.ignorance)?x.ignorance.join('\n'):x.ignorance||'',secrets:typeof x.secrets==='string'?x.secrets:JSON.stringify(x.secrets||[]),revealConditions:x.revealConditions||'',memoryRules:x.memoryRules||'',deliverables:x.deliverables||'',openRouterModel:x.openRouterModel||d.npcModel||'',elevenLabsVoiceId:x.elevenLabsVoiceId||'',knowledgeDocs:[]}
+      return {id:/^[a-zA-Z0-9_-]{1,120}$/.test(x.id||'')?x.id:'npc-'+crypto.randomUUID().replace(/-/g,'').slice(0,25),name:name,age:x.age||'',role:x.role||'',goals:Array.isArray(x.goals)?x.goals.join('\n'):x.goals||'',personality:x.personality||'',portraitUrl:x.portraitUrl||'',trust:Number(x.trust??50),secretMinimumTrust:100,reputation:x.reputation||'',relationships:typeof x.relationships==='string'?x.relationships:JSON.stringify(x.relationships||{}),autonomy:typeof x.autonomy==='string'?x.autonomy:JSON.stringify(x.autonomy||{}),triggers:Array.isArray(x.emotionalTriggers)?x.emotionalTriggers.join('\n'):x.triggers||'',allowedActions:x.allowedActions||'',forbiddenActions:x.forbiddenActions||'',tone:x.tone||'',vocabulary:x.vocabulary||'',attitude:x.attitude||'',knowledge:Array.isArray(x.knowledge)?x.knowledge.join('\n'):x.knowledge||'',ignorance:Array.isArray(x.ignorance)?x.ignorance.join('\n'):x.ignorance||'',secrets:typeof x.secrets==='string'?x.secrets:JSON.stringify(x.secrets||[]),revealConditions:x.revealConditions||'',memoryRules:x.memoryRules||'',deliverables:x.deliverables||'',items:Array.isArray(x.items)?x.items:[],openRouterModel:x.openRouterModel||d.npcModel||'',elevenLabsVoiceId:x.elevenLabsVoiceId||'',knowledgeDocs:[]}
     })
     d.npcLegacyRuntimeBackup=d.npcRuntimeJson
     setData('npcCharacters',output);npcRuntimeRefresh();renderGame();toast('Anciennes fiches importées — source conservée')
@@ -1174,7 +1223,7 @@
           '<div class="row">'+npcField(i,'tone','Ton',c.tone)+npcField(i,'vocabulary','Vocabulaire',c.vocabulary)+'</div>'+npcField(i,'attitude','Attitude',c.attitude,3)+
           '<div class="divider"></div><h4>🔐 Connaissances et révélations</h4>'+npcField(i,'knowledge','Ce qu’il sait déjà',c.knowledge,4)+npcField(i,'ignorance','Ce qu’il ignore',c.ignorance,3)+
           npcField(i,'secrets','Secrets dont il dispose',c.secrets,4)+npcField(i,'secretMinimumTrust','Confiance minimale pour autoriser l’accès à ces secrets (0–100)',c.secretMinimumTrust??100)+npcField(i,'revealConditions','Conditions pour révéler un secret / indice',c.revealConditions,3)+
-          npcField(i,'memoryRules','Mémoire : ce qu’il retient de chaque joueur',c.memoryRules,3)+npcField(i,'deliverables','Objets et médias remis (avec conditions, validées par moteur)',c.deliverables,4)+
+          npcField(i,'memoryRules','Mémoire : ce qu’il retient de chaque joueur',c.memoryRules,3)+npcItemsEditor(c,i)+
           npcDocs(c,i)+'<div class="tools-line" style="margin-top:14px"><button class="btn danger" onclick="npcRemove('+i+')">Supprimer ce PNJ et ses connaissances</button></div></div></details>'
       }).join('')+
       '<div class="divider"></div><div class="game-note">📘 Le livre et le cerveau de NyXia MJ sont dans leur propre onglet : <button class="btn gold" onclick="setGameTab(\'gm\')">Ouvrir NyXia MJ</button></div>'+
@@ -2714,10 +2763,17 @@
     var playerRows=players.length?players.map(function(p){return '<div class="live-player"><div><span class="live-dot"></span><b>'+esc(p.name)+'</b><div class="tiny">'+esc(p.team||'Sans équipe')+'</div></div><select onchange="setGameLivePlayerTeam(\''+p.id+'\',this.value)">'+teams.map(function(t){return '<option'+(t===p.team?' selected':'')+'>'+esc(t)+'</option>'}).join('')+'</select></div>'}).join(''):'<div class="tiny">Aucun joueur connecté pour l’instant.</div>'
     var logRows=logs.length?logs.map(function(x){var label=x.type==='roll'?'🎲 '+x.playerName+' : d'+x.sides+' = '+x.result:x.type==='npc'?'🧠 '+x.playerName+' → '+x.npc+': '+x.prompt:x.type==='join'?'👤 '+x.playerName+' a rejoint':x.type==='clue-team'?'🔐 Indice '+x.team+': '+x.text:x.type==='clue-all'?'🔎 Indice groupe: '+x.text:x.type==='decision'||x.type==='note'?'💬 '+x.playerName+': '+(x.text||''):x.type;return '<div class="live-log-row">'+esc(label||'')+'<div class="tiny">'+new Date(x.at).toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})+'</div></div>'}).join(''):'<div class="tiny">Aucune action encore.</div>'
     var teamOpts='<option value="">Tous les joueurs</option>'+teams.map(function(t){return '<option>'+esc(t)+'</option>'}).join('')
-    box.innerHTML='<div class="live-grid"><div class="live-box"><h5>🎛️ État de la scène</h5><div class="row">'+liveRuntimeField('Phase','live-phase',r.phase)+liveRuntimeField('Scène','live-scene',r.sceneTitle)+'</div>'+liveRuntimeField('Objectif visible','live-objective',r.objective,3)+liveRuntimeField('Annonce','live-announcement',r.announcement,3)+liveRuntimeField('Narration / situation','live-narrative',r.narrative,5)+'<div class="row">'+liveRuntimeField('PNJ disponible','live-npc',r.activeNpc)+liveRuntimeField('Lien Zoom','live-zoom',r.zoomUrl)+'</div><div class="row three">'+liveRuntimeField('Image URL','live-image',r.imageUrl)+liveRuntimeField('Audio URL','live-audio',r.audioUrl)+liveRuntimeField('Vidéo URL','live-video',r.videoUrl)+'</div><div class="row"><label class="check"><input id="live-allow-npc" type="checkbox" '+(r.allowNpc!==false?'checked':'')+'> PNJ IA disponibles</label><label class="check"><input id="live-allow-dice" type="checkbox" '+(r.allowDice!==false?'checked':'')+'> Dés disponibles</label></div><div class="tools-line" style="margin-top:10px"><button class="btn primary" onclick="pushGameLiveState(\'live\')">▶ Envoyer aux joueurs</button><button class="btn" onclick="pushGameLiveState(\'paused\')">⏸ Pause</button><button class="btn" onclick="pushGameLiveState(\'lobby\')">🚪 Lobby</button></div></div><div class="live-box"><h5>🔎 Envoyer un indice</h5><div class="field"><label>Destinataire</label><select id="live-clue-team">'+teamOpts+'</select></div><div class="field"><label>Indice / information secrète</label><textarea id="live-clue" rows="4"></textarea></div><div class="tools-line"><button class="btn gold" onclick="sendGameLiveClue()">Envoyer l’indice</button><button class="btn" onclick="clearGameLiveClues()">Effacer les indices de test</button></div><div class="divider"></div><h5>👥 Joueurs · '+players.length+'</h5><div class="live-players">'+playerRows+'</div></div></div><div class="live-grid" style="margin-top:10px"><div class="live-box"><h5>📜 Activité des joueurs</h5><div class="live-log">'+logRows+'</div></div><div class="live-box"><h5>🧪 Comment tester sur Zoom</h5><div class="muted" style="line-height:1.65">1. Ouvre Zoom et crée tes Breakout Rooms avec les mêmes noms d’équipes.<br>2. Envoie le lien joueur dans le chat Zoom.<br>3. Les gens entrent leur prénom et sont répartis dans une équipe.<br>4. Pendant qu’ils discutent dans Zoom, tu envoies ici objectifs et indices privés.<br>5. Ils peuvent lancer des dés, entrer un vrai résultat, parler au PNJ actif et t’envoyer leur décision.<br>6. Tu vois tout ici et tu fais avancer la scène.</div></div></div>'
+    box.innerHTML='<div class="live-grid"><div class="live-box"><h5>🎛️ État de la scène</h5><div class="row">'+liveRuntimeField('Phase','live-phase',r.phase)+liveRuntimeField('Scène','live-scene',r.sceneTitle)+'</div>'+liveRuntimeField('Objectif visible','live-objective',r.objective,3)+liveRuntimeField('Annonce','live-announcement',r.announcement,3)+liveRuntimeField('Narration / situation','live-narrative',r.narrative,5)+'<div class="row">'+liveRuntimeField('PNJ disponible','live-npc',r.activeNpc)+liveRuntimeField('Lien Zoom','live-zoom',r.zoomUrl)+'</div><div class="row three">'+liveRuntimeField('Image URL','live-image',r.imageUrl)+liveRuntimeField('Audio URL','live-audio',r.audioUrl)+liveRuntimeField('Vidéo URL','live-video',r.videoUrl)+'</div><div class="row"><label class="check"><input id="live-allow-npc" type="checkbox" '+(r.allowNpc!==false?'checked':'')+'> PNJ IA disponibles</label><label class="check"><input id="live-allow-dice" type="checkbox" '+(r.allowDice!==false?'checked':'')+'> Dés disponibles</label></div><div class="tools-line" style="margin-top:10px"><button class="btn primary" onclick="pushGameLiveState(\'live\')">▶ Envoyer aux joueurs</button><button class="btn" onclick="pushGameLiveState(\'paused\')">⏸ Pause</button><button class="btn" onclick="pushGameLiveState(\'lobby\')">🚪 Lobby</button></div></div><div class="live-box"><h5>🔎 Envoyer un indice</h5><div class="field"><label>Destinataire</label><select id="live-clue-team">'+teamOpts+'</select></div><div class="field"><label>Indice / information secrète</label><textarea id="live-clue" rows="4"></textarea></div><div class="tools-line"><button class="btn gold" onclick="sendGameLiveClue()">Envoyer l’indice</button><button class="btn" onclick="clearGameLiveClues()">Effacer les indices de test</button></div><div class="divider"></div><h5>🔓 Événement du MJ</h5><div class="row"><input id="live-host-event" placeholder="ID exact, ex. porte_ouverte"><button class="btn gold" onclick="confirmGameLiveEvent()">Confirmer</button></div><p class="tiny">Seul le MJ peut confirmer un événement requis pour remettre un objet.</p><div class="divider"></div><h5>👥 Joueurs · '+players.length+'</h5><div class="live-players">'+playerRows+'</div></div></div><div class="live-grid" style="margin-top:10px"><div class="live-box"><h5>📜 Activité des joueurs</h5><div class="live-log">'+logRows+'</div></div><div class="live-box"><h5>🧪 Comment tester sur Zoom</h5><div class="muted" style="line-height:1.65">1. Ouvre Zoom et crée tes Breakout Rooms avec les mêmes noms d’équipes.<br>2. Envoie le lien joueur dans le chat Zoom.<br>3. Les gens entrent leur prénom et sont répartis dans une équipe.<br>4. Pendant qu’ils discutent dans Zoom, tu envoies ici objectifs et indices privés.<br>5. Ils peuvent lancer des dés, entrer un vrai résultat, parler au PNJ actif et t’envoyer leur décision.<br>6. Tu vois tout ici et tu fais avancer la scène.</div></div></div>'
   }
   function liveHostPatch(status){return {status:status,runtime:{phase:(document.getElementById('live-phase')||{}).value||'',sceneTitle:(document.getElementById('live-scene')||{}).value||'',objective:(document.getElementById('live-objective')||{}).value||'',announcement:(document.getElementById('live-announcement')||{}).value||'',narrative:(document.getElementById('live-narrative')||{}).value||'',activeNpc:(document.getElementById('live-npc')||{}).value||'',zoomUrl:(document.getElementById('live-zoom')||{}).value||'',imageUrl:(document.getElementById('live-image')||{}).value||'',audioUrl:(document.getElementById('live-audio')||{}).value||'',videoUrl:(document.getElementById('live-video')||{}).value||'',allowNpc:!!(document.getElementById('live-allow-npc')||{}).checked,allowDice:!!(document.getElementById('live-allow-dice')||{}).checked}}}
   async function pushGameLiveState(status){var code=currentProject.data.liveSessionCode;try{var r=await api('/api/atelier/game/live/'+code,{method:'PUT',body:JSON.stringify(liveHostPatch(status))});gameLiveHostState=r.session;renderGameLiveHost();toast('Scène envoyée ✓')}catch(e){alert(e.message)}}
+  async function confirmGameLiveEvent(){
+    var code=currentProject?.data?.liveSessionCode,id=(document.getElementById('live-host-event')||{}).value||'';
+    id=id.trim();if(!/^[a-zA-Z0-9_-]{1,120}$/.test(id))return alert('Identifiant d’événement invalide.');
+    if(!confirm('Confirmer l’événement « '+id+' » pour cette partie seulement ?'))return;
+    try{var r=await api('/api/atelier/game/live/'+code,{method:'PUT',body:JSON.stringify({triggerEvent:id})});gameLiveHostState=r.session;renderGameLiveHost();toast('Événement confirmé ✓')}
+    catch(e){alert(e.message)}
+  }
   async function sendGameLiveClue(){var code=currentProject.data.liveSessionCode,text=(document.getElementById('live-clue')||{}).value||'',team=(document.getElementById('live-clue-team')||{}).value||'';if(!text.trim()){alert('Écris l’indice à envoyer.');return}try{var r=await api('/api/atelier/game/live/'+code,{method:'PUT',body:JSON.stringify({clue:{scope:team?'team':'all',team:team,text:text}})});gameLiveHostState=r.session;renderGameLiveHost();toast(team?'Indice privé envoyé ✓':'Indice envoyé à tous ✓')}catch(e){alert(e.message)}}
   async function clearGameLiveClues(){if(!confirm('Effacer tous les indices envoyés pendant ce test ?'))return;var code=currentProject.data.liveSessionCode;try{var r=await api('/api/atelier/game/live/'+code,{method:'PUT',body:JSON.stringify({clearClues:true})});gameLiveHostState=r.session;renderGameLiveHost()}catch(e){alert(e.message)}}
   async function setGameLivePlayerTeam(playerId,team){var code=currentProject.data.liveSessionCode;try{var r=await api('/api/atelier/game/live/'+code,{method:'PUT',body:JSON.stringify({playerTeam:{playerId:playerId,team:team}})});gameLiveHostState=r.session;renderGameLiveHost()}catch(e){alert(e.message)}}

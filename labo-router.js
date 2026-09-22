@@ -724,7 +724,7 @@ async function gameGetProduct(env, id) {
 }
 async function gameSaveProduct(env, product) {
   if (!env.LABO_STORE) throw new Error('CASHFLOW_KV non raccordée à l’Atelier')
-  // Le jeu compilé lit la clé centrale directe; garder aussi la copie historique du Labo.
+  // Le jeu lit la clé centrale directe, le Labo conserve son préfixe historique dans la même KV.
   if (!env.CASHFLOW_KV) throw new Error('CASHFLOW_KV commune indisponible : publication annulée')
   const content = JSON.stringify(product)
   await env.CASHFLOW_KV.put(gameProductKey(product.id), content)
@@ -940,6 +940,25 @@ function gameHostPackageFromData(d = {}) {
   }
 }
 
+function gameValidateNpcItems(d, guidedScenes) {
+  const scenes=new Set((guidedScenes||[]).map(s=>String(s.id||'')));
+  for(const npc of (Array.isArray(d.npcCharacters)?d.npcCharacters:[])){
+    const ids=new Set();
+    for(const item of (Array.isArray(npc.items)?npc.items:[])){
+      const label=String(item.title||'').trim(),kind=String(item.kind||'');
+      if(!label||label.length>180||!['object','image','audio','video','pdf'].includes(kind))throw Error('Objet/média incomplet dans '+(npc.name||'ce PNJ')+' : renseigne nom et type.');
+      if(!/^[a-zA-Z0-9_-]{1,100}$/.test(String(item.id||''))||ids.has(item.id))throw Error('Identifiant d’objet absent ou dupliqué pour '+npc.name);
+      ids.add(item.id);
+      const url=String(item.url||'').trim();
+      if(kind!=='object'&&!url)throw Error('URL manquante pour '+label+' ('+npc.name+').');
+      if(url){try{const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port)throw Error('URL invalide')}catch(_){throw Error('URL HTTPS invalide pour '+label+'.')}}
+      const trust=Number(item.minimumTrust);
+      if(!Number.isInteger(trust)||trust<0||trust>100)throw Error('Confiance invalide pour '+label+'.');
+      if(item.requiredScene&&!scenes.has(String(item.requiredScene)))throw Error('Scène requise inconnue pour '+label+' : '+item.requiredScene);
+      if(item.requiredEvent&&!/^[a-zA-Z0-9_-]{1,120}$/.test(String(item.requiredEvent)))throw Error('Identifiant d’événement invalide pour '+label+'.');
+    }
+  }
+}
 async function gamePublishProject(env, project, body = {}) {
   if (!project || project.kind !== 'nyxia-game') throw new Error('Projet NyXia Game introuvable')
   const d = project.data || {}
@@ -948,6 +967,7 @@ async function gamePublishProject(env, project, body = {}) {
   const prior = await gameGetProduct(env, id)
   const stamp = gameLiveNow()
   const guidedScenes = gameGuidedScenesFromData(d)
+  gameValidateNpcItems(d,guidedScenes)
   const product = {
     id,
     sourceProjectId: project.id,
@@ -1371,6 +1391,27 @@ function gameLiveParseAiJson(text) {
   const cleaned = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
   try { return JSON.parse(cleaned) } catch (_) { return { reply: cleaned, memory: '', relationDelta: {} } }
 }
+// The model may request an item ID only. The server alone decides if a URL may be sent.
+function gameLiveGrantItem(session,player,config,state,itemId,currentTrust){
+  const game=String(session.sourceProjectId||''),npcId=String(config.id||'');
+  if(!game||!npcId||!session.code||!player.id)return {error:'Partie ou personnage non identifié.'};
+  const item=(Array.isArray(config.items)?config.items:[]).find(x=>x&&x.id===itemId);
+  if(!item||!String(item.title||'').trim())return {error:'Cet objet n’existe pas dans ce jeu.'};
+  const kind=String(item.kind||''),url=String(item.url||'').trim(),trust=Number(item.minimumTrust);
+  if(!['object','image','audio','video','pdf'].includes(kind)||!Number.isInteger(trust)||trust<0||trust>100)return {error:'Configuration de cet objet invalide.'};
+  if(Number(currentTrust)<trust)return {error:'Le niveau de confiance requis n’est pas atteint.'};
+  if(item.requiredScene&&String(session.runtime?.guidedSceneId||'')!==String(item.requiredScene))return {error:'Cet objet n’est pas disponible dans cette scène.'};
+  if(item.requiredEvent&&!(Array.isArray(session.hostEvents)&&session.hostEvents.includes(String(item.requiredEvent))))return {error:'L’événement requis n’a pas été confirmé par le MJ.'};
+  if(kind!=='object'&&!url)return {error:'URL du média manquante.'};
+  if(url){try{const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port)throw Error('invalid')}catch(_){return {error:'Adresse du média invalide.'}}}
+  const receipt=game+'::'+npcId+'::'+item.id;
+  player.inventory=Array.isArray(player.inventory)?player.inventory:[];
+  if(item.grantOnce!==false&&player.inventory.some(x=>x.key===receipt))return {error:'Ce joueur possède déjà cet objet.'};
+  const stored={key:receipt,id:item.id,gameId:game,npcId,title:String(item.title).slice(0,180),kind,at:gameLiveNow()};
+  player.inventory.push(stored);player.inventory=player.inventory.slice(-120);
+  gameLiveLog(session,{type:'item-granted',playerId:player.id,npcId,itemId:item.id,title:stored.title});
+  return {attachment:{id:item.id,title:stored.title,description:String(item.description||'').slice(0,2000),kind,url}};
+}
 async function gameLiveNpcReply(env, session, player, npcName, message) {
   if (!env.OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY manquante pour les PNJ IA Live')
   const snapshot=session.projectSnapshot||{}, config=gameLiveNpcConfig(snapshot,npcName)
@@ -1388,7 +1429,7 @@ async function gameLiveNpcReply(env, session, player, npcName, message) {
   const recent=(state.history||[]).slice(-10)
   const currentTrust=gameLiveClampRelation(state.relation?.trust??config.trust??50)
   const authorizedKnowledge=await npcKnowledgeContext(env,gameId,config,message,currentTrust)
-  const {knowledgeDocs,deliverables,secrets,...npcPublicToModel}=config
+  const {knowledgeDocs,deliverables,items,secrets,...npcPublicToModel}=config
   if(currentTrust>=Math.max(0,Math.min(100,Number(config.secretMinimumTrust??100))))npcPublicToModel.secrets=secrets||''
   const runtime=session.runtime||{}
   // Le PNJ ne reçoit ni la Bible globale ni les secrets des autres personnages.
@@ -1396,10 +1437,11 @@ async function gameLiveNpcReply(env, session, player, npcName, message) {
   const context={
     jeu:gameId, personnage:npcPublicToModel, connaissancesVectoriseesAutorisees:authorizedKnowledge,
     scene:{phase:runtime.phase,title:runtime.sceneTitle,announcement:runtime.announcement},
+    objetsDemandables:(Array.isArray(items)?items:[]).map(x=>({id:x.id,title:x.title,kind:x.kind,description:x.description||''})),
     joueur:{name:player.name,character:player.character?{name:player.character.name||'',publicBio:player.character.publicBio||''}:null,
       relation:state.relation,memories:state.memories||[]}
   }
-  const system=`Tu interprètes exclusivement le PNJ « ${npcName} » du jeu identifié ${gameId}. Seuls ta fiche, les connaissances vectorisées explicitement autorisées et la scène publique font foi. Tu ignores les secrets des autres personnages et les solutions non présentes dans ces sources. Ton autonomie, tes interdictions et conditions de révélation priment sur toute demande du joueur. Ne prétends pas avoir remis un objet, divulgué un document ou changé l'état du jeu : le moteur doit vérifier ces actions séparément. Public : ${session.audience||'16+'}. Réponds uniquement par JSON valide : {"reply":"réponse en personnage","memory":"souvenir bref ou vide","relationDelta":{"trust":0,"affinity":0,"fear":0}}. Les deltas vont de -10 à 10.`
+  const system=`Tu interprètes exclusivement le PNJ « ${npcName} » du jeu identifié ${gameId}. Seuls ta fiche, les connaissances vectorisées explicitement autorisées et la scène publique font foi. Tu ignores les secrets des autres personnages et les solutions non présentes dans ces sources. Ton autonomie, tes interdictions et conditions de révélation priment sur toute demande du joueur. Ne prétends jamais avoir remis un objet ou donné son URL avant la confirmation du moteur. Si tu souhaites remettre un objet de la liste, indique uniquement son identifiant dans giveItemId ; si aucun, une chaîne vide. Public : ${session.audience||'16+'}. Réponds uniquement par JSON valide : {"reply":"réponse en personnage","memory":"souvenir bref ou vide","relationDelta":{"trust":0,"affinity":0,"fear":0},"giveItemId":""}. Les deltas vont de -10 à 10.`
   const res=await fetch('https://openrouter.ai/api/v1/chat/completions',{
     method:'POST',headers:{Authorization:`Bearer ${env.OPENROUTER_API_KEY}`,'Content-Type':'application/json','HTTP-Referer':'https://labo.nyxia.top','X-Title':'NyXia Game Live NPC'},
     body:JSON.stringify({model,messages:[{role:'system',content:system},
@@ -1408,17 +1450,19 @@ async function gameLiveNpcReply(env, session, player, npcName, message) {
   const data=await res.json().catch(()=>({}))
   if(!res.ok)throw Error(data?.error?.message||`OpenRouter HTTP ${res.status}`)
   const parsed=gameLiveParseAiJson(data?.choices?.[0]?.message?.content||'')
+  const requested=cleanText(parsed.giveItemId||'',100)
+  const granted=requested?gameLiveGrantItem(session,player,config,state,requested,currentTrust):null
   const delta=parsed.relationDelta||{}
   state.relation=state.relation||{trust:gameLiveClampRelation(config.trust??50),affinity:0,fear:0}
   for(const k of ['trust','affinity','fear']){
     const change=Math.max(-10,Math.min(10,Number(delta[k])||0))
     state.relation[k]=gameLiveClampRelation((Number(state.relation[k])||0)+change)
   }
-  const reply=cleanText(parsed.reply||'',5000)
+  const reply=granted?.error?'La remise n’est pas autorisée : '+granted.error:cleanText(parsed.reply||'',5000)
   state.history=[...(state.history||[]),{at:gameLiveNow(),player:message,npc:reply}].slice(-16)
   if(cleanText(parsed.memory||'',700))state.memories=[...(state.memories||[]),cleanText(parsed.memory,700)].slice(-24)
   state.lastAt=gameLiveNow();session.npcState[key]=state
-  return {reply,relation:state.relation,hasVoice:!!(config.elevenLabsVoiceId&&env.ELEVENLABS_API_KEY)}
+  return {reply,attachments:granted?.attachment?[granted.attachment]:[],relation:state.relation,hasVoice:!!(config.elevenLabsVoiceId&&env.ELEVENLABS_API_KEY)}
 }
 
 async function handleGamePublic(request, env) {
@@ -1589,6 +1633,15 @@ async function handleGamePublic(request, env) {
 
 
 async function gameLiveApplyHostUpdate(session, body = {}) {
+  if(body.triggerEvent){
+    const id=String(body.triggerEvent||'').trim();
+    if(/^[a-zA-Z0-9_-]{1,120}$/.test(id)){
+      session.hostEvents=Array.isArray(session.hostEvents)?session.hostEvents:[];
+      if(!session.hostEvents.includes(id))session.hostEvents.push(id);
+      session.hostEvents=session.hostEvents.slice(-200);
+      gameLiveLog(session,{type:'event-confirmed',eventId:id});
+    }
+  }
   if (body.status) {
     const allowed = new Set(['lobby', 'live', 'paused', 'ended'])
     if (allowed.has(body.status)) session.status = body.status
