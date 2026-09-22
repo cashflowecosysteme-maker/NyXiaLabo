@@ -373,7 +373,7 @@
   function chooseGame(id){chooseProject('nyxia-game',id,renderGame)}
 
   async function newProject(kind){
-    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',playerPrologue:'',playerCreationInstructions:'',playerArchetypes:'',playerFactions:'',playerStartingReputation:0,playerReputationRules:'',playerBadgeCatalog:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',aiPlayerPolicy:'',arrivalGuidelines:'',partyRules:{characterChoice:'both',allowSolo:true,allowAiPlayers:true,allowLateJoin:true,gmMode:'human',gmChoices:'both'},playableCharacters:[],factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',sourceDocuments:'',importedSourceNames:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',guidedScenesJson:'',mediaUseFreeAudio:true,mediaUseFreeVideo:true,mediaPaidFallback:false,mediaAllowPaidImages:false,mediaPaidVideoLimit:0,mediaAskVideoApproval:true,mediaUseUserAssets:true,userMediaAssets:[],mediaImageQuality:'low',mediaPaidImageLimit:0,deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
+    var defaults={ghostwriting:{idea:'',genre:'',audience:'',tone:'',lockedFacts:'',synopsis:'',outline:'',characters:'',draft:''},audiobook:{author:'',notes:'',voiceName:'',languageCode:'fr-FR',speakingRate:1,pitch:0,chapters:[{title:'Chapitre 1',text:''}]},'nyxia-game':{gameType:'Soirée immersive',audience:'16+',playMode:'Hybride',playerCount:8,duration:'2 h 30',genre:'Fantasy sombre',tone:'Cinématographique, mature, immersif',difficulty:'Intermédiaire',horror:2,violence:2,sensuality:1,romance:1,language:1,psychological:2,idea:'',creatorIntent:'',lockedCanon:'',worldBible:'',storyStructure:'',scenesQuests:'',characters:'',playerPrologue:'',playerSessionInfo:'',playerRules:'',playerHandoutMaterials:'',playerCreationInstructions:'',playerArchetypes:'',playerFactions:'',playerStartingReputation:0,playerReputationRules:'',playerBadgeCatalog:'',npcIntelligence:'',npcMemoryRules:'',npcAutonomyRules:'',npcRelationshipRules:'',npcVoicePlan:'',npcTestName:'',npcRuntimeJson:'',npcModel:'',aiPlayerPolicy:'',arrivalGuidelines:'',partyRules:{characterChoice:'both',allowSolo:true,allowAiPlayers:true,allowLateJoin:true,gmMode:'human',gmChoices:'both'},playableCharacters:[],factionsCreatures:'',itemsRewards:'',mechanics:'',combatRules:'',progression:'',playerMaterials:'',hostMaterials:'',livePlan:'',liveTeams:'Équipe Intuition\nÉquipe Symboles\nÉquipe Destin',liveSessionCode:'',imageBriefs:'',audioPlan:'',videoPlan:'',mapPlan:'',controlReport:'',sourceDocuments:'',importedSourceNames:'',packageNotes:'',packageSubtitle:'',coverUrl:'',productVersion:'1.0',publishedProductId:'',clientTestEmail:'',clientSessionLimit:0,testAccessKey:'',testLibraryUrl:'',guidedScenesJson:'',mediaUseFreeAudio:true,mediaUseFreeVideo:true,mediaPaidFallback:false,mediaAllowPaidImages:false,mediaPaidVideoLimit:0,mediaAskVideoApproval:true,mediaUseUserAssets:true,userMediaAssets:[],mediaImageQuality:'low',mediaPaidImageLimit:0,deliverables:{}},mystery:{premise:'',playerCount:8,duration:'2 h 30',era:'Contemporain',place:'',theme:'',difficulty:'Intermédiaire',locked:false,murderer:'',motive:'',method:'',timeline:'',secrets:'',relationships:'',trueClues:'',redHerrings:'',solution:'',deliverables:{}}}
     var title=prompt('Titre du projet :','Nouveau '+kindLabel(kind))||('Nouveau '+kindLabel(kind))
     try{var d=await api('/api/atelier/projects',{method:'POST',body:JSON.stringify({kind:kind,title:title,data:defaults[kind]||{}})}); currentProject=d.project; await reloadIndex(); showView(({ghostwriting:'ghost',audiobook:'audio','nyxia-game':'game',mystery:'mystery'})[kind]||'home'); toast('Projet créé') }catch(e){alert(e.message)}
   }
@@ -496,8 +496,9 @@
   }
   function gameWorkspace(){
     var d=currentProject.data||{}
-    var tabs='<div class="game-tabs">'+gameTabBtn('concept','✨ Concept')+gameTabBtn('bible','🌍 Bible')+gameTabBtn('story','📖 Histoire')+gameTabBtn('cast','🧙 Personnages')+gameTabBtn('players','🎭 Joueurs')+gameTabBtn('npcai','🧠 PNJ IA')+gameTabBtn('rules','⚔️ Règles')+gameTabBtn('materials','🖨️ Matériel')+gameTabBtn('media','🎬 Médias')+gameTabBtn('live','🎥 Live')+gameTabBtn('control','🧠 Contrôle')+gameTabBtn('package','📦 Package')+'</div>'
-    return '<div class="hero" style="margin-bottom:16px"><div class="badge">ARCHITECTE NYXIA GAME</div><h3>'+esc(currentProject.title)+'</h3><p>Studio commun pour RPG, ACE, Meurtre & Mystère, soirées immersives et histoires interactives. Les propositions IA ne remplacent jamais silencieusement tes choix.</p></div>'+tabs+(gameTab==='media'?'<div class="workspace" style="display:block"><div class="panel">'+gameMainPanel(d)+'</div></div>':'<div class="workspace"><div class="panel">'+gameMainPanel(d)+'</div>'+gameSidePanel(d)+'</div>')
+    var tabs='<div class="game-tabs">'+gameTabBtn('concept','✨ Concept')+gameTabBtn('bible','🌍 Bible')+gameTabBtn('story','📖 Histoire')+gameTabBtn('players','🎭 Joueurs')+gameTabBtn('rules','⚔️ Règles')+gameTabBtn('materials','🖨️ Matériel')+gameTabBtn('media','🎬 Médias')+gameTabBtn('cast','🧙 Personnages')+gameTabBtn('npcai','🧠 PNJ IA')+gameTabBtn('package','📦 Compilation ZIP')+'</div>'
+    var advanced=(gameTab==='live'||gameTab==='control')?'<div class="tools-line" style="margin:0 0 16px"><button class="btn gold" onclick="setGameTab(\'package\')">← Retour à Compilation ZIP</button><button class="btn" onclick="setGameTab(\'live\')">🎥 Live</button><button class="btn" onclick="setGameTab(\'control\')">🧠 Contrôle</button></div>':''
+    return '<div class="hero" style="margin-bottom:16px"><div class="badge">ARCHITECTE NYXIA GAME</div><h3>'+esc(currentProject.title)+'</h3><p>Studio commun pour RPG, ACE, Meurtre & Mystère, soirées immersives et histoires interactives. Les propositions IA ne remplacent jamais silencieusement tes choix.</p></div>'+tabs+advanced+(gameTab==='media'?'<div class="workspace" style="display:block"><div class="panel">'+gameMainPanel(d)+'</div></div>':'<div class="workspace"><div class="panel">'+gameMainPanel(d)+'</div>'+gameSidePanel(d)+'</div>')
   }
   function gameMainPanel(d){
     if(gameTab==='concept')return gameConcept(d)
@@ -514,7 +515,7 @@
     return gamePackage(d)
   }
   function gameSidePanel(d){
-    var sections=[['Concept',d.idea],['Bible',d.worldBible],['Structure',d.storyStructure],['Personnages',d.characters],['Joueurs',d.playerPrologue||d.playerArchetypes||d.playerFactions],['PNJ IA',d.npcIntelligence||d.npcMemoryRules],['Règles',d.mechanics],['Matériel',d.playerMaterials||d.hostMaterials],['Médias',d.imageBriefs||d.audioPlan||d.videoPlan],['Live',d.livePlan],['Contrôle',d.controlReport]]
+    var sections=[['Concept',d.idea],['Bible',d.worldBible],['Structure',d.storyStructure],['Joueurs',d.playerPrologue||d.playerArchetypes||d.playerFactions],['Règles',d.mechanics||d.playerRules],['Matériel',d.playerMaterials||d.hostMaterials||d.playerHandoutMaterials],['Médias',d.imageBriefs||d.audioPlan||d.videoPlan],['Personnages',d.characters],['PNJ IA',d.npcIntelligence||d.npcMemoryRules],['Live',d.livePlan],['Contrôle',d.controlReport]]
     var status=sections.map(function(x){var isConcept=x[0]==='Concept',ready=isConcept?conceptIsApproved(d):!!String(x[1]||'').trim();return '<div '+(isConcept?'id="concept-progress-card" ':'')+'class="game-status '+(ready?'ready':'')+'"><strong>'+(ready?'✓ ':'○ ')+x[0]+(isConcept?(ready?' terminé':' à confirmer'):'')+'</strong>'+(isConcept?(ready?'Validation humaine enregistrée':'Aucune amélioration IA obligatoire'):(ready?'Prêt / en travail':'À produire'))+'</div>'}).join('')
     return '<div class="game-stack">'+aiPanel()+'<div class="panel"><h4>🧭 Avancement</h4><div class="game-status-grid">'+status+'</div><div class="divider"></div><div class="tools-line"><button class="btn gold" onclick="gameAI(\'next\')">✨ Que produire ensuite ?</button><button class="btn" onclick="showView(\'maps\')">🗺️ Cartes</button><button class="btn" onclick="showView(\'visual\')">🎨 Visuels</button><button class="btn" onclick="showView(\'video\')">🎬 Vidéo</button></div></div></div>'
   }
@@ -1105,8 +1106,8 @@
         gameArea('PNJ structurés pour le moteur (JSON)','npcRuntimeJson',d.npcRuntimeJson,12)+
       '</details>'
   }
-  function gameRules(d){return '<h4>⚔️ Mécaniques de jeu</h4>'+gameArea('Boucle de jeu / règles principales','mechanics',d.mechanics,12)+gameArea('Combat / conflits / dés / résolution','combatRules',d.combatRules,10)+gameArea('Progression / réputation / inventaire / ressources','progression',d.progression,9)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'rules\')">⚔️ Concevoir les règles</button><button class="btn" onclick="gameAI(\'combat\')">Concevoir les combats</button><button class="btn" onclick="gameAI(\'balance\')">Tester l’équilibre</button></div>'}
-  function gameMaterials(d){return '<h4>🖨️ Matériel réellement nécessaire</h4><div class="game-note">Ici NyXia pense comme une directrice de production : pas seulement « raconter l’histoire », mais lister et rédiger ce qu’il faut pour pouvoir animer la soirée ou jouer.</div>'+gameArea('Matériel joueurs — fiches, cartes, indices, QR, aides de jeu, imprimables','playerMaterials',d.playerMaterials,13)+gameArea('Matériel animateur / MJ — conducteur, solutions, timing, secrets, feuilles de contrôle','hostMaterials',d.hostMaterials,13)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'materials\')">🖨️ Faire la liste complète du matériel</button><button class="btn" onclick="gameAI(\'playerdocs\')">Rédiger les documents joueurs</button><button class="btn" onclick="gameAI(\'hostdocs\')">Rédiger le dossier animateur</button></div>'}
+  function gameRules(d){return '<h4>⚔️ Mécaniques de jeu</h4><div class="game-note">Les règles complètes restent dans le dossier du MJ. Seul le champ public séparé ci-dessous sera repris dans le Cahier du joueur après ta validation.</div>'+gameArea('Boucle de jeu / règles principales','mechanics',d.mechanics,12)+gameArea('Règles PUBLIQUES du Cahier du joueur — relire avant diffusion','playerRules',d.playerRules,9)+gameArea('Combat / conflits / dés / résolution','combatRules',d.combatRules,10)+gameArea('Progression / réputation / inventaire / ressources','progression',d.progression,9)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'rules\')">⚔️ Concevoir les règles</button><button class="btn" onclick="gameAI(\'combat\')">Concevoir les combats</button><button class="btn" onclick="gameAI(\'balance\')">Tester l’équilibre</button></div>'}
+  function gameMaterials(d){return '<h4>🖨️ Matériel réellement nécessaire</h4><div class="game-note">Ici NyXia pense comme une directrice de production : pas seulement « raconter l’histoire », mais lister et rédiger ce qu’il faut pour pouvoir animer la soirée ou jouer.</div>'+gameArea('Matériel joueurs — fiches, cartes, indices, QR, aides de jeu, imprimables','playerMaterials',d.playerMaterials,13)+gameArea('Matériel animateur / MJ — conducteur, solutions, timing, secrets, feuilles de contrôle','hostMaterials',d.hostMaterials,13)+gameArea('Informations PRATIQUES publiques — horaires, lieu ou lien et déroulement de la soirée','playerSessionInfo',d.playerSessionInfo,6)+gameArea('Matériel PUBLIC du Cahier du joueur — uniquement les éléments partageables','playerHandoutMaterials',d.playerHandoutMaterials,9)+'<div class="tools-line"><button class="btn primary" onclick="gameAI(\'materials\')">🖨️ Faire la liste complète du matériel</button><button class="btn" onclick="gameAI(\'playerdocs\')">Rédiger les documents joueurs</button><button class="btn" onclick="gameAI(\'hostdocs\')">Rédiger le dossier animateur</button></div>'+playerBookPreview(d)}
   function prodTick(key,label,d,help){
     return '<label style="display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid rgba(167,139,250,.12);border-radius:12px;background:rgba(255,255,255,.03)"><input type="checkbox" '+((d[key]===false)?'':'checked')+' onchange="setData(\''+key+'\',this.checked)"><span><b>'+label+'</b>'+(help?'<div class="tiny" style="margin-top:2px">'+help+'</div>':'')+'</span></label>'
   }
@@ -2661,17 +2662,18 @@
     try{var gj=parseJsonLoose(d.guidedScenesJson||'');guidedCount=Array.isArray(gj)?gj.length:(Array.isArray(gj.scenes)?gj.scenes.length:0)}catch(e){}
     var mediaAssets=parseProductionAssets(d.productionAssetsJson),linked=mediaAssets.filter(gameMediaReady),localOnly=mediaAssets.filter(function(x){return !!x.localMediaId}),unlinked=mediaAssets.length-linked.length
     var clientReady=!!(mediaAssets.length&&!unlinked&&!localOnly.length&&String(d.coverUrl||'').startsWith('/game-media/')&&guidedCount)
-    return '<h4>📦 Package & vérification</h4><div class="game-note"><b>État réel :</b> '+linked.length+'/'+mediaAssets.length+' médias liés · '+unlinked+' manquants · '+localOnly.length+' uniquement sur cet ordinateur · '+guidedCount+' scène(s) guidée(s) · couverture '+(d.coverUrl?'indiquée':'absente')+'.</div>'+
+    return '<h4>📦 Compilation ZIP & vérification</h4><div class="game-note"><b>État réel :</b> '+linked.length+'/'+mediaAssets.length+' médias liés · '+unlinked+' manquants · '+localOnly.length+' uniquement sur cet ordinateur · '+guidedCount+' scène(s) guidée(s) · couverture '+(d.coverUrl?'indiquée':'absente')+'.</div>'+
       '<div class="game-note"><b>Important :</b> le bouton « Associer, héberger et placer les médias » transfère les fichiers vers le R2 du Worker, sans aucune génération IA. L’archive ZIP est une sauvegarde de production, pas un jeu jouable. Elle ne publie rien. Les URL et le parcours acheteur seront vérifiés avant finalisation ; aucun test réel sur le site déployé n’a encore été réalisé.</div>'+ 
       gameArea('Notes de publication / fiche Boutique','packageNotes',d.packageNotes,6)+
       '<div class="row three"><div class="field"><label>Sous-titre client</label><input value="'+esc(d.packageSubtitle||'')+'" oninput="setData(\'packageSubtitle\',this.value)"></div><div class="field"><label>Version</label><input value="'+esc(d.productVersion||'1.0')+'" oninput="setData(\'productVersion\',this.value)"></div><div class="field"><label>Image couverture URL</label><input value="'+esc(d.coverUrl||'')+'" oninput="setData(\'coverUrl\',this.value)"></div></div>'+ 
       '<div class="game-status-grid"><div class="game-status '+(guidedCount?'ready':'')+'"><strong>'+(guidedCount?'✓ Conducteur guidé prêt':'Conducteur à finaliser')+'</strong>'+(guidedCount?guidedCount+' scène(s) préparée(s)':'NyXia transformera automatiquement le dossier en étapes simples pour l’animateur.')+'</div><div class="game-status '+(String(d.npcRuntimeJson||'').trim()?'ready':'')+'"><strong>'+(String(d.npcRuntimeJson||'').trim()?'✓ PNJ runtime prêts':'PNJ runtime à compléter')+'</strong>Les PNJ IA restent une capacité complète du jeu.</div><div class="game-status '+(map?'ready':'')+'"><strong>'+(map?'✓ Cartographie liée':'Cartographie optionnelle')+'</strong>Azgaar reste disponible sans réduction de capacité.</div></div>'+ 
-      '<div class="tools-line" style="margin-top:16px"><button class="btn primary" style="font-size:14px;padding:12px 18px" onclick="packageNyxiaGame()">📁 Télécharger une archive ZIP du projet (brouillon si incomplet)</button></div>'+
+      '<div class="tools-line" style="margin-top:16px"><button class="btn primary" style="font-size:14px;padding:12px 18px" onclick="packageNyxiaGame()">📁 Archive de production (non jouable)</button><button class="btn gold" onclick="setGameTab(\'materials\')">📘 Préparer le Cahier du joueur</button></div>'+
       '<div class="tools-line" style="margin-top:10px"><button class="btn gold" style="font-size:14px;padding:12px 18px" onclick="finalizeAndTestAsBuyer()" '+(clientReady?'':'disabled title="Médias, couverture et conducteur doivent être prêts et disponibles en ligne"')+'>✨ Finaliser et tester comme acheteuse</button></div>'+ 
       '<div class="tiny" style="margin-top:8px">'+(clientReady?'Conditions de prépublication réunies dans le dossier : exécuter ensuite le test réel de bibliothèque et des scènes.':'Blocages à résoudre : médias manquants / fichiers seulement locaux / couverture absente / conducteur absent. Aucun test client promis avant cela.')+'</div>'+ 
+      '<div class="tools-line" style="margin-top:14px"><button class="btn" onclick="setGameTab(\'live\')">🎥 Ouvrir Live</button><button class="btn" onclick="setGameTab(\'control\')">🧠 Ouvrir Contrôle</button></div>'+
       '<details style="margin-top:18px"><summary class="btn" style="display:inline-block;cursor:pointer">⚙️ Outils avancés de production</summary><div style="margin-top:12px">'+
       '<div class="game-file-list"><b>Archive de sauvegarde interne (non jouable) :</b><br>manifest.json · project.json · runtime/npc-ai-config.json · runtime/live-config.json · bible.md · story.md · characters.md · pnj-ia.md · rules.md · materials.md · media.md · live.md · control.md'+(map?'<br>🗺️ Carte Azgaar liée : oui':'<br>🗺️ Carte Azgaar liée : non')+'</div>'+ 
-      '<div class="tools-line" style="margin-top:12px"><button class="btn primary" onclick="packageNyxiaGame()">📁 Télécharger l’archive ZIP du projet</button><button class="btn" onclick="exportGamePDF()">⬇ Dossier PDF</button><button class="btn gold" onclick="gameAI(\'store\')">🛍️ Préparer la fiche Boutique</button><button class="btn" onclick="regenerateGuidedScenes()">↺ Regénérer le conducteur guidé</button></div>'+ 
+      '<div class="tools-line" style="margin-top:12px"><button class="btn primary" onclick="packageNyxiaGame()">📁 Télécharger l’archive ZIP du projet</button><button class="btn" onclick="exportGamePDF()">⬇ Dossier PDF privé (MJ)</button><button class="btn gold" onclick="gameAI(\'store\')">🛍️ Préparer la fiche Boutique</button><button class="btn" onclick="regenerateGuidedScenes()">↺ Regénérer le conducteur guidé</button></div>'+ 
       '</div></details>'
   }
 
@@ -2989,6 +2991,76 @@
     }catch(e){alert('Package impossible : '+e.message)}
   }
   function gamePdfLines(doc,title,text,y){if(!String(text||'').trim())return y;doc.setFont(undefined,'bold');doc.setFontSize(13);if(y>270){doc.addPage();y=20}doc.text(title,18,y);y+=7;doc.setFont(undefined,'normal');doc.setFontSize(10);var lines=doc.splitTextToSize(String(text),175);lines.forEach(function(line){if(y>282){doc.addPage();y=20}doc.text(line,18,y);y+=5});return y+5}
+
+  // Le cahier utilise une liste blanche de champs destinés à TOUS les joueurs.
+  // Jamais de canon, solutions, secrets individuels, fiches PNJ ou matériel du MJ.
+  function playerBookSections(d){
+    return [
+      ['Prologue de l’univers',d.playerPrologue],
+      ['Informations pratiques de la soirée',d.playerSessionInfo],
+      ['Préparer ou créer son personnage',d.playerCreationInstructions],
+      ['Archétypes accessibles aux joueurs',d.playerArchetypes],
+      ['Factions accessibles aux joueurs',d.playerFactions],
+      ['Règles destinées aux joueurs',d.playerRules],
+      ['Matériel et imprimables publics',d.playerHandoutMaterials]
+    ].filter(function(item){return String(item[1]||'').trim()})
+  }
+  function playerBookMissing(d){
+    return [
+      ['Prologue',d.playerPrologue],
+      ['Informations pratiques',d.playerSessionInfo],
+      ['Règles publiques',d.playerRules],
+      ['Matériel public',d.playerHandoutMaterials]
+    ].filter(function(item){return !String(item[1]||'').trim()}).map(function(item){return item[0]})
+  }
+  function playerBookPreview(d){
+    var sections=playerBookSections(d),missing=playerBookMissing(d)
+    return '<div class="divider"></div><h4>📘 Cahier du joueur · aperçu public</h4>'+
+      (missing.length?'<div class="game-note">Champs à remplir avant export : <b>'+esc(missing.join(' · '))+'</b>.</div>':'<div class="game-note">Les quatre sections essentielles sont prêtes. Relis le texte avant tout partage.</div>')+
+      '<details style="border:1px solid rgba(167,139,250,.28);border-radius:12px;padding:12px;margin:12px 0">'+
+      '<summary class="btn gold" style="display:inline-block;cursor:pointer">👁️ Voir exactement les '+sections.length+' sections du PDF</summary>'+
+      sections.map(function(x){return '<div style="margin-top:14px"><b>'+esc(x[0])+'</b><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:12px;color:var(--muted)">'+esc(x[1])+'</pre></div>'}).join('')+
+      '</details><label class="game-note" style="display:block;margin:12px 0"><input id="player-book-reviewed" type="checkbox" style="width:auto;margin-right:8px">J’ai relu les textes publics : aucun secret du MJ ni information réservée à un personnage.</label>'+
+      '<div class="tools-line"><button class="btn gold" onclick="exportPlayerBookPDF()"'+(missing.length?' disabled title="Complète les sections essentielles"':'')+'>⬇ Télécharger le Cahier du joueur (PDF)</button><button class="btn" onclick="setGameTab(\'media\')">🎬 Continuer vers Médias →</button></div>'
+  }
+  function exportPlayerBookPDF(){
+    if(!currentProject||currentProject.kind!=='nyxia-game')return
+    var d=currentProject.data||{},missing=playerBookMissing(d)
+    if(missing.length){alert('Complète le Cahier du joueur : '+missing.join(', '));return}
+    var approved=document.getElementById('player-book-reviewed')
+    if(!approved||!approved.checked){alert('Dans Matériel, ouvre l’aperçu, relis le Cahier du joueur puis coche la case de validation avant de télécharger.');return}
+    if(!window.jspdf||!window.jspdf.jsPDF){alert('La bibliothèque PDF n’est pas chargée. Vérifie ta connexion et réessaie.');return}
+    var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'}),y=22
+    function appendText(value,fontSize,bold,lineHeight){
+      doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(fontSize)
+      String(value||'').replace(/\r\n?/g,'\n').split('\n').forEach(function(paragraph){
+        var lines=doc.splitTextToSize(paragraph||' ',174)
+        lines.forEach(function(line){
+          if(y+lineHeight>279){doc.addPage();y=20}
+          doc.text(line,18,y);y+=lineHeight
+        })
+        y+=paragraph.trim()?1:0
+      })
+    }
+    var title=String(currentProject.title||'NyXia Game').trim()||'NyXia Game'
+    appendText(title,20,true,10);y+=3
+    appendText('Cahier du joueur',15,true,8)
+    var info=[d.gameType,d.playMode,d.duration,d.playerCount?d.playerCount+' joueurs':''].filter(Boolean).join(' | ')
+    if(info)appendText(info,10,false,5)
+    y+=9
+    playerBookSections(d).forEach(function(section){
+      if(y+18>279){doc.addPage();y=20}
+      appendText(section[0],13,true,7);y+=2
+      appendText(section[1],10,false,5);y+=8
+    })
+    var pages=doc.getNumberOfPages()
+    for(var i=1;i<=pages;i++){
+      doc.setPage(i);doc.setFont('helvetica','normal');doc.setFontSize(9)
+      doc.text('Cahier du joueur | '+i+' / '+pages,18,289)
+    }
+    doc.save(safeName(title)+'-cahier-du-joueur.pdf')
+  }
+
   function exportGamePDF(){if(!window.jspdf||!currentProject)return;var d=currentProject.data||{},doc=new window.jspdf.jsPDF(),y=20;doc.setFontSize(20);doc.text(currentProject.title,18,y);y+=9;doc.setFontSize(10);doc.text((d.gameType||'NyXia Game')+' · '+(d.audience||'16+')+' · '+(d.playerCount||'')+' joueurs · '+(d.duration||''),18,y);y+=12;[['Idée',d.idea],['Intention créative',d.creatorIntent],['Canon verrouillé',d.lockedCanon],['Bible du monde',d.worldBible],['Structure jouable',d.storyStructure],['Scènes / quêtes',d.scenesQuests],['Personnages',d.characters],['Parcours personnages joueurs',[(d.playerPrologue||''),(d.playerCreationInstructions||''),(d.playerArchetypes||''),(d.playerFactions||''),(d.playerReputationRules||''),(d.playerBadgeCatalog||'')].filter(Boolean).join('\n\n')],['Intelligence PNJ',[(d.npcIntelligence||''),(d.npcMemoryRules||''),(d.npcRelationshipRules||''),(d.npcAutonomyRules||''),(d.npcVoicePlan||'')].filter(Boolean).join('\n\n')],['Factions / créatures',d.factionsCreatures],['Mécaniques',d.mechanics],['Combat',d.combatRules],['Matériel joueurs',d.playerMaterials],['Dossier animateur',d.hostMaterials],['Plan média',[(d.imageBriefs||''),(d.audioPlan||''),(d.videoPlan||''),(d.mapPlan||'')].filter(Boolean).join('\n\n')],['Plan Live',d.livePlan],['NyXia Contrôle',d.controlReport]].forEach(function(x){y=gamePdfLines(doc,x[0],x[1],y)});doc.save(safeName(currentProject.title)+'-dossier-production.pdf')}
 
   function renderGhost(){
