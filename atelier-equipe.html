@@ -580,7 +580,7 @@
       pages.push('<!-- Page '+n+' -->\n\n'+body);
     }
     var markdown=pages.join('\n\n').trim();
-    if(markdown.replace(/<!--[^>]*-->/g,'').trim().length<80)throw Error('Ce PDF semble scanné ou sans texte sélectionnable. Aucun texte n’a été inventé : utilise une version avec texte ou DOCX.');
+    if(!markdown.replace(/<!--[^>]*-->/g,'').trim())throw Error('Le PDF ne contient aucun texte à importer.');
     return markdown;
   }
   async function importConceptBook(files){
@@ -2652,27 +2652,6 @@
     return '<div class="game-status-grid">'+results.join('')+'</div><div class="tiny" style="margin:10px 0">Contrôle du DOSSIER uniquement : ces indicateurs ne remplacent ni des tests API ni un essai en production.</div>'
   }
   function gameControl(d){return '<h4>🧠 NyXia Contrôle</h4><div class="game-note">Audite le <b>modèle réutilisable</b>, pas seulement l’histoire test. Vérifie : solo + compagnons IA, équipe humaine, groupe mixte, MJ humain/IA, départ en cours de scène, révocation de l’ancien accès, arrivée d’un nouveau personnage indépendant, secrets, sauvegarde de la scène et absence de remise à zéro.</div>'+gameParticipationAudit(d)+gameArea('Rapport de contrôle','controlReport',d.controlReport,18)+'<div class="tools-line"><button class="btn gold" onclick="gameAI(\'control\')">🔎 Auditer le jeu complet et les remplacements</button><button class="btn" onclick="gameAI(\'playtest\')">🎲 Simuler les configurations de joueurs</button><button class="btn primary" onclick="setGameTab(\'live\')">🎥 Vérifier la partie réelle</button></div>'}
-  function gamePackage(d){
-    var map=d.cartography
-    var guidedCount=0
-    try{var gj=parseJsonLoose(d.guidedScenesJson||'');guidedCount=Array.isArray(gj)?gj.length:(Array.isArray(gj.scenes)?gj.scenes.length:0)}catch(e){}
-    var mediaAssets=parseProductionAssets(d.productionAssetsJson),linked=mediaAssets.filter(gameMediaReady),localOnly=mediaAssets.filter(function(x){return !!x.localMediaId}),unlinked=mediaAssets.length-linked.length
-    var clientReady=!!(mediaAssets.length&&!unlinked&&!localOnly.length&&String(d.coverUrl||'').startsWith('/game-media/')&&guidedCount)
-    return '<h4>📦 Compilation ZIP & vérification</h4><div class="game-note"><b>État réel :</b> '+linked.length+'/'+mediaAssets.length+' médias liés · '+unlinked+' manquants · '+localOnly.length+' uniquement sur cet ordinateur · '+guidedCount+' scène(s) guidée(s) · couverture '+(d.coverUrl?'indiquée':'absente')+'.</div>'+
-      '<div class="game-note"><b>Important :</b> le bouton « Associer, héberger et placer les médias » transfère les fichiers vers le R2 du Worker, sans aucune génération IA. L’archive ZIP est une sauvegarde de production, pas un jeu jouable. Elle ne publie rien. Les URL et le parcours acheteur seront vérifiés avant finalisation ; aucun test réel sur le site déployé n’a encore été réalisé.</div>'+ 
-      gameArea('Notes de publication / fiche Boutique','packageNotes',d.packageNotes,6)+
-      '<div class="row three"><div class="field"><label>Sous-titre client</label><input value="'+esc(d.packageSubtitle||'')+'" oninput="setData(\'packageSubtitle\',this.value)"></div><div class="field"><label>Version</label><input value="'+esc(d.productVersion||'1.0')+'" oninput="setData(\'productVersion\',this.value)"></div><div class="field"><label>Image couverture URL</label><input value="'+esc(d.coverUrl||'')+'" oninput="setData(\'coverUrl\',this.value)"></div></div>'+ 
-      '<div class="game-status-grid"><div class="game-status '+(guidedCount?'ready':'')+'"><strong>'+(guidedCount?'✓ Conducteur guidé prêt':'Conducteur à finaliser')+'</strong>'+(guidedCount?guidedCount+' scène(s) préparée(s)':'NyXia transformera automatiquement le dossier en étapes simples pour l’animateur.')+'</div><div class="game-status '+(String(d.npcRuntimeJson||'').trim()?'ready':'')+'"><strong>'+(String(d.npcRuntimeJson||'').trim()?'✓ PNJ runtime prêts':'PNJ runtime à compléter')+'</strong>Les PNJ IA restent une capacité complète du jeu.</div><div class="game-status '+(map?'ready':'')+'"><strong>'+(map?'✓ Cartographie liée':'Cartographie optionnelle')+'</strong>Azgaar reste disponible sans réduction de capacité.</div></div>'+ 
-      '<div class="tools-line" style="margin-top:16px"><button class="btn primary" style="font-size:14px;padding:12px 18px" onclick="packageNyxiaGame()">📁 Archive de production (non jouable)</button><button class="btn gold" onclick="setGameTab(\'players\')">📘 Préparer le Cahier du joueur</button></div>'+
-      '<div class="tools-line" style="margin-top:10px"><button class="btn gold" style="font-size:14px;padding:12px 18px" onclick="finalizeAndTestAsBuyer()" '+(clientReady?'':'disabled title="Médias, couverture et conducteur doivent être prêts et disponibles en ligne"')+'>✨ Finaliser et tester comme acheteuse</button></div>'+ 
-      '<div class="tiny" style="margin-top:8px">'+(clientReady?'Conditions de prépublication réunies dans le dossier : exécuter ensuite le test réel de bibliothèque et des scènes.':'Blocages à résoudre : médias manquants / fichiers seulement locaux / couverture absente / conducteur absent. Aucun test client promis avant cela.')+'</div>'+ 
-      '<div class="tools-line" style="margin-top:14px"><button class="btn" onclick="setGameTab(\'live\')">🎥 Ouvrir Live</button><button class="btn" onclick="setGameTab(\'control\')">🧠 Ouvrir Contrôle</button></div>'+
-      '<details style="margin-top:18px"><summary class="btn" style="display:inline-block;cursor:pointer">⚙️ Outils avancés de production</summary><div style="margin-top:12px">'+
-      '<div class="game-file-list"><b>Archive de sauvegarde interne (non jouable) :</b><br>manifest.json · project.json · runtime/npc-ai-config.json · runtime/live-config.json · bible.md · story.md · characters.md · pnj-ia.md · rules.md · materials.md · media.md · live.md · control.md'+(map?'<br>🗺️ Carte Azgaar liée : oui':'<br>🗺️ Carte Azgaar liée : non')+'</div>'+ 
-      '<div class="tools-line" style="margin-top:12px"><button class="btn primary" onclick="packageNyxiaGame()">📁 Télécharger l’archive ZIP du projet</button><button class="btn" onclick="exportGamePDF()">⬇ Dossier PDF privé (MJ)</button><button class="btn gold" onclick="gameAI(\'store\')">🛍️ Préparer la fiche Boutique</button><button class="btn" onclick="regenerateGuidedScenes()">↺ Regénérer le conducteur guidé</button></div>'+ 
-      '</div></details>'
-  }
-
   async function buildGuidedScenesJson(force){
     if(!currentProject)throw new Error('Aucun projet ouvert')
     var d=currentProject.data||{}
@@ -2699,31 +2678,6 @@
   async function regenerateGuidedScenes(){
     if(!confirm('Regénérer le conducteur guidé à partir du dossier actuel ?'))return
     try{await buildGuidedScenesJson(true);toast('Conducteur guidé régénéré ✓')}catch(e){alert('Impossible de préparer le conducteur : '+e.message)}
-  }
-
-  async function finalizeAndTestAsBuyer(){
-    if(!currentProject)return
-    var clientAssets=parseProductionAssets((currentProject.data||{}).productionAssetsJson)
-    var pending=clientAssets.filter(function(a){return ['image','badge','map','audio','video'].indexOf(a.kind)>=0&&!gameMediaReady(a)})
-    var local=clientAssets.filter(function(a){return a.localMediaId})
-    var guide=(currentProject.data||{}).guidedScenesJson||'',sceneCount=0
-    try{var parsedGuide=parseJsonLoose(guide),sceneList=Array.isArray(parsedGuide)?parsedGuide:parsedGuide.scenes;sceneCount=Array.isArray(sceneList)?sceneList.length:0}catch(e){}
-    if(!clientAssets.length||pending.length||local.length||!String((currentProject.data||{}).coverUrl||'').startsWith('/game-media/')||!sceneCount){
-      alert('FINALISATION BLOQUÉE : '+pending.length+' média(s) restent sans fichier publié ; '+local.length+' média(s) sont seulement dans TON navigateur. Vérifie aussi la couverture, le registre et les scènes guidées.\n\nUtilise le bouton Médias « Associer, héberger et placer » pour transférer les fichiers sur R2, puis vérifie que la couverture et les scènes pointent vers des URL hébergées. La vente exige encore un test réel sur le site déployé.')
-      return
-    }
-    try{await verifyGameMediaForClient()}catch(e){alert('Vérification livraison médias : '+e.message);return}
-    var popup=window.open('about:blank','nyxia-game-client-test')
-    if(popup){popup.document.write('<title>NyXia Game</title><body style="background:#060a18;color:white;font-family:sans-serif;padding:40px">Préparation de ta bibliothèque cliente…</body>')}
-    try{
-      await buildGuidedScenesJson(false)
-      await saveCurrent()
-      var d=currentProject.data||{}
-      var r=await api('/api/atelier/game/test-client',{method:'POST',body:JSON.stringify({projectId:currentProject.id,productId:d.publishedProductId||currentProject.id,title:currentProject.title,subtitle:d.packageSubtitle||'',description:d.packageNotes||d.idea||'',coverUrl:d.coverUrl||'',version:d.productVersion||'1.0',teams:d.liveTeams})})
-      currentProject.data.publishedProductId=r.product.id
-      markDirty();await saveCurrent();renderGame();toast('Version cliente prête ✓')
-      if(popup)popup.location.href=r.libraryUrl;else window.open(r.libraryUrl,'_blank')
-    }catch(e){if(popup)popup.close();alert('Finalisation impossible : '+e.message)}
   }
 
   async function publishGameClient(){
@@ -2927,65 +2881,6 @@
     }
   }
 
-  function gameManifest(){var d=currentProject.data||{};return {format:'NyXia Game Package',ngpVersion:'1.3',id:currentProject.id,title:currentProject.title,author:'NyXia Game',createdAt:currentProject.createdAt,updatedAt:currentProject.updatedAt,game:{type:d.gameType,audience:d.audience||'16+',playMode:d.playMode,players:d.playerCount,duration:d.duration,genre:d.genre,tone:d.tone,difficulty:d.difficulty},intensity:{horror:d.horror,violence:d.violence,sensuality:d.sensuality,romance:d.romance,language:d.language,psychological:d.psychological},hasCartography:!!d.cartography,hasIntelligentNPCs:!!(d.npcCharacters||[]).length||!!String(d.npcIntelligence||'').trim(),hasLiveMode:true,partyRules:d.partyRules||{},hasAutomatedProduction:!!String(d.productionAssetsJson||'').trim()}}
-  function gameNpcRuntimeConfig(){var d=currentProject.data||{};return {format:'NyXia NPC Runtime',version:'1.0',truthAuthority:['lockedCanon','worldBible','engineGameState'],policy:{npcMayLieInCharacter:true,npcMayHaveFalseBeliefs:true,npcMayInventCanon:false,npcMayReadForbiddenKnowledge:false,npcMayMutateWorldState:false,engineValidatesStateChanges:true,gmMayOverride:true,memoryDoesNotEqualTruth:true},sources:{lockedCanon:d.lockedCanon||'',worldBible:d.worldBible||'',characters:d.characters||'',intelligence:d.npcIntelligence||'',memoryRules:d.npcMemoryRules||'',relationshipRules:d.npcRelationshipRules||'',autonomyRules:d.npcAutonomyRules||'',voicePlan:d.npcVoicePlan||'',runtimeJson:d.npcRuntimeJson||'',model:d.npcModel||'',npcCharacters:d.npcCharacters||[],gmBrain:d.gmBrain||{}}}}
-  function gameLiveRuntimeConfig(){var d=currentProject.data||{};return {format:'NyXia Game Live Runtime',version:'1.1',defaultAudience:d.audience||'16+',partyRules:d.partyRules||{},teams:String(d.liveTeams||'').split(/[\n,;]+/).map(function(x){return x.trim()}).filter(Boolean),supports:{zoomBreakouts:true,digitalDice:true,physicalDice:true,teamClues:true,npcAI:true,playerDecisions:true,playerCharacters:true,playerPortraits:true,badges:true,factionReputation:true,media:true},playerSetup:{prologue:d.playerPrologue||'',badgeCatalog:d.playerBadgeCatalog||'',playableCharacters:d.playableCharacters||[]},source:{livePlan:d.livePlan||'',storyStructure:d.storyStructure||'',scenesQuests:d.scenesQuests||''}}}
-  async function packageNyxiaGame(){
-    if(!window.JSZip){alert('JSZip indisponible.');return}
-    try{
-      var d=currentProject.data||{},zip=new JSZip(),manifest=gameManifest()
-      zip.file('manifest.json',JSON.stringify(manifest,null,2));zip.file('project.json',JSON.stringify(currentProject,null,2));zip.folder('runtime').file('npc-ai-config.json',JSON.stringify(gameNpcRuntimeConfig(),null,2));zip.folder('runtime').file('live-config.json',JSON.stringify(gameLiveRuntimeConfig(),null,2))
-      if(String(d.sourceDocuments||'').trim())zip.file('00-sources-originales.md',String(d.sourceDocuments))
-      zip.file('01-concept.md',mdSection('Concept',d.idea)+'\n'+mdSection('Intention créative',d.creatorIntent)+'\n'+mdSection('Canon verrouillé',d.lockedCanon))
-      zip.file('02-bible.md',mdSection('Bible du monde',d.worldBible));zip.file('03-histoire.md',mdSection('Structure',d.storyStructure)+'\n'+mdSection('Scènes et quêtes',d.scenesQuests)+'\n'+mdSection('Fins',d.endings))
-      zip.file('04-personnages.md',mdSection('Personnages',d.characters)+'\n'+mdSection('Factions et créatures',d.factionsCreatures)+'\n'+mdSection('Objets et récompenses',d.itemsRewards)+'\n'+mdSection('Arrivée d’un nouveau personnage',d.arrivalGuidelines));zip.file('04b-personnages-joueurs.md',mdSection('Prologue joueur',d.playerPrologue)+'\n'+mdSection('Badges',d.playerBadgeCatalog)+'\n'+mdSection('Fiches jouables',JSON.stringify(d.playableCharacters||[],null,2)))
-      zip.file('05-pnj-ia.md',mdSection('Intelligence PNJ',d.npcIntelligence)+'\n'+mdSection('Mémoire',d.npcMemoryRules)+'\n'+mdSection('Relations',d.npcRelationshipRules)+'\n'+mdSection('Autonomie',d.npcAutonomyRules)+'\n'+mdSection('Voix',d.npcVoicePlan)+'\n'+mdSection('Compagnons PJ IA distincts des PNJ',d.aiPlayerPolicy)+'\n'+mdSection('Runtime JSON',d.npcRuntimeJson))
-      zip.file('06-regles.md',mdSection('Mécaniques',d.mechanics)+'\n'+mdSection('Combat',d.combatRules)+'\n'+mdSection('Progression',d.progression))
-      zip.file('07-materiel.md',mdSection('Joueurs',d.playerMaterials)+'\n'+mdSection('Animateur / MJ',d.hostMaterials))
-      zip.file('08-medias.md',mdSection('Images',d.imageBriefs)+'\n'+mdSection('Audio',d.audioPlan)+'\n'+mdSection('Vidéo',d.videoPlan)+'\n'+mdSection('Cartes',d.mapPlan))
-      if(mediaNotebookRead(d))zip.file('08d-cahier-media.json',JSON.stringify(mediaNotebookRead(d),null,2))
-      zip.file('08b-production-assets.json',String(d.productionAssetsJson||'[]'))
-      zip.file('08c-production-log.md',mdSection('Journal de production',d.productionLog)+'\n'+mdSection('Journal médias réels',d.mediaProductionLog))
-      var mediaList=parseProductionAssets(d.productionAssetsJson),embeds=[],missing=[],af=zip.folder('assets')
-      for(var ai=0;ai<mediaList.length;ai++){
-        var aa=mediaList[ai],isMedia=['image','badge','map','audio','video'].indexOf(aa.kind)>=0
-        if(!isMedia)continue
-        var blob=null,filename=''
-        if(aa.localMediaId){
-          var user=(d.userMediaAssets||[]).find(function(m){return m.id===aa.localMediaId})
-          if(user){
-            if(user.storage==='local-browser')blob=await getLocalMedia(currentProject.id+':'+user.id)
-            else if(user.url){try{var ur=await fetch(user.url);if(ur.ok)blob=await ur.blob()}catch(e){}}
-            filename=user.name||''
-          }
-        }else if(aa.status==='produit'&&aa.url){
-          try{
-            var remote=await fetch(aa.url)
-            if(remote.ok&&!(String(remote.headers.get('content-type')||'').includes('text/html')))blob=await remote.blob()
-          }catch(e){}
-        }
-        if(!blob||!blob.size){missing.push(aa.title||aa.code||aa.id);continue}
-        var ext=(filename.split('.').pop()||'').toLowerCase()
-        if(!/^(png|jpe?g|webp|gif|svg|mp3|wav|ogg|m4a|aac|flac|mp4|webm|mov|m4v)$/.test(ext)){
-          ext=aa.kind==='video'?(/webm/.test(blob.type)?'webm':/quicktime/.test(blob.type)?'mov':'mp4'):aa.kind==='audio'?(/wav/.test(blob.type)?'wav':/ogg/.test(blob.type)?'ogg':/mp4|m4a/.test(blob.type)?'m4a':'mp3'):(/jpeg/.test(blob.type)?'jpg':/webp/.test(blob.type)?'webp':/svg/.test(blob.type)?'svg':'png')
-        }
-        var path='assets/'+String(ai+1).padStart(3,'0')+'-'+safeName(aa.code||aa.title||aa.kind)+'.'+ext
-        zip.file(path,await blob.arrayBuffer())
-        embeds.push(Object.assign({},aa,{path:path,embedded:true}))
-      }
-      var draft=missing.length>0
-      if(draft&&!confirm('ATTENTION : '+missing.length+' média(s) sur '+mediaList.length+' manquent.\n\nLe fichier sera nommé BROUILLON et NE constitue PAS un produit client fini.\n\nExporter quand même les '+embeds.length+' vrais médias disponibles ?'))return
-      af.file('index.json',JSON.stringify(embeds,null,2))
-      zip.file('08b-production-assets.json',JSON.stringify(mediaList,null,2))
-      manifest.media={expected:mediaList.length,embedded:embeds.length,missing:missing.length,complete:!draft}
-      manifest.readyForSale=false // Un ZIP de production seul ne prouve pas la diffusion dans le portail acheteur.
-      zip.file('manifest.json',JSON.stringify(manifest,null,2))
-      zip.file('assets/verification.json',JSON.stringify({kind:draft?'BROUILLON':'FICHIERS_PRÉSENTS',embedded:embeds.map(function(a){return {title:a.title,path:a.path}}),missing:missing,clientRuntimeVerified:false,checkedAt:new Date().toISOString()},null,2))
-      zip.file('09-live.md',mdSection('Plan Live',d.livePlan));zip.file('10-controle.md',mdSection('NyXia Contrôle',d.controlReport));zip.file('11-publication.md',mdSection('Publication',d.packageNotes))
-      if(d.cartography&&d.cartography.files){var folder=zip.folder('cartographie');for(var k of ['map','json','svg','png']){var f=d.cartography.files[k];if(!f)continue;try{var r=await fetch('/api/atelier/cartography'+f.path,{headers:h()});if(r.ok)folder.file(f.name||('carte.'+k),await r.blob())}catch(e){console.warn('Carte '+k+' non jointe',e)}}}
-      var blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(draft?'BROUILLON-':'PRODUCTION-')+safeName(currentProject.title)+'.zip';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},2500);toast(draft?'BROUILLON exporté · médias manquants : '+missing.length:'Fichiers intégrés : '+embeds.length+' · test client requis')
-    }catch(e){alert('Package impossible : '+e.message)}
-  }
   function gamePdfLines(doc,title,text,y){if(!String(text||'').trim())return y;doc.setFont(undefined,'bold');doc.setFontSize(13);if(y>270){doc.addPage();y=20}doc.text(title,18,y);y+=7;doc.setFont(undefined,'normal');doc.setFontSize(10);var lines=doc.splitTextToSize(String(text),175);lines.forEach(function(line){if(y>282){doc.addPage();y=20}doc.text(line,18,y);y+=5});return y+5}
 
   // Contenu du cahier : liste blanche. Les champs du MJ, le canon et les anciens champs retirés sont exclus.
