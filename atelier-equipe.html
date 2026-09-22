@@ -1103,39 +1103,36 @@
     if(String(c.deliverables||'').trim())out+='<details style="margin-top:12px"><summary>Anciennes notes conservées — non automatisées</summary><div class="game-note">'+esc(c.deliverables)+'</div></details>';
     return out;
   }
-  function npcCharacterPhoto(c,index){
-    var url=String(c.portraitUrl||''),good=/^\/game-media\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\/[0-9a-f-]{36}\.(png|jpe?g|webp|gif)$/.test(url)
-    return '<div class="field"><label>Image du personnage</label>'+
-      (good?'<div style="margin:8px 0"><img src="'+gameRosterAttr(url)+'" alt="Portrait" style="max-height:190px;max-width:180px;border-radius:12px;border:1px solid var(--line)"><p class="tiny">'+esc(c.portraitName||'Portrait enregistré')+'</p></div>':'<p class="tiny">Aucune image téléversée.</p>')+
-      '<label class="btn gold" style="cursor:pointer;display:inline-block">📷 Téléverser / remplacer<input style="display:none" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="npcUploadPhoto(this.files,'+index+');this.value=\'\'"></label> '+
-      (good?'<button class="btn danger" onclick="npcUpdate('+index+',\'portraitUrl\',\'\');npcUpdate('+index+',\'portraitName\',\'\');renderGame()">Retirer</button>':'')+
-      '<div id="npc-photo-status-'+index+'" class="tiny" role="status"></div></div>'
+  // Les portraits des PNJ sont référencés par URL externe : aucun téléversement requis.
+  // Une ancienne adresse privée du Labo reste affichable, sans migrer ni supprimer la donnée.
+  function npcPortraitUrlValid(value){
+    var value=String(value||'').trim();
+    if(!value||value.length>1600)return false;
+    if(/^\/game-media\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\/[0-9a-f-]{36}\.(png|jpe?g|webp|gif)$/.test(value))return true;
+    try{var u=new URL(value);return u.protocol==='https:'&&!!u.hostname&&!u.username&&!u.password;}
+    catch(_){return false;}
   }
-  async function npcUploadPhoto(files,index){
-    if(!files?.length||!currentProject)return
-    var file=files[0],character=(currentProject.data.npcCharacters||[])[index],game=currentProject.id
-    if(!character)return
-    if(!/^image\/(png|jpeg|webp|gif)$/.test(file.type)||!file.size||file.size>8*1024*1024)return alert('Photo PNG/JPG/WEBP/GIF de 8 Mo maximum.')
-    var status=document.getElementById('npc-photo-status-'+index)
-    try{
-      if(status)status.textContent='Téléversement…'
-      clearTimeout(saveTimer);saveTimer=null
-      if(!(await saveCurrent()))throw Error('Impossible d’enregistrer la fiche avant le transfert.')
-      var form=new FormData();form.append('projectId',game);form.append('characterId',character.id);form.append('file',file,file.name)
-      var response=await fetch('/api/game/media/npc-portrait',{method:'POST',headers:{Authorization:'Bearer '+token},body:form})
-      var result=await response.json().catch(()=>({}))
-      if(!response.ok||!result.ok)throw Error(result.error||'Téléversement refusé')
-      if(!/^\/game-media\//.test(result.url||''))throw Error('Adresse du portrait invalide')
-      var check=await fetch(result.url,{method:'HEAD',headers:{Authorization:'Bearer '+token},cache:'no-store'})
-      if(!check.ok||Number(check.headers.get('content-length'))!==file.size)throw Error('Portrait non vérifié dans R2')
-      if(!currentProject||currentProject.id!==game)throw Error('Projet changé pendant le transfert')
-      var list=(currentProject.data.npcCharacters||[]).slice(),pos=list.findIndex(function(x){return x.id===character.id})
-      if(pos<0)throw Error('Personnage introuvable après transfert')
-      list[pos]=Object.assign({},list[pos],{portraitUrl:result.url,portraitName:file.name})
-      setData('npcCharacters',list);npcRuntimeRefresh()
-      if(!(await saveCurrent()))throw Error('Portrait transféré, liaison à la fiche non enregistrée')
-      renderGame();toast('Portrait IA enregistré')
-    }catch(e){if(status&&status.isConnected)status.textContent='⚠ '+e.message;alert(e.message)}
+  function npcSetPortraitUrl(index,value){
+    if(!currentProject)return;
+    var list=currentProject.data.npcCharacters||[];
+    if(!list[index])return;
+    var url=String(value||'').trim();
+    if(url&&!npcPortraitUrlValid(url)){
+      alert('Entre une URL HTTPS valide pour l’image.');
+      renderGame();return;
+    }
+    // Les autres informations de la fiche et les portraits des autres personnages restent inchangés.
+    npcUpdate(index,'portraitUrl',url);
+    npcUpdate(index,'portraitName','');
+    renderGame();
+  }
+  function npcCharacterPhoto(c,index){
+    var url=String(c.portraitUrl||''),valid=npcPortraitUrlValid(url);
+    return '<div class="field"><label>URL de l’image du personnage</label>'+
+      '<input type="text" inputmode="url" autocomplete="off" value="'+gameRosterAttr(url)+'" placeholder="https://ton-hebergeur.com/personnage.jpg" onchange="npcSetPortraitUrl('+index+',this.value)">'+
+      (valid?'<div style="margin:8px 0"><img src="'+gameRosterAttr(url)+'" alt="Portrait de '+gameRosterAttr(c.name||'ce personnage')+'" style="max-height:190px;max-width:180px;object-fit:contain;border-radius:12px;border:1px solid var(--line)"><div class="tiny"><a href="'+gameRosterAttr(url)+'" target="_blank" rel="noopener noreferrer">Ouvrir l’image ↗</a></div></div>':'<p class="tiny">Colle l’URL HTTPS de ton image pour afficher son aperçu.</p>')+
+      (url?'<button class="btn danger" type="button" onclick="npcSetPortraitUrl('+index+',\'\')">Retirer l’URL</button>':'')+
+      '</div>';
   }
   function npcDocs(c,index){
     var docs=Array.isArray(c.knowledgeDocs)?c.knowledgeDocs:[]
