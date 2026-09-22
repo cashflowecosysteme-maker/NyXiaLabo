@@ -28,19 +28,27 @@ function npcSaveRecord(project,id,record) {
   else project.data.npcCharacters=project.data.npcCharacters.map(x=>x.id===id?record:x)
 }
 function chunksOf(text) {
-  // Ne jamais couper en silence: refuser un document excédant la limite explicite.
-  if(text.length>MAX_TEXT)throw Error('Document trop long : maximum 30 000 caractères par injection. Découpe-le en plusieurs documents.')
-  const paragraphs=text.replace(/\r\n?/g,'\n').split(/\n\s*\n/),out=[],max=1100
-  for(const p of paragraphs){
-    const words=p.split(/\s+/).filter(Boolean); let section=''
-    for(const word of words){
-      if(word.length>max)throw Error('Mot/fragment trop long : découpe le document.')
-      if((section+' '+word).length>max){out.push(section);section=word}
-      else section=(section?section+' ':'')+word
-    }
-    if(section)out.push(section)
+  // Regrouper les petits paragraphes Markdown au lieu de créer un vecteur par ligne.
+  // Conserver les titres, les listes et les mots; aucun découpage manuel requis.
+  const content=String(text).replace(/\r\n?/g,'\n').trim()
+  if(content.length>MAX_TEXT)throw Error('Document trop long : maximum 30 000 caractères par injection. Découpe-le en plusieurs documents.')
+  if(!content)return []
+  const max=1100, minimum=Math.floor(max*0.85), out=[]
+  let remaining=content
+  while(remaining.length>max){
+    // Une coupure proche de la limite évite les fragments artificiellement courts.
+    let cut=remaining.lastIndexOf('\n\n',max)
+    if(cut<minimum)cut=remaining.lastIndexOf('\n',max)
+    if(cut<minimum)cut=remaining.lastIndexOf(' ',max)
+    if(cut<minimum)cut=max // texte sans espaces : aucun caractère perdu
+    const part=remaining.slice(0,cut).trim()
+    if(part)out.push(part)
+    remaining=remaining.slice(cut).trimStart()
   }
-  if(out.length>40)throw Error('Document trop fragmenté : utilise plusieurs injections.')
+  if(remaining.trim())out.push(remaining.trim())
+  // Avec 30 000 caractères et des extraits d'au moins ~935 caractères,
+  // cette limite de sûreté n'impose jamais de scinder un Markdown valide.
+  if(out.length>40)throw Error('Nombre d’extraits inattendu : injection interrompue.')
   return out
 }
 async function embed(env,texts) {
