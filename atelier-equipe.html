@@ -79,11 +79,16 @@
     <button class="nav-btn" data-view="game" onclick="showView('game')"><span class="ico">🎮</span>Architecte NyXia Game</button>
     <button class="nav-btn" data-view="mystery" onclick="showView('mystery')"><span class="ico">🎲</span>Meurtre & Mystère</button>
     <button class="nav-btn" data-view="maps" onclick="showView('maps')"><span class="ico">🗺️</span>Cartographie & Mondes</button>
+    <div class="nav-label">Outils existants du Labo</div>
+    <button class="nav-btn" data-view="visual" onclick="showView('visual')"><span class="ico">🎨</span>Création visuelle</button>
+    <button class="nav-btn" data-view="video" onclick="showView('video')"><span class="ico">🎬</span>Vidéo</button>
+    <button class="nav-btn" data-view="models" onclick="showView('models')"><span class="ico">🧠</span>Modèles & API</button>
+    <button class="nav-btn" type="button" onclick="location.href='/dashboard.html'"><span class="ico">🧪</span>Labo complet · Tester les modèles</button>
     <div class="back"><button class="nav-btn" onclick="location.href='https://univers.nyxia.top/superadmin2/'"><span class="ico">↩</span>Retour au Super Admin 2</button></div>
   </aside>
 
   <main>
-    <div class="topbar"><h2 id="top-title">Atelier Équipe</h2><div class="tts-tools"><div id="health" class="status">Connexion…</div><button type="button" class="btn" onclick="window.location.href='https://univers.nyxia.top/superadmin2/'">↩ Retour au Super Admin 2</button><button type="button" class="btn classement-trigger" onclick="openClassement()">🗂️ Classement</button></div></div><div id="tts-diagnostic" role="status" aria-live="polite" style="display:none;padding:12px 24px;border-bottom:1px solid rgba(167,139,250,.2);font-size:12px;line-height:1.5"></div>
+    <div class="topbar"><h2 id="top-title">Atelier Équipe</h2><div class="tts-tools"><div id="health" class="status">Connexion…</div><button type="button" class="btn primary" onclick="window.location.href='/dashboard.html'">🧪 Ouvrir le Labo complet</button><button type="button" class="btn" onclick="window.location.href='https://univers.nyxia.top/superadmin2/'">↩ Retour au Super Admin 2</button><button type="button" class="btn classement-trigger" onclick="openClassement()">🗂️ Classement</button></div></div><div id="tts-diagnostic" role="status" aria-live="polite" style="display:none;padding:12px 24px;border-bottom:1px solid rgba(167,139,250,.2);font-size:12px;line-height:1.5"></div>
     <div class="content">
       <section id="view-home" class="view"></section>
       <section id="view-classement" class="view hidden"></section>
@@ -188,6 +193,7 @@
     var recent=(allProjects||[]).filter(function(p){return !isClassementArchived(p)}).slice(0,8).map(function(p){return '<tr><td>'+kindIcon(p.kind)+' <span class="kind">'+esc(kindLabel(p.kind))+'</span></td><td><b>'+esc(p.title)+'</b><div class="tiny">'+esc(p.client||'')+'</div></td><td>'+new Date(p.updatedAt).toLocaleDateString('fr-CA')+'</td><td><button class="btn" onclick="openProject(\''+p.id+'\')">Ouvrir</button></td></tr>'}).join('')
     document.getElementById('view-home').innerHTML=''+
       '<div class="hero"><div class="badge">ATELIER INTERNE · ÉQUIPE HUMAINE + IA</div><h3>Créer plus vite sans céder la direction créative.</h3><p>Cet outil du Super Admin 2 sert à fabriquer les livres et les jeux. Les modèles aident à produire, tester, comparer et contrôler. Les faits verrouillés, les décisions éditoriales et la relation client restent entre les mains de l’équipe humaine.</p></div>'+
+      '<div class="tools-line" style="margin-top:16px"><button type="button" class="btn primary" onclick="location.href=\'/dashboard.html\'">🧪 Ouvrir le Labo complet — tester les modèles existants</button></div>'+
       '<div class="grid">'+
         homeCard('✍️','GhostWriting','Idée → synopsis → plan → chapitres → cohérence. Les faits verrouillés sont injectés dans chaque demande IA.','ghost','Nouveau livre')+
         homeCard('🎧','Studio Livre Audio','Aperçu gratuit dans le navigateur, puis production réelle avec Google Cloud Text-to-Speech.','audio','Nouveau livre audio')+
