@@ -218,6 +218,39 @@ async function upload(request,env,ctx){
   return json({ok:true,url:PUBLIC+key.slice(PREFIX.length),mimeType:format.mime,bytes:file.size,kind:format.kind},201)
 }
 
+// Portraits des personnages jouables : le fichier appartient au jeu et au personnage
+// déjà présent dans le projet. Réutilise le même R2 privé et les mêmes vérifications d'accès.
+async function uploadPlayerPortrait(request,env,ctx){
+  if(!(await hasTeamAccess(request,env,ctx)))return json({error:'Accès équipe requis'},401)
+  if(!env.MAPS||!env.LABO_STORE)return json({error:'R2 ou projets non raccordés'},503)
+  const origin=request.headers.get('Origin')
+  if(origin&&origin!==new URL(request.url).origin)return json({error:'Origine interdite'},403)
+  const stated=Number(request.headers.get('Content-Length')||0)
+  if(stated>9*1024*1024)return json({error:'Portrait trop volumineux (8 Mo maximum).'},413)
+  let form
+  try{form=await request.formData()}catch(_){return json({error:'Transfert invalide'},400)}
+  const file=form.get('file'),projectId=String(form.get('projectId')||''),characterId=String(form.get('characterId')||'')
+  if(!idValid(projectId)||!idValid(characterId)||characterId.length>110)return json({error:'Projet ou personnage invalide'},400)
+  if(!(file instanceof File)||!file.size||file.size>8*1024*1024)return json({error:'Portrait manquant ou supérieur à 8 Mo'},413)
+  const ext=String(file.name||'').split('.').pop().toLowerCase(),format=FORMATS[ext]
+  if(!format||format.kind!=='image')return json({error:'Choisis PNG, JPG, WEBP ou GIF.'},415)
+  if(file.type!==format.mime&&!(ext==='jpg'&&file.type==='image/jpg'))return json({error:'Type de fichier incompatible'},415)
+  if(!sniffImage(ext,new Uint8Array(await file.slice(0,16).arrayBuffer())))return json({error:'Fichier image invalide'},415)
+  const project=await env.LABO_STORE.get('atelier:project:'+projectId,'json')
+  if(!project||project.kind!=='nyxia-game')return json({error:'Jeu introuvable'},404)
+  const isNpc=new URL(request.url).pathname==='/api/game/media/npc-portrait'
+  const roster=isNpc?project.data?.npcCharacters:project.data?.playableCharacters
+  const character=(Array.isArray(roster)?roster:[]).find(c=>c?.id===characterId)
+  if(!character)return json({error:'Personnage absent de ce jeu'},404)
+  const assetId='portrait-'+characterId,key=PREFIX+projectId+'/'+assetId+'/'+crypto.randomUUID()+'.'+ext
+  try{
+    await env.MAPS.put(key,file,{httpMetadata:{contentType:format.mime,cacheControl:'private, no-store',contentDisposition:'inline'},customMetadata:{projectId,assetId,characterId,originalName:String(file.name).slice(0,160)}})
+    const stored=await env.MAPS.head(key)
+    if(!stored||stored.size!==file.size)return json({error:'Taille du portrait non vérifiée dans R2'},502)
+  }catch(e){return json({error:'Transfert R2 : '+(e?.message||'erreur inconnue')},502)}
+  return json({ok:true,url:PUBLIC+key.slice(PREFIX.length),bytes:file.size,mimeType:format.mime},201)
+}
+
 // Import d'une proposition gratuite validée par l'équipe ; jamais de requête vers
 // une URL quelconque (prévention SSRF) et jamais de génération IA payante ici.
 async function importFree(request,env,ctx){
@@ -320,6 +353,20 @@ async function serveMedia(request,env,ctx){
   return new Response(object.body,{status:range?206:200,headers})
 }
 
+// Le nouveau montage garde seulement des URL, tout en réutilisant les API image existantes.
+// Le Worker revalide la présence d'un emplacement image appartenant au projet authentifié.
+function findTimelineImageSlot(project, slotId) {
+  let data;
+  try { data = JSON.parse(project?.data?.mediaTimelineJson || '{}') } catch (_) { return null }
+  if (data?.projectId !== project.id || !Array.isArray(data.scenes)) return null
+  for (const scene of data.scenes.slice(0,250)) {
+    if (!Array.isArray(scene?.slots)) continue
+    const slot = scene.slots.find(item => item?.id === slotId && item.kind === 'image')
+    if (slot) return { id:slot.id, code:slot.id, kind:'image', url:slot.url||'', localMediaId:'', generatedPreviewUrl:'', title:slot.label||'' }
+  }
+  return null
+}
+
 // Prix officiels indicatifs septembre 2026, 1 MP pour les modèles au MP.
 // Autorisation explicite par requête, jamais d'appel en lot, clés seulement côté Worker.
 const ECONOMY_IMAGE_IDS = new Set(['flux/schnell','flux/dev','stable-diffusion-v3-medium','dall-e-3'])
@@ -337,7 +384,7 @@ async function economyImageGenerate(request,env,ctx){
   if(!project||project.kind!=='nyxia-game')return json({error:'Jeu introuvable'},404)
   let assets=[]
   try{assets=JSON.parse(project.data?.productionAssetsJson||'[]')}catch(_){}
-  const asset=Array.isArray(assets)?assets.find(a=>a?.id===assetId):null
+  const asset=(Array.isArray(assets)?assets.find(a=>a?.id===assetId):null)||findTimelineImageSlot(project,assetId)
   if(!asset||!['image','badge','map'].includes(asset.kind))return json({error:'Image absente du cahier ou mauvais type'},404)
   if(asset.url||asset.localMediaId||asset.generatedPreviewUrl)return json({error:'Cette carte possède déjà un média ou un résultat à valider ; retire-le avant de créer une autre image'},409)
   const prompt=String(body.prompt||'').trim()
@@ -372,7 +419,7 @@ async function cloudflareImageGenerate(request,env,ctx){
   if(!project||project.kind!=='nyxia-game')return json({error:'Projet introuvable'},404)
   let assets=[]
   try{assets=JSON.parse(project.data?.productionAssetsJson||'[]')}catch(_){}
-  const asset=Array.isArray(assets)?assets.find(a=>a?.id===assetId):null
+  const asset=(Array.isArray(assets)?assets.find(a=>a?.id===assetId):null)||findTimelineImageSlot(project,assetId)
   if(!asset||!['image','badge','map'].includes(asset.kind))return json({error:'Carte image absente du cahier'},404)
   if(asset.url||asset.localMediaId||asset.generatedPreviewUrl)return json({error:'Média existant : retire-le d’abord si tu veux créer une nouvelle image'},409)
   const style=String(project.data?.imageBriefs||project.data?.worldBible||'').trim()
@@ -441,6 +488,8 @@ export default {
     if(path==='/api/game/media/image/cloudflare' && request.method==='POST')return cloudflareImageGenerate(request,env,ctx)
     if(path==='/api/game/media/image/generate' && request.method==='POST')return economyImageGenerate(request,env,ctx)
     if(path==='/api/game/media/upload' && request.method==='POST')return upload(request,env,ctx)
+    if(path==='/api/game/media/player-portrait' && request.method==='POST')return uploadPlayerPortrait(request,env,ctx)
+    if(path==='/api/game/media/npc-portrait' && request.method==='POST')return uploadPlayerPortrait(request,env,ctx)
     if(path==='/api/game/media/import-free' && request.method==='POST')return importFree(request,env,ctx)
     const response=await existingWorker.fetch(request,env,ctx)
     if(path.startsWith('/api/game/'))return authenticatedApiResponse(request,response,env)

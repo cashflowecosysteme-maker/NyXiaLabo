@@ -3368,5 +3368,7 @@
   window.addEventListener('beforeunload',function(){audioUrls.forEach(function(u){try{URL.revokeObjectURL(u)}catch(e){}});if(cartoPreviewUrl)try{URL.revokeObjectURL(cartoPreviewUrl)}catch(e){}})
   boot()
 </script>
+<script src="/js/game-media-url-editor.js"></script>
+<script src="/js/game-zip-compiler.js"></script>
 </body>
 </html>

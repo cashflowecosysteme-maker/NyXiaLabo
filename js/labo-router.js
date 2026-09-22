@@ -725,7 +725,12 @@ async function gameGetProduct(env, id) {
 }
 async function gameSaveProduct(env, product) {
   if (!env.LABO_STORE) throw new Error('CASHFLOW_KV non raccordée à l’Atelier')
-  await env.LABO_STORE.put(gameProductKey(product.id), JSON.stringify(product))
+  // Même KV centrale : le Worker autonome consulte game:product:<gameId> sans le préfixe Labo.
+  // Conserver la clé historique nyxialabo: pour les fonctions existantes du Labo.
+  if (!env.CASHFLOW_KV) throw new Error('CASHFLOW_KV commune indisponible : publication annulée')
+  const content = JSON.stringify(product)
+  await env.CASHFLOW_KV.put(gameProductKey(product.id), content)
+  await env.LABO_STORE.put(gameProductKey(product.id), content)
   const index = await gameLoadProductIndex(env)
   const next = index.filter(x => x.id !== product.id)
   next.unshift(gameProductPublic(product))
@@ -863,11 +868,23 @@ function gameGuidedScenesFromData(d = {}) {
     try { parsed = JSON.parse(cleaned) } catch (_) { return [] }
   }
   const source = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.scenes) ? parsed.scenes : [])
-  return source.slice(0, 80).map((scene, index) => {
+  return source.slice(0, 250).map((scene, index) => {
     const breakout = scene?.breakout && typeof scene.breakout === 'object' ? scene.breakout : {}
     const npc = scene?.npc && typeof scene.npc === 'object' ? scene.npc : {}
     const dice = scene?.dice && typeof scene.dice === 'object' ? scene.dice : {}
     const media = scene?.media && typeof scene.media === 'object' ? scene.media : {}
+    // Les fichiers restent chez l'hébergeur externe. Ne conserver que les URL HTTPS
+    // et les emplacements déjà attribués à une scène du projet.
+    const mediaItems = (Array.isArray(media.items) ? media.items : []).slice(0,48)
+      .filter(item => item && ['image','audio','video'].includes(item.kind) && /^https:\/\/[^\s<>'"]+$/i.test(String(item.url||'')))
+      .map((item,j) => ({
+        id:cleanText(item.id||`media-${index+1}-${j+1}`,90),
+        kind:item.kind,url:cleanText(item.url,2000),label:cleanText(item.label||'',220),
+        trigger:cleanText(item.trigger||'début',80),playback:cleanText(item.playback||'complet',80),
+        order:j,source:cleanText(item.source||'',80),sourceUrl:cleanText(item.sourceUrl||'',1600),
+        credit:cleanText(item.credit||'',250),license:cleanText(item.license||'',250)
+      }))
+
     const clues = Array.isArray(scene?.clues) ? scene.clues.slice(0, 30).map((clue, ci) => ({
       id: cleanText(clue?.id || `clue-${index + 1}-${ci + 1}`, 100),
       label: cleanText(clue?.label || `Indice ${ci + 1}`, 160),
@@ -900,6 +917,7 @@ function gameGuidedScenesFromData(d = {}) {
         instruction: cleanText(dice.instruction || '', 2200)
       },
       media: {
+        items: mediaItems,
         imageUrl: cleanText(media.imageUrl || '', 1600),
         audioUrl: cleanText(media.audioUrl || '', 1600),
         videoUrl: cleanText(media.videoUrl || '', 1600),
