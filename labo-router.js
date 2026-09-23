@@ -859,6 +859,25 @@ function gameGuidedScenesFromData(d = {}) {
     const npc = scene?.npc && typeof scene.npc === 'object' ? scene.npc : {}
     const dice = scene?.dice && typeof scene.dice === 'object' ? scene.dice : {}
     const media = scene?.media && typeof scene.media === 'object' ? scene.media : {}
+    const mediaItems = Array.isArray(media.items) ? media.items.slice(0, 48).map((item, mi) => {
+      const kind = ['image','audio','video'].includes(String(item?.kind || '').toLowerCase()) ? String(item.kind).toLowerCase() : ''
+      let mediaUrl = cleanText(item?.url || '', 1600)
+      if (!kind || !mediaUrl) return null
+      try {
+        const u = new URL(mediaUrl)
+        if (u.protocol !== 'https:' || u.username || u.password || u.port) return null
+        mediaUrl = u.toString()
+      } catch (_) { return null }
+      return {
+        id: cleanText(item?.id || `media-${index + 1}-${mi + 1}`, 100),
+        kind,
+        url: mediaUrl,
+        label: cleanText(item?.label || '', 220),
+        trigger: cleanText(item?.trigger || 'début', 80),
+        playback: cleanText(item?.playback || 'complet', 80),
+        order: Math.max(0, Math.min(999, Number(item?.order) || mi))
+      }
+    }).filter(Boolean) : []
     const clues = Array.isArray(scene?.clues) ? scene.clues.slice(0, 30).map((clue, ci) => ({
       id: cleanText(clue?.id || `clue-${index + 1}-${ci + 1}`, 100),
       label: cleanText(clue?.label || `Indice ${ci + 1}`, 160),
@@ -894,6 +913,9 @@ function gameGuidedScenesFromData(d = {}) {
         imageUrl: cleanText(media.imageUrl || '', 1600),
         audioUrl: cleanText(media.audioUrl || '', 1600),
         videoUrl: cleanText(media.videoUrl || '', 1600),
+        showText: media.showText === true,
+        displayText: cleanText(media.displayText || '', 6000),
+        items: mediaItems,
         instruction: cleanText(media.instruction || '', 2200)
       },
       clues
