@@ -1011,6 +1011,7 @@
   function gameNpcRuntimeCharacter(c){
     return {id:c.id,name:c.name||[c.firstName,c.lastName].filter(Boolean).join(' ').trim(),age:c.age||'',
       portraitUrl:c.portraitUrl||'',role:c.role||'',goals:c.goals||'',personality:c.personality||'',appearance:c.appearance||'',
+      hitPoints:c.hitPoints??'',specialAbilities:c.specialAbilities||'',psychologicalProfile:c.psychologicalProfile||'',secretFavor:c.secretFavor||'',
       openRouterModel:c.openRouterModel||'',elevenLabsVoiceId:c.elevenLabsVoiceId||'',
       trust:Number(c.trust??50),secretMinimumTrust:Math.max(0,Math.min(100,Number(c.secretMinimumTrust??100))),reputation:c.reputation||'',relationships:c.relationships||'',
       autonomy:c.autonomy||'',triggers:c.triggers||'',allowedActions:c.allowedActions||'',forbiddenActions:c.forbiddenActions||'',
@@ -1026,7 +1027,7 @@
   function npcAdd(){
     if(!currentProject)return
     var list=(currentProject.data.npcCharacters||[]).slice()
-    list.push({id:'npc-'+crypto.randomUUID().replace(/-/g,'').slice(0,25),name:'',firstName:'',lastName:'',age:'',role:'',goals:'',personality:'',appearance:'',portraitUrl:'',portraitName:'',openRouterModel:'',elevenLabsVoiceId:'',trust:50,secretMinimumTrust:100,reputation:'',relationships:'',autonomy:'',triggers:'',allowedActions:'',forbiddenActions:'',tone:'',vocabulary:'',attitude:'',knowledge:'',ignorance:'',secrets:'',revealConditions:'',memoryRules:'',deliverables:'',items:[],knowledgeDocs:[]})
+    list.push({id:'npc-'+crypto.randomUUID().replace(/-/g,'').slice(0,25),name:'',firstName:'',lastName:'',age:'',role:'',goals:'',personality:'',appearance:'',hitPoints:'',specialAbilities:'',psychologicalProfile:'',secretFavor:'',portraitUrl:'',portraitName:'',openRouterModel:'',elevenLabsVoiceId:'',trust:50,secretMinimumTrust:100,reputation:'',relationships:'',autonomy:'',triggers:'',allowedActions:'',forbiddenActions:'',tone:'',vocabulary:'',attitude:'',knowledge:'',ignorance:'',secrets:'',revealConditions:'',memoryRules:'',deliverables:'',items:[],knowledgeDocs:[]})
     setData('npcCharacters',list);npcRuntimeRefresh();renderGame()
   }
   async function npcRemove(index){
@@ -1197,7 +1198,7 @@
     if((d.npcCharacters||[]).length)return alert('Des fiches IA existent déjà : import automatique refusé pour éviter les doublons.')
     if(!confirm('Importer '+list.length+' ancien(s) PNJ dans le nouveau formulaire, sans supprimer leur source ?'))return
     var output=list.map(function(x){var name=String(x.name||x.nom||'').trim()
-      return {id:/^[a-zA-Z0-9_-]{1,120}$/.test(x.id||'')?x.id:'npc-'+crypto.randomUUID().replace(/-/g,'').slice(0,25),name:name,age:x.age||'',role:x.role||'',goals:Array.isArray(x.goals)?x.goals.join('\n'):x.goals||'',personality:x.personality||'',appearance:x.appearance||'',portraitUrl:x.portraitUrl||'',trust:Number(x.trust??50),secretMinimumTrust:100,reputation:x.reputation||'',relationships:typeof x.relationships==='string'?x.relationships:JSON.stringify(x.relationships||{}),autonomy:typeof x.autonomy==='string'?x.autonomy:JSON.stringify(x.autonomy||{}),triggers:Array.isArray(x.emotionalTriggers)?x.emotionalTriggers.join('\n'):x.triggers||'',allowedActions:x.allowedActions||'',forbiddenActions:x.forbiddenActions||'',tone:x.tone||'',vocabulary:x.vocabulary||'',attitude:x.attitude||'',knowledge:Array.isArray(x.knowledge)?x.knowledge.join('\n'):x.knowledge||'',ignorance:Array.isArray(x.ignorance)?x.ignorance.join('\n'):x.ignorance||'',secrets:typeof x.secrets==='string'?x.secrets:JSON.stringify(x.secrets||[]),revealConditions:x.revealConditions||'',memoryRules:x.memoryRules||'',deliverables:x.deliverables||'',items:Array.isArray(x.items)?x.items:[],openRouterModel:x.openRouterModel||d.npcModel||'',elevenLabsVoiceId:x.elevenLabsVoiceId||'',knowledgeDocs:[]}
+      return {id:/^[a-zA-Z0-9_-]{1,120}$/.test(x.id||'')?x.id:'npc-'+crypto.randomUUID().replace(/-/g,'').slice(0,25),name:name,age:x.age||'',role:x.role||'',goals:Array.isArray(x.goals)?x.goals.join('\n'):x.goals||'',personality:x.personality||'',appearance:x.appearance||'',hitPoints:x.hitPoints??x.hp??'',specialAbilities:x.specialAbilities||x.abilities||'',psychologicalProfile:x.psychologicalProfile||x.psychProfile||'',secretFavor:x.secretFavor||x.favor||'',portraitUrl:x.portraitUrl||'',trust:Number(x.trust??50),secretMinimumTrust:100,reputation:x.reputation||'',relationships:typeof x.relationships==='string'?x.relationships:JSON.stringify(x.relationships||{}),autonomy:typeof x.autonomy==='string'?x.autonomy:JSON.stringify(x.autonomy||{}),triggers:Array.isArray(x.emotionalTriggers)?x.emotionalTriggers.join('\n'):x.triggers||'',allowedActions:x.allowedActions||'',forbiddenActions:x.forbiddenActions||'',tone:x.tone||'',vocabulary:x.vocabulary||'',attitude:x.attitude||'',knowledge:Array.isArray(x.knowledge)?x.knowledge.join('\n'):x.knowledge||'',ignorance:Array.isArray(x.ignorance)?x.ignorance.join('\n'):x.ignorance||'',secrets:typeof x.secrets==='string'?x.secrets:JSON.stringify(x.secrets||[]),revealConditions:x.revealConditions||'',memoryRules:x.memoryRules||'',deliverables:x.deliverables||'',items:Array.isArray(x.items)?x.items:[],openRouterModel:x.openRouterModel||d.npcModel||'',elevenLabsVoiceId:x.elevenLabsVoiceId||'',knowledgeDocs:[]}
     })
     d.npcLegacyRuntimeBackup=d.npcRuntimeJson
     setData('npcCharacters',output);npcRuntimeRefresh();renderGame();toast('Anciennes fiches importées — source conservée')
@@ -1213,6 +1214,8 @@
           npcCharacterPhoto(c,i)+'<div class="row">'+npcField(i,'role','Rôle',c.role)+npcField(i,'goals','Objectif du personnage',c.goals)+'</div>'+
           npcField(i,'personality','Description de la personnalité (pour le Worker)',c.personality,6)+
           npcField(i,'appearance','Apparence physique du personnage',c.appearance,6)+
+          '<div class="row">'+npcField(i,'hitPoints','Points de Vie',c.hitPoints??'')+npcField(i,'specialAbilities','Capacités spéciales',c.specialAbilities,4)+'</div>'+
+          npcField(i,'psychologicalProfile','Profil psychologique',c.psychologicalProfile,5)+
           '<div class="divider"></div><h4>🤖 Configuration de CE PNJ</h4>'+npcField(i,'openRouterModel','Identifiant du modèle OpenRouter (à coller directement)',c.openRouterModel)+npcField(i,'elevenLabsVoiceId','ID de sa voix ElevenLabs',c.elevenLabsVoiceId)+
           '<div class="field"><label>Relation de confiance initiale : <b id="npc-trust-'+i+'">'+Number(c.trust??50)+'/100</b></label><input type="range" min="0" max="100" value="'+Number(c.trust??50)+'" oninput="npcUpdate('+i+',\'trust\',Number(this.value));document.getElementById(\'npc-trust-'+i+'\').textContent=this.value+\'/100\'"></div>'+
           npcField(i,'reputation','Réputation du personnage',c.reputation,3)+npcField(i,'relationships','Relations avec les autres personnages',c.relationships,4)+
@@ -1220,7 +1223,7 @@
           npcField(i,'allowedActions','Actions permises',c.allowedActions,3)+npcField(i,'forbiddenActions','Actions interdites',c.forbiddenActions,3)+
           '<div class="row">'+npcField(i,'tone','Ton',c.tone)+npcField(i,'vocabulary','Vocabulaire',c.vocabulary)+'</div>'+npcField(i,'attitude','Attitude',c.attitude,3)+
           '<div class="divider"></div><h4>🔐 Connaissances et révélations</h4>'+npcField(i,'knowledge','Ce qu’il sait déjà',c.knowledge,4)+npcField(i,'ignorance','Ce qu’il ignore',c.ignorance,3)+
-          npcField(i,'secrets','Secrets dont il dispose',c.secrets,4)+npcField(i,'secretMinimumTrust','Confiance minimale pour autoriser l’accès à ces secrets (0–100)',c.secretMinimumTrust??100)+npcField(i,'revealConditions','Conditions pour révéler un secret / indice',c.revealConditions,3)+
+          npcField(i,'secrets','Secrets dont il dispose',c.secrets,4)+npcField(i,'secretFavor','Faveur (secret)',c.secretFavor,4)+npcField(i,'secretMinimumTrust','Confiance minimale pour autoriser l’accès à ces secrets (0–100)',c.secretMinimumTrust??100)+npcField(i,'revealConditions','Conditions pour révéler un secret / indice',c.revealConditions,3)+
           npcField(i,'memoryRules','Mémoire : ce qu’il retient de chaque joueur',c.memoryRules,3)+npcItemsEditor(c,i)+
           npcDocs(c,i)+'<div class="tools-line" style="margin-top:14px"><button class="btn danger" onclick="npcRemove('+i+')">Supprimer ce PNJ et ses connaissances</button></div></div></details>'
       }).join('')+
