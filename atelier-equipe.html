@@ -66,6 +66,14 @@
     .classement-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
     .classement-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:15px}
     @media(max-width:720px){.classement-edit-grid{grid-template-columns:1fr}.classement-trigger{order:-1}.classement-actions{min-width:285px}}
+
+    /* Écriture IA — groupe compact comme les personnages, page indépendante en iframe. */
+    .writing-group{margin:2px 0 6px}.writing-trigger{justify-content:space-between}.writing-trigger .left{display:flex;align-items:center;gap:10px}.writing-chevron{margin-left:auto;transition:transform .18s}.writing-group.open .writing-chevron{transform:rotate(180deg)}
+    .writing-menu{display:none;margin:3px 0 8px 20px;padding-left:10px;border-left:1px solid rgba(167,139,250,.16)}.writing-group.open .writing-menu{display:block}
+    .writing-agent-btn{width:100%;border:0;background:transparent;color:#8f98bd;border-radius:10px;padding:8px 9px;text-align:left;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:8px}.writing-agent-btn:hover,.writing-agent-btn.active{background:rgba(123,92,255,.12);color:#fff}.writing-agent-btn span:first-child{width:20px;text-align:center}
+    #view-writing{height:calc(100vh - 118px);min-height:640px;margin:-26px}#writing-frame{width:100%;height:100%;border:0;display:block;background:#060A18}
+    @media(max-width:720px){#view-writing{height:82vh;min-height:620px;margin:-16px}}
+
   </style>
 </head>
 <body>
@@ -74,6 +82,19 @@
     <div class="brand"><div class="orb">🧪</div><div><h1>Atelier équipe humaine + IA</h1><small>Outil interne du Super Admin 2</small></div></div>
     <div class="nav-label">Atelier</div>
     <button class="nav-btn active" data-view="home" onclick="showView('home')"><span class="ico">🏠</span>Vue d'ensemble</button>
+    <div class="writing-group" id="writing-group">
+      <button class="nav-btn writing-trigger" type="button" onclick="toggleWritingMenu()"><span class="left"><span class="ico">✍️</span>Écriture</span><span class="writing-chevron">⌄</span></button>
+      <div class="writing-menu" id="writing-menu">
+        <button class="writing-agent-btn" data-writer="alex" onclick="openWritingAgent('alex','Alex')"><span>✍️</span>Alex</button>
+        <button class="writing-agent-btn" data-writer="aimee" onclick="openWritingAgent('aimee','Aimée')"><span>🌹</span>Aimée</button>
+        <button class="writing-agent-btn" data-writer="alibi" onclick="openWritingAgent('alibi','Alibi')"><span>🔎</span>Alibi</button>
+        <button class="writing-agent-btn" data-writer="abime" onclick="openWritingAgent('abime','Abîme')"><span>🖤</span>Abîme</button>
+        <button class="writing-agent-btn" data-writer="constance" onclick="openWritingAgent('constance','Constance')"><span>🎭</span>Constance</button>
+        <button class="writing-agent-btn" data-writer="fripouille" onclick="openWritingAgent('fripouille','Fripouille')"><span>🐾</span>Fripouille</button>
+        <button class="writing-agent-btn" data-writer="melusine" onclick="openWritingAgent('melusine','Mélusine')"><span>🌙</span>Mélusine</button>
+        <button class="writing-agent-btn" data-writer="nyxia" onclick="openWritingAgent('nyxia','NyXia')"><span>💜</span>NyXia</button>
+      </div>
+    </div>
     <button class="nav-btn" data-view="ghost" onclick="showView('ghost')"><span class="ico">✍️</span>GhostWriting</button>
     <button class="nav-btn" data-view="audio" onclick="showView('audio')"><span class="ico">🎧</span>Studio Livre Audio</button>
     <button class="nav-btn" data-view="game" onclick="showView('game')"><span class="ico">🎮</span>Architecte NyXia Game</button>
@@ -91,6 +112,7 @@
     <div class="topbar"><h2 id="top-title">Atelier Équipe</h2><div class="tts-tools"><div id="health" class="status">Connexion…</div><button type="button" class="btn primary" onclick="window.location.href='/dashboard.html'">🧪 Ouvrir le Labo complet</button><button type="button" class="btn" onclick="window.location.href='https://univers.nyxia.top/superadmin2/'">↩ Retour au Super Admin 2</button><button type="button" class="btn classement-trigger" onclick="openClassement()">🗂️ Classement</button></div></div><div id="tts-diagnostic" role="status" aria-live="polite" style="display:none;padding:12px 24px;border-bottom:1px solid rgba(167,139,250,.2);font-size:12px;line-height:1.5"></div>
     <div class="content">
       <section id="view-home" class="view"></section>
+      <section id="view-writing" class="view hidden"><iframe id="writing-frame" src="about:blank" title="Écriture IA"></iframe></section>
       <section id="view-classement" class="view hidden"></section>
       <section id="view-ghost" class="view hidden"></section>
       <section id="view-audio" class="view hidden"></section>
@@ -178,6 +200,20 @@
       he.textContent='● Atelier connecté · TTS '+(r.connected?'vérifié':'non connecté')
       he.className='status '+(r.connected?'ok':'warn')
     } catch(e){box.textContent='⚠ Test TTS impossible : '+e.message;he.className='status warn'}
+  }
+
+  function toggleWritingMenu(force){
+    var g=document.getElementById('writing-group');if(!g)return;
+    var open=typeof force==='boolean'?force:!g.classList.contains('open');g.classList.toggle('open',open)
+  }
+  function openWritingAgent(agent,name){
+    toggleWritingMenu(true);showView('writing');
+    document.querySelectorAll('.writing-agent-btn').forEach(function(b){b.classList.toggle('active',b.dataset.writer===agent)})
+    var f=document.getElementById('writing-frame');if(f){
+      var u='/ecriture-atelier.html?agent='+encodeURIComponent(agent)+(token?'&t='+encodeURIComponent(token):'');
+      if(f.getAttribute('data-agent')!==agent){f.setAttribute('data-agent',agent);f.src=u}
+    }
+    var t=document.getElementById('top-title');if(t)t.textContent='Écriture · '+name
   }
 
   function showView(v){
