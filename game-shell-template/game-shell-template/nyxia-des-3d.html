@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NyXia — Dés 3D</title>
+<link rel="icon" type="image/png" href="/images/FavIcon.png">
+<style>
+:root{--p:#7B5CFF;--p2:#5A6CFF;--gold:#F4C842;--t:#fff;--t2:#D6D9F0;--t3:#8891B8;--bg1:#0A1628;--bg2:#0F1C3F}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:var(--bg1);font-family:Arial,sans-serif;color:var(--t2);overflow:hidden}
+canvas#stars{position:fixed;inset:0;z-index:0;pointer-events:none}
+#app{position:relative;z-index:1;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:12px}
+h1{font-size:19px;color:var(--t);letter-spacing:3px;text-align:center}
+
+/* Zone dés dynamique */
+#dice-zone{display:flex;gap:20px;flex-wrap:wrap;align-items:center;justify-content:center;min-height:110px;padding:8px}
+
+/* Dé CSS 3D */
+.die-wrap{display:flex;flex-direction:column;align-items:center;gap:6px}
+.die-label-top{font-size:11px;color:var(--t3);letter-spacing:1px}
+.die-box{width:80px;height:80px;perspective:300px}
+.die{width:80px;height:80px;position:relative;transform-style:preserve-3d}
+.face{position:absolute;width:80px;height:80px;border:2px solid rgba(123,92,255,0.55);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;color:#fff;font-family:Arial Black,Arial,sans-serif;background:rgba(18,5,55,0.92)}
+.f1{transform:translateZ(40px)}
+.f2{transform:rotateY(180deg) translateZ(40px)}
+.f3{transform:rotateY(90deg) translateZ(40px)}
+.f4{transform:rotateY(-90deg) translateZ(40px)}
+.f5{transform:rotateX(90deg) translateZ(40px)}
+.f6{transform:rotateX(-90deg) translateZ(40px)}
+
+/* Résultat */
+#result{font-size:42px;font-weight:900;color:var(--gold);letter-spacing:3px;text-align:center;min-height:52px;text-shadow:0 0 20px rgba(244,200,66,0.4)}
+#detail{font-size:12px;color:var(--t3);text-align:center;min-height:16px}
+
+/* Sélecteur */
+#selector{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.die-btn{display:flex;flex-direction:column;align-items:center;gap:3px}
+.die-icon{width:50px;height:50px;border:1.5px solid rgba(123,92,255,0.4);border-radius:10px;background:rgba(123,92,255,0.1);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--t2);cursor:pointer;transition:all .15s;user-select:none}
+.die-icon:hover{border-color:var(--p);background:rgba(123,92,255,0.25);color:#fff}
+.cnt-row{display:flex;align-items:center;gap:2px;background:rgba(123,92,255,0.1);border:1px solid rgba(123,92,255,0.2);border-radius:6px;padding:2px 4px}
+.cnt-row button{background:none;border:none;color:var(--p);cursor:pointer;font-size:16px;line-height:1;padding:0 3px;font-weight:700}
+.cnt-row button:hover{color:#fff}
+.cnt-row span{min-width:16px;text-align:center;font-weight:700;color:var(--t);font-size:13px}
+.die-lbl{font-size:10px;color:var(--t3)}
+
+#mod-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t3)}
+#mod-row input{width:52px;background:var(--bg2);border:1px solid rgba(123,92,255,0.3);border-radius:6px;color:var(--t);font-size:14px;text-align:center;padding:4px;outline:none}
+
+#actions{display:flex;gap:8px}
+.btn{padding:9px 20px;border-radius:50px;border:1px solid rgba(123,92,255,0.4);background:rgba(123,92,255,0.1);color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.btn:hover{background:rgba(123,92,255,0.25);color:#fff}
+.btn.primary{background:linear-gradient(135deg,var(--p),var(--p2));border-color:transparent;color:#fff}
+
+#hist{display:flex;flex-direction:column;gap:3px;width:100%;max-width:440px;max-height:68px;overflow-y:auto}
+.hrow{display:flex;justify-content:space-between;background:rgba(15,28,63,0.5);border:1px solid rgba(123,92,255,0.1);border-radius:6px;padding:3px 10px;font-size:11px}
+.htot{color:var(--gold);font-weight:700}
+
+#empty-msg{color:var(--t3);font-size:13px;font-style:italic}
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div id="app">
+  <h1>✦ NyXia — Dés 3D ✦</h1>
+  <div id="dice-zone"><span id="empty-msg">Ajoute des dés ci-dessous</span></div>
+  <div id="result"></div>
+  <div id="detail"></div>
+  <div id="selector"></div>
+  <div id="mod-row">
+    <span>Modificateur :</span>
+    <input type="number" id="modifier" value="0" min="-20" max="20" step="1">
+  </div>
+  <div id="actions">
+    <button class="btn" onclick="clearAll()">Effacer</button>
+    <button class="btn primary" onclick="rollAll()">✦ Lancer</button>
+    <button class="btn" onclick="resetAll()">Reset</button>
+  </div>
+  <div id="hist"></div>
+</div>
+<script>
+// ── Fond étoilé ──────────────────────────────────────────────
+(function(){
+  var c=document.getElementById('stars'),ctx=c.getContext('2d'),st=[],sh=[];
+  function rsz(){c.width=innerWidth;c.height=innerHeight;}
+  function mk(){st=[];for(var i=0;i<320;i++)st.push({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.3+0.2,o:Math.random()*0.7+0.2,ts:Math.random()*0.02+0.004,ph:Math.random()*Math.PI*2});}
+  function shoot(){sh.push({x:Math.random()*c.width*0.7,y:Math.random()*c.height*0.3,len:Math.random()*80+40,sp:Math.random()*7+4,ang:Math.PI/4+(Math.random()-0.5)*0.3,life:1});}
+  function draw(t){
+    ctx.clearRect(0,0,c.width,c.height);
+    for(var i=0;i<st.length;i++){var s=st[i],f=Math.sin(t*0.001*s.ts+s.ph)*0.3+0.7;ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,'+(s.o*f).toFixed(2)+')';ctx.fill();}
+    for(var i=sh.length-1;i>=0;i--){var s=sh[i],tx=s.x-Math.cos(s.ang)*s.len,ty=s.y-Math.sin(s.ang)*s.len,g=ctx.createLinearGradient(tx,ty,s.x,s.y);g.addColorStop(0,'rgba(255,255,255,0)');g.addColorStop(1,'rgba(255,255,255,'+s.life.toFixed(2)+')');ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(s.x,s.y);ctx.strokeStyle=g;ctx.lineWidth=1.5;ctx.stroke();s.x+=Math.cos(s.ang)*s.sp;s.y+=Math.sin(s.ang)*s.sp;s.life-=0.016;if(s.life<=0)sh.splice(i,1);}
+    requestAnimationFrame(draw);
+  }
+  rsz();mk();requestAnimationFrame(draw);
+  setInterval(shoot,3000);
+  window.addEventListener('resize',function(){rsz();mk();});
+})();
+
+// ── Configuration dés ────────────────────────────────────────
+const DICE=[
+  {key:'d4',label:'D4',sides:4},
+  {key:'d6',label:'D6',sides:6},
+  {key:'d8',label:'D8',sides:8},
+  {key:'d10',label:'D10',sides:10},
+  {key:'d12',label:'D12',sides:12},
+  {key:'d20',label:'D20',sides:20},
+];
+const counts={};
+DICE.forEach(d=>counts[d.key]=0);
+
+// ── Sélecteur ────────────────────────────────────────────────
+const selEl=document.getElementById('selector');
+DICE.forEach(die=>{
+  const w=document.createElement('div');w.className='die-btn';
+  w.innerHTML=`
+    <div class="die-icon" onclick="change('${die.key}',1)">${die.label}</div>
+    <div class="cnt-row">
+      <button onclick="change('${die.key}',-1)">−</button>
+      <span id="cnt-${die.key}">0</span>
+      <button onclick="change('${die.key}',1)">+</button>
+    </div>
+    <div class="die-lbl">${die.label}</div>`;
+  selEl.appendChild(w);
+});
+
+// ── Gestion des dés dans la zone ─────────────────────────────
+// diceObjects = [{id, sides, el (die div), rotX, rotY, vX, vY, spinning, doneCb}]
+let diceObjects=[];
+let uidCounter=0;
+
+function change(key,delta){
+  const die=DICE.find(d=>d.key===key);
+  const prev=counts[key];
+  counts[key]=Math.max(0,Math.min(6,counts[key]+delta));
+  document.getElementById('cnt-'+key).textContent=counts[key];
+  const diff=counts[key]-prev;
+  if(diff>0) for(let i=0;i<diff;i++) addDieToZone(die);
+  else if(diff<0) for(let i=0;i<Math.abs(diff);i++) removeDieFromZone(key);
+  renderZone();
+}
+
+function addDieToZone(die){
+  const id='die-'+uidCounter++;
+  diceObjects.push({id,key:die.key,sides:die.sides,label:die.label,rotX:Math.random()*360,rotY:Math.random()*360,vX:0,vY:0,spinning:false,doneCb:null,val:null});
+}
+
+function removeDieFromZone(key){
+  const idx=diceObjects.map(d=>d.key).lastIndexOf(key);
+  if(idx>=0) diceObjects.splice(idx,1);
+}
+
+const zone=document.getElementById('dice-zone');
+const emptyMsg=document.getElementById('empty-msg');
+
+function renderZone(){
+  zone.innerHTML='';
+  if(diceObjects.length===0){
+    zone.appendChild(emptyMsg);
+    return;
+  }
+  diceObjects.forEach(d=>{
+    const wrap=document.createElement('div');wrap.className='die-wrap';
+    wrap.innerHTML=`
+      <div class="die-label-top">${d.label}</div>
+      <div class="die-box">
+        <div class="die" id="${d.id}" style="transform:rotateX(${d.rotX}deg) rotateY(${d.rotY}deg)">
+          <div class="face f1">${d.val||d.sides}</div>
+          <div class="face f2">${d.val||d.sides}</div>
+          <div class="face f3">${d.val||d.sides}</div>
+          <div class="face f4">${d.val||d.sides}</div>
+          <div class="face f5">${d.val||d.sides}</div>
+          <div class="face f6">${d.val||d.sides}</div>
+        </div>
+      </div>`;
+    zone.appendChild(wrap);
+  });
+}
+
+// ── Animation ────────────────────────────────────────────────
+let lastTs=0;
+(function animate(ts){
+  requestAnimationFrame(animate);
+  const dt=Math.min((ts-lastTs)/1000,0.05);lastTs=ts;
+  diceObjects.forEach(d=>{
+    const el=document.getElementById(d.id);
+    if(!el)return;
+    if(d.spinning){
+      d.rotX+=d.vX*dt*360;
+      d.rotY+=d.vY*dt*360;
+      d.vX*=0.96;d.vY*=0.96;
+      if(Math.abs(d.vX)<0.4&&Math.abs(d.vY)<0.4){
+        d.spinning=false;
+        // Afficher le résultat sur toutes les faces
+        el.querySelectorAll('.face').forEach(f=>f.textContent=d.val);
+        if(d.doneCb){d.doneCb();d.doneCb=null;}
+      }
+    } else {
+      d.rotX+=(d.key==='d20'?10:8)*dt*(diceObjects.indexOf(d)%2?-1:1);
+      d.rotY+=(d.key==='d20'?14:12)*dt;
+    }
+    el.style.transform=`rotateX(${d.rotX}deg) rotateY(${d.rotY}deg)`;
+  });
+})();
+
+// ── Lancer ───────────────────────────────────────────────────
+const resultEl=document.getElementById('result');
+const detailEl=document.getElementById('detail');
+let rolling=false;
+
+function rollAll(){
+  if(diceObjects.length===0){resultEl.textContent='Ajoute des dés !';return;}
+  if(rolling)return;
+  rolling=true;
+  resultEl.textContent='⟳';detailEl.textContent='';
+
+  // Calculer les résultats
+  let total=0,parts=[];
+  diceObjects.forEach(d=>{
+    d.val=Math.ceil(Math.random()*d.sides);
+    total+=d.val;
+    parts.push(`${d.label}:${d.val}`);
+    // Mettre ? pendant le lancer
+    const el=document.getElementById(d.id);
+    if(el)el.querySelectorAll('.face').forEach(f=>f.textContent='?');
+  });
+  const mod=parseInt(document.getElementById('modifier').value)||0;
+  const grand=total+mod;
+  const modStr=mod!==0?(mod>0?` + ${mod}`:` − ${Math.abs(mod)}`):'' ;
+
+  // Lancer tous les dés en cascade
+  let done=0;
+  diceObjects.forEach((d,i)=>{
+    setTimeout(()=>{
+      d.spinning=true;
+      d.vX=(Math.random()-.5)*15+7;
+      d.vY=(Math.random()-.5)*15+9;
+      d.doneCb=()=>{
+        done++;
+        if(done===diceObjects.length){
+          rolling=false;
+          resultEl.textContent=`${grand}${mod!==0?` (${total}${modStr})`:''}`;
+          detailEl.textContent=parts.join('  ·  ');
+          addHist(grand,parts.join(', '),mod);
+        }
+      };
+    },i*120);
+  });
+}
+
+function clearAll(){
+  resultEl.textContent='';detailEl.textContent='';
+  diceObjects.forEach(d=>{d.val=null;});
+  renderZone();
+}
+
+function resetAll(){
+  DICE.forEach(d=>{counts[d.key]=0;document.getElementById('cnt-'+d.key).textContent='0';});
+  diceObjects=[];
+  document.getElementById('modifier').value=0;
+  resultEl.textContent='';detailEl.textContent='';
+  renderZone();
+  document.getElementById('hist').innerHTML='';
+}
+
+const histEl=document.getElementById('hist');
+function addHist(total,detail,mod){
+  const ms=mod!==0?(mod>0?` +${mod}`:` ${mod}`):'';
+  const r=document.createElement('div');r.className='hrow';
+  r.innerHTML=`<span>${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})} — ${detail}${ms}</span><span class="htot">${total}</span>`;
+  histEl.prepend(r);
+  while(histEl.children.length>8)histEl.removeChild(histEl.lastChild);
+}
+</script>
+</body>
+</html>

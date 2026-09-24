@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/png" href="/images/FavIcon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NyXia Game — Connexion</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/css/login.css">
+</head>
+<body>
+
+  <canvas id="starry-canvas"></canvas>
+
+  <div class="login-wrap">
+    <div class="login-card">
+
+      <!-- HEADER -->
+      <div class="login-header">
+        <img src="/images/NyXia.png" alt="NyXia Game" class="login-avatar">
+        <div class="login-title" id="game-login-title">NyXia Game | Nom du jeu à venir</div>
+        <div class="login-subtitle">Connecte-toi pour retrouver ton jeu.</div>
+      </div>
+
+      <!-- FORM -->
+      <form id="login-form" onsubmit="return false">
+
+        <div class="form-group">
+          <label class="form-label" for="firstname">Ton prénom</label>
+          <input class="form-input" type="text" id="firstname" placeholder="Ex : Sophie, Marc, Julie..." autocomplete="given-name">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="email">Adresse email</label>
+          <input class="form-input" type="email" id="email" placeholder="ton@email.com" autocomplete="email" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">Mot de passe</label>
+          <div class="input-wrap">
+            <input class="form-input" type="password" id="password" placeholder="••••••••" autocomplete="current-password" required style="padding-right:44px">
+            <button type="button" class="toggle-pw" id="toggle-pw" onclick="togglePw()" title="Afficher/masquer">👁</button>
+          </div>
+        </div>
+
+        <button class="btn-login" id="btn-login" onclick="doLogin()">
+          <div class="spinner" id="spinner"></div>
+          <span id="btn-text">Se connecter</span>
+        </button>
+
+        <div class="msg-box" id="msg-box"></div>
+
+      </form>
+
+      <!-- FOOTER -->
+      <div class="login-footer">
+        <a href="/">Découvrir le jeu</a><br>
+        <span style="opacity:0.5">© 2026 NyXia Game</span>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="/js/starry-bg.js" defer></script>
+
+  <script>
+    /* ══════════════════════════════════
+       AUTH CHECK — redirige si déjà connecté
+    ══════════════════════════════════ */
+    ;(function() {
+      var token = sessionStorage.getItem('nyxia_token')
+      if (token) {
+        fetch('/api/check-auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: token })
+        })
+        .then(function(r) { return r.json() })
+        .then(function(data) {
+          if (data.valid) window.location.href = '/dashbord'
+        })
+        .catch(function(){})
+      }
+    })()
+
+    /* ══════════════════════════════════
+       LOGIN
+    ══════════════════════════════════ */
+    function doLogin() {
+      var firstname = document.getElementById('firstname').value.trim()
+      var email    = document.getElementById('email').value.trim()
+      var password = document.getElementById('password').value.trim()
+      var btn      = document.getElementById('btn-login')
+      var spinner  = document.getElementById('spinner')
+      var btnText  = document.getElementById('btn-text')
+      var msgBox   = document.getElementById('msg-box')
+
+      if (!email || !password) {
+        showMsg('Remplis tous les champs.', 'error')
+        return
+      }
+
+      btn.disabled    = true
+      spinner.style.display = 'block'
+      btnText.textContent   = 'Connexion...'
+      msgBox.style.display  = 'none'
+
+      fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, password: password })
+      })
+      .then(function(r) {
+        return r.json().then(function(data) {
+          data.__status = r.status;
+          data.__ok = r.ok;
+          return data;
+        }).catch(function() {
+          return { __status: r.status, __ok: r.ok, error: 'Réponse invalide du serveur.' };
+        });
+      })
+      .then(function(data) {
+        if (data.success && data.token) {
+          sessionStorage.setItem('nyxia_token', data.token)
+          // Sauvegarde le prénom — priorité : champ login, sinon retour API (firstname stocké dans KV)
+          var name = firstname || data.firstname || ''
+          if (name) {
+            // Capitalise proprement
+            name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
+            localStorage.setItem('nyxia_username', name)
+          }
+          showMsg('✓ Connexion réussie ! Redirection...', 'success')
+          setTimeout(function() {
+            window.location.href = '/dashbord'
+          }, 1000)
+        } else {
+          showMsg(data.error || ('Identifiants incorrects. Code : ' + (data.__status || 'inconnu')), 'error')
+          btn.disabled = false
+          spinner.style.display = 'none'
+          btnText.textContent   = 'Se connecter'
+        }
+      })
+      .catch(function(err) {
+        showMsg('Connexion indisponible pour le moment. Réessaie.', 'error')
+        btn.disabled = false
+        spinner.style.display = 'none'
+        btnText.textContent   = 'Se connecter'
+      })
+    }
+
+    function showMsg(text, type) {
+      var box = document.getElementById('msg-box')
+      box.textContent    = text
+      box.className      = 'msg-box ' + type
+      box.style.display  = 'block'
+    }
+
+    function togglePw() {
+      var input = document.getElementById('password')
+      input.type = input.type === 'password' ? 'text' : 'password'
+    }
+
+    /* Enter = login */
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && e.target && e.target.tagName !== 'BUTTON') { e.preventDefault(); doLogin() }
+    })
+  </script>
+
+<script>
+fetch('/api/game/public',{cache:'no-store'}).then(r=>r.ok?r.json():{}).then(d=>{
+  if(d.title)document.getElementById('game-login-title').textContent='NyXia Game | '+d.title;
+}).catch(()=>{});
+</script>
+</body>
+</html>

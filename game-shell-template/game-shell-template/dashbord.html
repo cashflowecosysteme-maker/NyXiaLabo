@@ -1,0 +1,1070 @@
+<!DOCTYPE htmL>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/png" href="/images/FavIcon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NyXia Game | Nom du jeu à venir</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/images/FavIcon.png">
+
+  <link rel="stylesheet" href="/css/dashbord.css">
+</head>
+<body>
+
+  <canvas id="starry-canvas"></canvas>
+
+  <header>
+    <button type="button" id="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Ouvrir le menu">☰</button>
+    <div class="header-brand">
+      <img src="/images/NyXia.png" alt="NyXia">
+      <div class="brand-info">
+        <div class="brand-name">NyXia IA</div>
+        <div class="brand-status">En ligne</div>
+      </div>
+    </div>
+    <div class="header-center">
+      <div class="welcome-text">Bienvenue dans NyXia Game ✦ <strong id="header-username"></strong></div>
+    </div>
+    <div class="header-actions">
+      <span class="btn-header btn-pro">🎲 NyXia Game | Nom du jeu à venir</span>
+      <button class="btn-header btn-logout" onclick="logout()">Déconnexion</button>
+    </div>
+  </header>
+  <div id="mobile-menu-backdrop" onclick="closeMobileMenu()" aria-hidden="true"></div>
+
+  <div class="app-body">
+    <aside>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Mes Conversations</div>
+        <div class="nav-item active" id="nav-nyxia" onclick="openAgentTab('nyxia')">
+          <img class="nav-avatar" src="/images/NyXia.png" alt="NyXia">
+          <span class="nav-text"><span class="nav-name">NyXia</span><span class="nav-sub">Maître de jeu</span></span><span class="nav-arrow">›</span>
+        </div>
+        <div class="nav-item" id="nav-diane" onclick="openAgentTab('diane')">
+          <img class="nav-avatar" src="/images/Diane.png" alt="Diane">
+          <span class="nav-text"><span class="nav-name">Diane</span><span class="nav-sub">Univers · partage d’écran</span></span><span class="nav-arrow">›</span>
+        </div>
+        <div class="nav-item" id="nav-eric" onclick="openAgentTab('eric')">
+          <img class="nav-avatar" src="/images/Eric.png?v=20260922" alt="Éric">
+          <span class="nav-text"><span class="nav-name">Éric</span><span class="nav-sub">Cercle d’entraide</span></span><span class="nav-arrow">›</span>
+        </div>
+        <div class="nav-dropdown" id="nxg-characters">
+          <button type="button" class="nav-dropdown-trigger" id="nxg-characters-trigger" onclick="toggleGameCharacters()" aria-expanded="false" aria-controls="nxg-characters-menu">
+            <span aria-hidden="true">👄</span>
+            <span class="nav-dropdown-title">Personnages</span>
+            <span class="nav-dropdown-chevron" aria-hidden="true">⌄</span>
+          </button>
+          <div class="nav-dropdown-menu" id="nxg-characters-menu"></div>
+          <select id="nxg-npc-picker" onchange="nxgSelectNpc(this.value)" hidden style="display:none" aria-hidden="true"><option value="">Aucun PNJ pour le moment</option></select>
+          <div id="nxg-npc-nav" hidden></div>
+        </div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Le jeu</div>
+        <div class="nav-item" id="nav-jeu" onclick="nxgOpenPanel('jeu')"><span class="nav-icon">🎮</span><span class="nav-text"><span class="nav-name" id="nxg-title-nav">Nom du jeu à venir</span><span class="nav-sub">Diapositives · Médias · Histoire</span></span><span class="nav-arrow">›</span></div>
+        <div class="nav-item" id="nav-des" onclick="openAgentTab('des')"><span class="nav-icon">🎲</span><span class="nav-text"><span class="nav-name">Dés 3D NyXia</span><span class="nav-sub">Lancer les dés du jeu</span></span><span class="nav-arrow">›</span></div>
+        <div class="nav-item" id="nav-compte" onclick="nxgOpenPanel('compte')"><span class="nav-icon">📊</span><span class="nav-text"><span class="nav-name">Voir mon tableau de bord</span></span><span class="nav-arrow">›</span></div>
+        <div class="nav-item" id="nav-carte" onclick="nxgOpenPanel('carte')"><span class="nav-icon">🗺️</span><span class="nav-text"><span class="nav-name">Carte du jeu</span></span><span class="nav-arrow">›</span></div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Outils</div>
+        <div class="nav-item" id="nav-messages" onclick="showPanel('messages'); if(typeof loadMessages==='function')loadMessages()"><span class="nav-icon">💬</span> Messagerie <span id="unread-badge" style="display:none;margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:#ff4b6e;color:#fff;font-size:11px;font-weight:700;line-height:20px;text-align:center"></span><span class="nav-arrow">›</span></div>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="user-card">
+          <div class="user-avatar" id="sidebar-avatar">D</div>
+          <div class="user-info">
+            <div class="user-name" id="sidebar-username">Chargement...</div>
+            <div class="user-plan">✦ NyXia Game</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main-content">
+      <!-- Panel Chat — charge la page individuelle du personnage en iframe -->
+      <div class="panel active" id="panel-chat" style="flex-direction:column">
+        <iframe id="agent-iframe" src="about:blank" style="width:100%;height:100%;border:none;display:block" title="Conversation"></iframe>
+      </div>
+
+      <!-- Les pages du jeu sont AJOUTÉES : le panneau original de conversations reste intact. -->
+      <div class="panel nxg-panel" id="panel-jeu" onfullscreenchange="document.getElementById('nxg-fullscreen-game').textContent=document.fullscreenElement?'⛶ Quitter le plein écran':'⛶ Plein écran'"><div class="nxg-toolbar"><button type="button" id="nxg-fullscreen-game" onclick="var p=document.getElementById('panel-jeu');if(document.fullscreenElement){document.exitFullscreen()}else{p.requestFullscreen()}">⛶ Plein écran</button><h2 id="nxg-game-title">Nom du jeu à venir</h2></div><iframe src="about:blank" id="nxg-game-frame" title="Le jeu" allow="autoplay;fullscreen;picture-in-picture" onload="try{var b=this.contentDocument.getElementById('fullscreen-media');if(b)b.hidden=true}catch(e){}"></iframe></div>
+      <div class="panel nxg-panel nxg-scroll" id="panel-compte"><h2>Mon tableau de bord</h2><div id="nxg-account-content" class="nxg-grid"></div><section class="nxg-license"><h3>Licence d’utilisation</h3><p>Tu peux organiser des activités payantes à partir de ce jeu. Tu ne peux pas revendre le jeu, ses fichiers ou ses licences. Sa recommandation commerciale passe exclusivement par le Cercle d’entraide autorisé.</p></section></div>
+      <div class="panel nxg-panel nxg-scroll" id="panel-ressource"><h2 id="nxg-resource-title">Informations du jeu</h2><div class="nxg-resource" id="nxg-resource-body"></div></div>
+      <div class="panel nxg-panel nxg-scroll" id="panel-carte"><h2>Carte du jeu</h2><div id="nxg-map-content">La carte apparaîtra avec ce jeu.</div></div>
+      <!-- Panel Messagerie interne -->
+      <div class="panel" id="panel-messages" style="flex-direction:column;padding:24px;overflow-y:auto">
+        <div style="max-width:640px;margin:0 auto;width:100%">
+          <h2 style="font-family:'Space Grotesk',sans-serif;font-size:22px;margin-bottom:4px">💌 Messages du Cercle</h2>
+          <p style="color:var(--t3);font-size:13px;margin-bottom:24px">Écris au Super Admin ou à un contact officiel de l'équipe. Les membres ne peuvent pas s'écrire entre eux.</p>
+
+          <div style="background:rgba(123,92,255,0.06);border:1px solid rgba(123,92,255,0.15);border-radius:16px;padding:20px;margin-bottom:24px">
+            <div style="font-weight:600;font-size:13px;margin-bottom:12px">✦ Écrire à l'équipe</div>
+            <select id="msg-recipient" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(123,92,255,0.2);background:rgba(15,28,63,0.5);color:#fff;font-family:'Outfit',sans-serif;font-size:13px;margin-bottom:10px">
+              <option value="">Choisis un destinataire...</option>
+            </select>
+            <input type="text" id="msg-subject" placeholder="Sujet (optionnel)" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(123,92,255,0.2);background:rgba(15,28,63,0.5);color:#fff;font-family:'Outfit',sans-serif;font-size:13px;margin-bottom:10px">
+            <textarea id="msg-body" placeholder="Ton message..." rows="3" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(123,92,255,0.2);background:rgba(15,28,63,0.5);color:#fff;font-family:'Outfit',sans-serif;font-size:13px;resize:vertical;margin-bottom:10px"></textarea>
+            <button onclick="sendGuardienneMessage()" style="padding:10px 20px;border-radius:50px;border:none;background:linear-gradient(135deg,#7B5CFF,#5A6CFF);color:#fff;font-weight:600;font-size:13px;cursor:pointer">Envoyer 💜</button>
+            <span id="msg-send-status" style="margin-left:10px;font-size:12px;color:var(--t3)"></span>
+          </div>
+
+          <div style="font-weight:600;font-size:13px;margin-bottom:12px">📬 Ta boîte de réception</div>
+          <div id="messages-list" style="display:flex;flex-direction:column;gap:10px">
+            <div style="color:var(--t3);font-size:13px">Chargement...</div>
+          </div>
+        </div>
+      </div>
+      <!-- Panel Cercle — multi-modèles -->
+    </div>
+  </div>
+
+  <script src="/js/starry-bg.js" defer></script>
+
+  <script>
+    /* ═══════ CONFIG VOIX ═══════ */
+    // NyXia garde exactement sa voix d'origine — inchangée, cohérente avec tous les autres portails.
+    var VOICE_PRIORITY = {
+      nyxia:  ['Microsoft Denise','Microsoft Hortense','Google français','Amélie','Audrey','Virginie','Sophie','Marie','Alice'],
+      diane:  ['Audrey','Virginie','Microsoft Hortense','Sophie','Marie','Alice','Amélie','Microsoft Denise','Google français'],
+      lena:   ['Julie','Audrey','Ariane','Microsoft Julie','Amélie','Caroline','Microsoft Hortense']
+    }
+    var AGENT_VOICE_GENDER = {
+      nyxia: 'feminine', diane: 'feminine', lena: 'feminine', daphee: 'feminine',
+      gabrielle: 'feminine', alexandra: 'feminine'
+    }
+    var _cachedVoices = null;
+    function pickBestFrenchVoice(voices, agentKey) {
+      if (!voices || !voices.length) voices = window.speechSynthesis.getVoices()
+      if (!voices || !voices.length) return _cachedVoices
+      var ownList = VOICE_PRIORITY[agentKey] || VOICE_PRIORITY.nyxia
+      for (var i = 0; i < ownList.length; i++) {
+        var found = voices.find(function(v) { return v.name.indexOf(ownList[i]) !== -1 && v.lang.indexOf('fr') === 0 })
+        if (found) { _cachedVoices = found; console.log('🔊 Voix (' + agentKey + '):', found.name); return found }
+      }
+      // Repli sur l'autre genre si aucune voix propre à ce personnage n'existe sur cet appareil
+      var gender = AGENT_VOICE_GENDER[agentKey] || 'feminine'
+      var fallbackList = VOICE_PRIORITY.alex || VOICE_PRIORITY.nyxia
+      for (var j = 0; j < fallbackList.length; j++) {
+        var found2 = voices.find(function(v) { return v.name.indexOf(fallbackList[j]) !== -1 && v.lang.indexOf('fr') === 0 })
+        if (found2) { _cachedVoices = found2; console.log('🔊 Voix repli (' + agentKey + '):', found2.name); return found2 }
+      }
+      var any = voices.find(function(v) { return v.lang === 'fr-FR' }) || voices.find(function(v) { return v.lang && v.lang.indexOf('fr') === 0 }) || null
+      if (any) { _cachedVoices = any; console.log('🔊 Voix générique:', any.name) }
+      return any
+    }
+
+    /* ═══════ AUTH ═══════ */
+    var sessionToken = sessionStorage.getItem('nyxia_token') || ''
+    var clientEmail  = '', clientName = ''
+    ;(function checkAuth() {
+      // Le portail Alex utilise une session normale, sans expiration de produit à 30 jours.
+      if (!sessionToken) { window.location.href = '/login'; return }
+      fetch('/api/check-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: sessionToken })
+      })
+      .then(function(r) { return r.json() })
+      .then(function(data) {
+        if (!data.valid) { window.location.href = '/login'; return }
+        clientEmail = data.email || ''
+        clientName = localStorage.getItem('nyxia_username') || data.firstname || ''
+        initUI()
+      })
+      .catch(function() { window.location.href = '/login' })
+    })()
+
+    function initUI() {
+      document.getElementById('header-username').textContent = clientName
+      document.getElementById('sidebar-username').textContent = clientName
+      document.getElementById('sidebar-avatar').textContent = (clientName || 'U').charAt(0).toUpperCase()
+      // Charge NyXia par défaut (cohérent avec le nav actif + iframe initiale)
+      openAgentTab('nyxia')
+      if (typeof nxgInit === 'function') nxgInit()
+      refreshUnreadBadge()
+      var voiceToggle = document.getElementById('nyxia-voice-toggle')
+      if (voiceToggle) voiceToggle.style.display = 'flex'
+    }
+
+    function logout() {
+      fetch('/api/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: sessionToken }) })
+      .finally(function() {
+        sessionStorage.removeItem('nyxia_token')
+        localStorage.removeItem('nyxia_username')
+        window.location.href = '/login'
+      })
+    }
+
+    /* ═══════ MESSAGERIE INTERNE ═══════ */
+    function refreshUnreadBadge() {
+      fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: sessionToken }) })
+      .then(r => r.json()).then(data => {
+        var badge = document.getElementById('unread-badge')
+        if (data.unreadCount > 0) { badge.textContent = data.unreadCount; badge.style.display = 'inline-block' }
+        else { badge.style.display = 'none' }
+      }).catch(() => {})
+    }
+
+    function loadMessages() {
+      // Recharge la liste des destinataires possibles
+      fetch('/api/gardiennes/list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: sessionToken }) })
+      .then(r => r.json()).then(data => {
+        var sel = document.getElementById('msg-recipient')
+        sel.innerHTML = '<option value="">Choisis un destinataire...</option>'
+        var adminOpt = document.createElement('option')
+        adminOpt.value = '__admin__'; adminOpt.textContent = '🛡️ Écrire au Super Admin (Diane)'
+        sel.appendChild(adminOpt)
+        ;(data.gardiennes || []).forEach(function(g) {
+          var opt = document.createElement('option')
+          opt.value = g.email; opt.textContent = g.firstName
+          sel.appendChild(opt)
+        })
+      }).catch(() => {})
+
+      // Recharge la boîte de réception
+      var listEl = document.getElementById('messages-list')
+      listEl.innerHTML = '<div style="color:var(--t3);font-size:13px">Chargement...</div>'
+      fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: sessionToken }) })
+      .then(r => r.json()).then(data => {
+        var messages = data.messages || []
+        if (messages.length === 0) {
+          listEl.innerHTML = '<div style="color:var(--t3);font-size:13px">Aucun message pour l\'instant. 🕯️</div>'
+          return
+        }
+        listEl.innerHTML = messages.map(function(m) {
+          var unreadDot = !m.read ? '<span style="width:8px;height:8px;border-radius:50%;background:#ff4b6e;display:inline-block;margin-right:6px"></span>' : ''
+          var when = new Date(m.createdAt).toLocaleString('fr-CA', { dateStyle: 'medium', timeStyle: 'short' })
+          var keyEnc = encodeURIComponent(m.key)
+          return '<div class="msg-card" data-key="' + keyEnc + '" style="background:rgba(123,92,255,0.05);border:1px solid rgba(123,92,255,0.12);border-radius:12px;padding:14px 16px">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;cursor:pointer" onclick="markRead(\'' + keyEnc + '\', this.closest(\'.msg-card\'))">' +
+              '<span style="font-weight:600;font-size:13px">' + unreadDot + escapeHtmlMsg(m.fromName) + '</span>' +
+              '<span style="font-size:11px;color:var(--t3)">' + when + '</span>' +
+            '</div>' +
+            '<div style="font-size:12px;color:var(--t3);margin-bottom:4px;cursor:pointer" onclick="markRead(\'' + keyEnc + '\', this.closest(\'.msg-card\'))">' + escapeHtmlMsg(m.subject) + '</div>' +
+            '<div style="font-size:13px;color:var(--t2);cursor:pointer" onclick="markRead(\'' + keyEnc + '\', this.closest(\'.msg-card\'))">' + escapeHtmlMsg(m.body) + '</div>' +
+            '<div style="margin-top:10px;display:flex;justify-content:flex-end">' +
+              '<button type="button" onclick="event.stopPropagation(); deleteMessage(\'' + keyEnc + '\', this.closest(\'.msg-card\'))" style="padding:5px 12px;border-radius:50px;border:1px solid rgba(255,75,110,0.3);background:rgba(255,75,110,0.08);color:#ff8fab;font-family:Outfit,sans-serif;font-size:11px;cursor:pointer">🗑️ Supprimer</button>' +
+            '</div>' +
+          '</div>'
+        }).join('')
+        refreshUnreadBadge()
+      }).catch(() => { listEl.innerHTML = '<div style="color:var(--t3);font-size:13px">Petite interruption... réessaie.</div>' })
+    }
+
+
+    function deleteMessage(encodedKey, el) {
+      if (!confirm('Supprimer ce message de ta boîte ?')) return
+      var key = decodeURIComponent(encodedKey)
+      fetch('/api/messages/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: sessionToken, key: key })
+      })
+      .then(function(r) { return r.json() })
+      .then(function(data) {
+        if (data.success) {
+          if (el && el.parentNode) el.parentNode.removeChild(el)
+          refreshUnreadBadge()
+          var listEl = document.getElementById('messages-list')
+          if (listEl && !listEl.querySelector('.msg-card')) {
+            listEl.innerHTML = '<div style="color:var(--t3);font-size:13px">Aucun message pour l\'instant. 🕯️</div>'
+          }
+        } else {
+          alert(data.error || 'Impossible de supprimer le message.')
+        }
+      })
+      .catch(function() { alert('Petite interruption... réessaie.') })
+    }
+
+    function markRead(encodedKey, el) {
+      var key = decodeURIComponent(encodedKey)
+      fetch('/api/messages/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: sessionToken, key: key }) })
+      .then(() => { refreshUnreadBadge(); el.style.opacity = '0.6' }).catch(() => {})
+    }
+
+    function sendGuardienneMessage() {
+      var toEmail = document.getElementById('msg-recipient').value
+      var subject = document.getElementById('msg-subject').value.trim()
+      var body = document.getElementById('msg-body').value.trim()
+      var status = document.getElementById('msg-send-status')
+      if (!toEmail) { status.textContent = 'Choisis un destinataire d\'abord.'; return }
+      if (!body) { status.textContent = 'Écris ton mot avant d\'envoyer.'; return }
+      if (!sessionToken) { status.textContent = 'Session expirée — reconnecte-toi.'; return }
+
+      status.textContent = 'Envoi...'
+      fetch('/api/messages/send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: sessionToken, toEmail: toEmail, subject: subject, body: body })
+      })
+      .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, status: r.status, data: data } }) })
+      .then(function(res) {
+        if (res.data && res.data.success) {
+          status.textContent = '✓ Envoyé 💜'
+          document.getElementById('msg-subject').value = ''
+          document.getElementById('msg-body').value = ''
+          setTimeout(function() { status.textContent = '' }, 3000)
+        } else {
+          status.textContent = (res.data && res.data.error) || ('Erreur ' + res.status + ' lors de l\'envoi.')
+        }
+      })
+      .catch(function() { status.textContent = 'Petite interruption... réessaie.' })
+    }
+
+    function escapeHtmlMsg(s) {
+      var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML
+    }
+
+    /* ═══════ NAVIGATION ═══════ */
+    // Menu des personnages du jeu : reprend les PNJ déjà chargés dans le sélecteur existant.
+    function renderGameCharactersMenu() {
+      var menu = document.getElementById('nxg-characters-menu')
+      var select = document.getElementById('nxg-npc-picker')
+      if (!menu || !select) return
+      menu.replaceChildren()
+      var entries = Array.prototype.filter.call(select.options, function(opt) { return opt.value })
+      if (!entries.length) {
+        var empty = document.createElement('span')
+        empty.textContent = 'Aucun personnage pour le moment'
+        empty.style.cssText = 'display:block;padding:9px;color:var(--t3);font-size:12px'
+        menu.appendChild(empty)
+        return
+      }
+      entries.forEach(function(opt) {
+        var item = document.createElement('div')
+        item.className = 'nav-item'
+        item.id = 'nav-pnj-' + opt.value
+        item.setAttribute('role', 'button')
+        item.tabIndex = 0
+        var avatar = document.createElement('img')
+        avatar.className = 'nav-avatar'
+        var npcMeta = nxgState && nxgState.game && Array.isArray(nxgState.game.npcs) ? nxgState.game.npcs.find(function(n){ return n.id === opt.value }) : null
+        avatar.src = (npcMeta && /^https:\/\//i.test(String(npcMeta.portraitUrl||''))) ? npcMeta.portraitUrl : '/images/PNJ-avatar.png'
+        avatar.alt = npcMeta ? npcMeta.name : ''
+        avatar.onerror = function(){ this.onerror=null; this.src='/images/PNJ-avatar.png' }
+        var text = document.createElement('span')
+        text.className = 'nav-text'
+        var name = document.createElement('span')
+        name.className = 'nav-name'
+        name.textContent = opt.textContent
+        var sub = document.createElement('span')
+        sub.className = 'nav-sub'
+        sub.textContent = 'Personnage du jeu'
+        text.appendChild(name)
+        text.appendChild(sub)
+        var arrow = document.createElement('span')
+        arrow.className = 'nav-arrow'
+        arrow.textContent = '›'
+        item.appendChild(avatar)
+        item.appendChild(text)
+        item.appendChild(arrow)
+        var open = function() { nxgSelectNpc(opt.value) }
+        item.addEventListener('click', open)
+        item.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() }
+        })
+        menu.appendChild(item)
+      })
+      var active = document.getElementById('agent-iframe')?.getAttribute('data-agent') || ''
+      var activeItem = document.getElementById('nav-' + active)
+      if (activeItem && menu.contains(activeItem)) activeItem.classList.add('active')
+    }
+
+    function toggleGameCharacters() {
+      var dropdown = document.getElementById('nxg-characters')
+      var trigger = document.getElementById('nxg-characters-trigger')
+      if (!dropdown || !trigger) return
+      var open = !dropdown.classList.contains('open')
+      if (open) renderGameCharactersMenu()
+      dropdown.classList.toggle('open', open)
+      trigger.setAttribute('aria-expanded', open ? 'true' : 'false')
+    }
+
+    function updateGameCharactersState(key) {
+      var dropdown = document.getElementById('nxg-characters')
+      if (!dropdown) return
+      var isNpc = typeof key === 'string' && key.indexOf('pnj-') === 0
+      dropdown.classList.toggle('has-active', isNpc)
+      if (isNpc) {
+        renderGameCharactersMenu()
+        dropdown.classList.add('open')
+        document.getElementById('nxg-characters-trigger').setAttribute('aria-expanded', 'true')
+        var current = document.getElementById('nav-' + key)
+        if (current) current.classList.add('active')
+      }
+    }
+
+    var WRITING_WORKSHOP_AGENTS = ['daphnee', 'alexandra', 'gabrielle']
+
+    function isWritingWorkshopAgent(key) {
+      return WRITING_WORKSHOP_AGENTS.indexOf(key) !== -1
+    }
+
+    function setWritingWorkshopOpen(forceOpen) {
+      var workshop = document.getElementById('writing-workshop')
+      var trigger = document.getElementById('writing-workshop-trigger')
+      if (!workshop) return
+      var shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !workshop.classList.contains('open')
+      workshop.classList.toggle('open', shouldOpen)
+      if (trigger) trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false')
+    }
+
+    function toggleWritingWorkshop() {
+      setWritingWorkshopOpen()
+    }
+
+    function updateWritingWorkshopState(key) {
+      updateGameCharactersState(key)
+      var workshop = document.getElementById('writing-workshop')
+      if (!workshop) return
+      var isWorkshopAgent = isWritingWorkshopAgent(key)
+      workshop.classList.toggle('has-active', isWorkshopAgent)
+      if (isWorkshopAgent) setWritingWorkshopOpen(true)
+    }
+
+    function showPanel(name) {
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'))
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'))
+      updateWritingWorkshopState('')
+      var panelEl = document.getElementById('panel-' + name)
+      if (panelEl) panelEl.classList.add('active')
+      var navEl = document.getElementById('nav-' + name)
+      if (navEl) navEl.classList.add('active')
+      closeMobileMenu()
+    }
+
+    function toggleMobileMenu(e) {
+      var aside = document.querySelector('aside')
+      var bd = document.getElementById('mobile-menu-backdrop')
+      if (!aside) return false
+      var open = !aside.classList.contains('mobile-open')
+      if (open) aside.classList.add('mobile-open')
+      else aside.classList.remove('mobile-open')
+      if (bd) {
+        if (open) bd.classList.add('mobile-open')
+        else bd.classList.remove('mobile-open')
+      }
+      document.body.style.overflow = open ? 'hidden' : ''
+      return false
+    }
+    function closeMobileMenu() {
+      var aside = document.querySelector('aside')
+      var bd = document.getElementById('mobile-menu-backdrop')
+      if (aside) aside.classList.remove('mobile-open')
+      if (bd) bd.classList.remove('mobile-open')
+      document.body.style.overflow = ''
+    }
+    window.toggleMobileMenu = toggleMobileMenu
+    window.closeMobileMenu = closeMobileMenu
+
+
+    /* ═══════ MESSAGES DES IFRAMES → personnage ═══════ */
+    window.addEventListener('message', function(e) {
+      if (!e.data) return
+      // Ouverture d'un agent précis (ex. page Miroir → Séléna). Le contexte est déjà déposé dans sessionStorage par l'iframe.
+      if (e.data.type === 'nyxia_open' && e.data.agent && AGENT_PAGES[e.data.agent]) {
+        openAgentTab(e.data.agent)
+        return
+      }
+      if (e.data.type === 'nyxia_suggest' && e.data.text) {
+        // Ouvre NyXia et laisse l'iframe gérer (le chat est maintenant dans l'iframe)
+        openAgentTab('diane')
+      }
+    })
+
+    /* ═══════ CHAT ═══════ */
+    var chatHistories = {
+      diane: [], nyxia: [], selena: [], daphnee: [], alexandra: [],
+      gabrielle: []
+    }
+    var _nyxiaVoiceAuto = false
+    var _micRecognition = null, _micListening = false
+
+    // Reconnaissance vocale (parler → texte) — gratuite, native au navigateur.
+    // Disponible sur Chrome/Edge ; Safari inconsistant, Firefox non supporté.
+    function toggleMic() {
+      var SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition
+      if (!SpeechRecognitionAPI) {
+        alert("La reconnaissance vocale n'est pas disponible sur ce navigateur. Essaie avec Chrome ou Edge.")
+        return
+      }
+      var btn = document.getElementById('btn-mic')
+      if (_micListening) {
+        if (_micRecognition) _micRecognition.stop()
+        return
+      }
+      _micRecognition = new SpeechRecognitionAPI()
+      _micRecognition.lang = 'fr-FR'
+      _micRecognition.interimResults = false
+      _micRecognition.maxAlternatives = 1
+
+      _micRecognition.onstart = function() {
+        _micListening = true
+        btn.textContent = '⏹'
+        btn.style.background = 'rgba(255,75,110,0.15)'
+        btn.style.borderColor = 'rgba(255,75,110,0.4)'
+        btn.style.color = '#ff4b6e'
+      }
+      _micRecognition.onresult = function(event) {
+        var transcript = event.results[0][0].transcript
+        document.getElementById('chat-input').value = transcript
+        sendMessage()
+      }
+      _micRecognition.onerror = function() { resetMicBtn() }
+      _micRecognition.onend = function() { resetMicBtn() }
+      _micRecognition.start()
+    }
+
+    function resetMicBtn() {
+      _micListening = false
+      var btn = document.getElementById('btn-mic')
+      if (!btn) return
+      btn.textContent = '🎤'
+      btn.style.background = 'rgba(123,92,255,0.06)'
+      btn.style.borderColor = 'rgba(123,92,255,0.2)'
+      btn.style.color = 'var(--t3)'
+    }
+
+    var isSpeaking = false, _currentAttachment = null, _currentAgent = 'diane'
+
+    function currentHistory() { return chatHistories[_currentAgent] }
+    function currentMsgsEl() { return document.getElementById('chat-messages-' + _currentAgent) }
+
+    // Bascule l'espace de conversation visible — chaque personnage garde le sien,
+    // NyXia n'est plus jamais mélangée avec les Alphas.
+    function switchToAgentContainer(key) {
+      if (_msgDiane && !_msgDiane.paused) {
+        _msgDiane.pause(); _msgDiane.currentTime = 0
+        var speakBtn = document.getElementById('btn-speak')
+        if (speakBtn) { speakBtn.textContent = '🔊 Message d\'accueil'; speakBtn.classList.remove('speaking') }
+      }
+      document.querySelectorAll('.chat-messages').forEach(function(el) { el.classList.remove('active-chat') })
+      var container = document.getElementById('chat-messages-' + key)
+      if (container) container.classList.add('active-chat')
+      _currentAgent = key
+      var voiceToggle = document.getElementById('nyxia-voice-toggle')
+      if (voiceToggle) voiceToggle.style.display = (key === 'nyxia') ? 'flex' : 'none'
+    }
+
+    function sendWelcome() {
+      var name = clientName || 'Membre'
+      var welcome = '✦ Allô ' + name + ' 💜\n\n' +
+        'Bienvenue dans le portail de Séléna, ton atelier vivant pour retrouver une amie dans le miroir.\n\n' +
+        'Diane t’accompagne, NyXia t’oriente, Séléna t’aide à te retrouver et chaque assistante possède sa spécialité.\n\n' +
+        'Dis-moi simplement ce que tu aimerais découvrir aujourd\'hui aujourd’hui. ✦'
+      addBotMessage(welcome)
+      addAlphaChoiceButtons()
+    }
+
+    var ALPHA_INFO = {
+      diane:      { name: 'Diane',      icon: '👑', sub: 'Créatrice & accompagnement', greeting: '👋 Dis-moi : **qu’aimerais-tu enfin oser écrire aujourd’hui ?** 💜' },
+      nyxia:      { name: 'NyXia',      icon: '✦',  sub: 'Orientation & technique', greeting: '👋 Dis-moi : **que veux-tu retrouver ou comprendre dans le portail ?** 💜' },
+      selena:       { name: 'Séléna',       icon: '🪞', sub: 'Miroir', greeting: '👋 Dis-moi : **aimerais-tu faire un exercice miroir ?** ✨' },
+      daphnee:      { name: 'Daphnée',      icon: '🍲', sub: 'Nutrition', greeting: '🍲 Parle-moi de tes goûts alimentaires.' },
+      alexandra:      { name: 'Alexandra',      icon: '🧘', sub: 'Spécialiste du stress', greeting: '🧘 Qu’est-ce qui te préoccupe actuellement ?' },
+      gabrielle:  { name: 'Gabrielle',  icon: '🎭', sub: 'Spécialiste EFT', greeting: '🎭 Quelle émotion t’habite en ce moment ?' }
+      
+    }
+    var AGENT_IMAGES = {
+      nyxia: '/images/NyXia.png',
+      diane: '/images/Diane.png',
+      eric: '/images/Eric.png',
+      selena: '/Selena.png',
+      daphnee: '/Daphnee.png',
+      alexandra: '/Alexandra.png',
+      gabrielle: '/Gabrielle.png'
+    }
+    function avatarHtmlFor(key, sizeClass) {
+      sizeClass = sizeClass || 'msg-avatar'
+      var src = AGENT_IMAGES[key] || AGENT_IMAGES.nyxia
+      var name = (ALPHA_INFO[key] && ALPHA_INFO[key].name) || 'NyXia'
+      return '<img src="' + src + '" class="' + sizeClass + '" alt="' + name + '">'
+    }
+
+    function updateHeaderAvatar(key) {
+      var el = document.getElementById('chat-header-avatar')
+      if (!el) return
+      el.innerHTML = '<img src="' + (AGENT_IMAGES[key] || AGENT_IMAGES.nyxia) + '" alt="' + ((ALPHA_INFO[key] && ALPHA_INFO[key].name) || 'NyXia') + '">'
+    }
+
+    function addAlphaChoiceButtons() {
+      var msgs = currentMsgsEl()
+      var row = document.createElement('div')
+      row.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 12px 0'
+      Object.keys(ALPHA_INFO).forEach(function(key) {
+        var a = ALPHA_INFO[key]
+        var btn = document.createElement('button')
+        btn.className = 'sugg-btn'
+        btn.innerHTML = a.icon + ' ' + a.name
+        btn.onclick = function() { chooseAlpha(key) }
+        row.appendChild(btn)
+      })
+      msgs.appendChild(row)
+      msgs.scrollTop = msgs.scrollHeight
+    }
+
+    function chooseAlpha(key) {
+      var a = ALPHA_INFO[key]
+      if (!a) return
+      var isFirstVisit = document.getElementById('chat-messages-' + key) && document.getElementById('chat-messages-' + key).children.length === 0
+      switchToAgentContainer(key)
+      document.getElementById('chat-header-name').textContent = a.name
+      document.getElementById('chat-header-sub').textContent = a.sub
+      updateHeaderAvatar(key)
+      document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active') })
+      var navEl = document.getElementById('nav-' + key)
+      if (navEl) navEl.classList.add('active')
+      updateWritingWorkshopState(key)
+      if (isFirstVisit) {
+        var videoUrl = AGENT_WELCOME_VIDEO[key]
+        if (videoUrl) addVideoMessage(videoUrl, key)
+        addBotMessage(a.greeting)
+      } else {
+        var msgs = currentMsgsEl()
+        if (msgs) msgs.scrollTop = msgs.scrollHeight
+      }
+    }
+
+    // Vidéo de bienvenue  — jouée automatiquement une fois, avec ses
+    // propres contrôles pour la réécouter ensuite. Toujours suivie du texte.
+    function addVideoMessage(videoUrl, agentKey) {
+      var msgs = document.getElementById('chat-messages-' + agentKey)
+      var div = document.createElement('div'); div.className = 'msg bot'
+      div.style.cssText = 'display:flex;gap:10px;align-items:flex-start'
+      var wrapper = document.createElement('div'); wrapper.style.cssText = 'display:flex;flex-direction:column;gap:4px;max-width:100%;flex:1'
+      var videoWrap = document.createElement('div')
+      videoWrap.style.cssText = 'border-radius:14px;overflow:hidden;max-width:320px;background:#000'
+      var video = document.createElement('video')
+      video.src = videoUrl
+      video.controls = true
+      video.playsInline = true
+      video.style.cssText = 'width:100%;display:block'
+      videoWrap.appendChild(video)
+      wrapper.appendChild(videoWrap)
+      div.innerHTML = avatarHtmlFor(agentKey)
+      div.appendChild(wrapper)
+      msgs.appendChild(div); msgs.scrollTop = msgs.scrollHeight
+      video.play().catch(function() { /* lecture auto bloquée par le navigateur — le membre peut cliquer play elle-même */ })
+    }
+
+    // Accès direct depuis la barre latérale — charge la page individuelle du personnage en iframe.
+    // Chaque personnage a sa propre page, chargée dans l'iframe du tableau de bord.
+    var AGENT_PAGES = {
+      nyxia:  '/chat-nyxia.html',
+      diane:  '/chat-diane.html',
+      eric:    '/chat-eric.html',
+      daphnee: '/chat-daphnee.html',
+      alexandra: '/chat-alexandra.html',
+      gabrielle: '/chat-gabrielle.html',
+     miroir: '/miroir.html',
+      coverstudio: '/studio-couverture.html',
+      des: '/nyxia-des-3d.html'
+    }
+
+    function openAgentTab(key) {
+      // Affiche le panel chat
+      document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active') })
+      document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active') })
+
+      var panelEl = document.getElementById('panel-chat')
+      if (panelEl) panelEl.classList.add('active')
+
+      var navEl = document.getElementById('nav-' + key)
+      if (navEl) navEl.classList.add('active')
+      updateWritingWorkshopState(key)
+
+      // Charge la page du personnage dans l'iframe
+      var iframe = document.getElementById('agent-iframe')
+      var page = AGENT_PAGES[key] || AGENT_PAGES.nyxia
+      if (iframe) {
+        var tok = sessionToken || sessionStorage.getItem('nyxia_token') || ''
+        var base = page + (page.indexOf('?') >= 0 ? '&' : '?') + 't=' + encodeURIComponent(tok)
+        // Recharge seulement si on change de personnage (conserve mieux le cache navigateur)
+        var current = iframe.getAttribute('data-agent') || ''
+        if (current !== key) {
+          iframe.setAttribute('data-agent', key)
+          iframe.src = base + '&_=' + Date.now()
+        }
+      }
+
+      closeMobileMenu()
+    }
+
+    function sendSuggestion(text) {
+      document.getElementById('suggestions').style.display = 'none'
+      sendMessageText(text)
+    }
+
+    function sendMessage() {
+      var input = document.getElementById('chat-input')
+      var text = input.value.trim()
+      if (!text && !_currentAttachment) return
+      input.value = ''; input.style.height = 'auto'
+      document.getElementById('suggestions').style.display = 'none'
+      sendMessageText(text || '📎 Fichier joint')
+    }
+
+    function sendMessageText(text) {
+      if (!clientName) {
+        var lastMsg = document.querySelector('#chat-messages-' + _currentAgent + ' .msg.bot:last-child .msg-bubble')
+        if (lastMsg && (lastMsg.textContent.includes('appelles') || lastMsg.textContent.includes('prénom'))) {
+          var name = text.trim().split(' ')[0]
+          clientName = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
+          localStorage.setItem('nyxia_username', clientName)
+          document.getElementById('header-username').textContent = clientName
+          document.getElementById('sidebar-username').textContent = clientName
+          document.getElementById('sidebar-avatar').textContent = clientName.charAt(0).toUpperCase()
+        }
+      }
+      var attachmentToSend = _currentAttachment ? JSON.parse(JSON.stringify(_currentAttachment)) : null
+      var displayText = text
+      if (attachmentToSend) { displayText = text ? text + '\n📎 ' + attachmentToSend.name : '📎 ' + attachmentToSend.name }
+      addUserMessage(displayText)
+      var historyContent = text
+      if (attachmentToSend) { historyContent = (text ? text + '\n' : '') + '[Fichier joint: ' + attachmentToSend.name + ' (' + attachmentToSend.type + ')]' }
+      currentHistory().push({ role: 'user', content: historyContent })
+      if (_currentAttachment) {
+        _currentAttachment = null
+        var bar = document.getElementById('attach-bar'), fi = document.getElementById('chat-file')
+        if (bar) bar.style.display = 'none'; if (fi) fi.value = ''
+      }
+      var btn = document.getElementById('btn-send')
+      btn.disabled = true
+      addTyping()
+      var requestAgent = _currentAgent
+      fetch('/api/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, history: chatHistories[requestAgent].slice(-10), userName: clientName, agent: requestAgent, attachment: attachmentToSend, token: sessionToken })
+      })
+      .then(r => r.json())
+      .then(data => {
+        removeTyping()
+        var reply = data.content || 'Erreur inattendue — réessaie dans un instant 💜'
+        addBotMessage(reply)
+        chatHistories[requestAgent].push({ role: 'assistant', content: reply })
+        if (chatHistories[requestAgent].length > 20) chatHistories[requestAgent] = chatHistories[requestAgent].slice(-20)
+        // Lecture automatique : toujours pour les Alphas (OpenAI, coût minime),
+        // seulement si activé pour NyXia (ElevenLabs, forfait mensuel).
+        var shouldAutoPlay = true
+        if (shouldAutoPlay) {
+          var msgsEl = document.getElementById('chat-messages-' + requestAgent)
+          var lastBotMsg = msgsEl ? msgsEl.querySelector('.msg.bot:last-child') : null
+          if (lastBotMsg) {
+            var speakBtn = Array.prototype.find.call(lastBotMsg.querySelectorAll('button'), function(b) { return b.textContent.indexOf('Écouter') !== -1 })
+            if (speakBtn) speakBtn.click()
+          }
+        }
+        btn.disabled = false
+      })
+      .catch(() => { removeTyping(); addBotMessage('Petite interruption... réessaie dans un instant 💜'); btn.disabled = false })
+    }
+
+    /* ═══════ MESSAGES & IMAGES ═══════ */
+    function addBotMessage(text) {
+      var msgAgent = _currentAgent
+      var msgs = document.getElementById('chat-messages-' + msgAgent)
+      var div = document.createElement('div'); div.className = 'msg bot'
+      div.style.cssText = 'display:flex;gap:10px;align-items:flex-start'
+      var wrapper = document.createElement('div'); wrapper.style.cssText = 'display:flex;flex-direction:column;gap:4px;max-width:100%;flex:1'
+
+      var imgRegex = /\[IMAGE\s*:\s*([\s\S]*?)\]/i
+      var imgMatch = text.match(imgRegex)
+      var parchRegex = /\[PARCHEMIN\]([\s\S]*?)\[\/PARCHEMIN\]/i
+      var parchMatch = text.match(parchRegex)
+      var parchImgRegex = /\[PARCHEMIN_IMAGE\s*:\s*([\s\S]*?)\]/i
+      var parchImgMatch = text.match(parchImgRegex)
+      var textWithoutImg = text.replace(imgRegex, '').replace(parchRegex, '').replace(parchImgRegex, '').trim()
+      var imgDesc = imgMatch ? imgMatch[1].trim() : null
+      var parchContent = parchMatch ? parchMatch[1].trim() : null
+      var parchImgUrl = parchImgMatch ? parchImgMatch[1].trim() : null
+
+      var bubble = document.createElement('div'); bubble.className = 'msg-bubble'
+      if (textWithoutImg) {
+        bubble.innerHTML = cleanMarkdown(escHtml(textWithoutImg)).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')
+      } else if (!imgDesc && !parchContent) {
+        bubble.innerHTML = cleanMarkdown(escHtml(text)).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')
+      }
+      wrapper.appendChild(bubble)
+
+      // Carte de parchemin — séparée du texte de l'Alpha, avec un vrai bouton Copier qui ne
+      // prend QUE le contenu publiable, jamais ses propres mots autour. Évite qu'une Gardienne
+      // copie et publie par erreur une phrase comme "Voici ton parchemin..." sur Facebook.
+      if (parchContent) {
+        var parchWrap = document.createElement('div')
+        parchWrap.style.cssText = 'background:rgba(123,92,255,0.06);border:1px solid rgba(123,92,255,0.18);border-radius:14px;padding:16px;margin-top:4px;max-width:460px'
+
+        if (parchImgUrl) {
+          var parchImgEl = document.createElement('img')
+          parchImgEl.src = parchImgUrl
+          parchImgEl.alt = 'Image du parchemin'
+          parchImgEl.style.cssText = 'width:100%;border-radius:10px;display:block;margin-bottom:12px;max-height:320px;object-fit:cover'
+          parchImgEl.onerror = function() { parchImgEl.style.display = 'none' }
+          parchWrap.appendChild(parchImgEl)
+        }
+
+        var parchText = document.createElement('div')
+        parchText.style.cssText = 'font-size:13.5px;line-height:1.7;white-space:pre-wrap;color:var(--t2)'
+        parchText.textContent = parchContent
+        parchWrap.appendChild(parchText)
+
+        var parchBtnRow = document.createElement('div')
+        parchBtnRow.style.cssText = 'display:flex;gap:8px;margin-top:12px'
+
+        var copyBtn = document.createElement('button')
+        copyBtn.textContent = '📋 Copier le texte'
+        copyBtn.style.cssText = 'flex:1;padding:9px;border-radius:9px;border:1px solid rgba(123,92,255,0.3);background:rgba(123,92,255,0.1);color:var(--t2);font-family:Outfit,sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s'
+        copyBtn.addEventListener('click', function() {
+          navigator.clipboard.writeText(parchContent).then(function() {
+            copyBtn.textContent = '✅ Copié !'
+            setTimeout(function() { copyBtn.textContent = '📋 Copier le texte' }, 2500)
+          }).catch(function() { copyBtn.textContent = '⚠️ Sélectionne le texte manuellement' })
+        })
+        parchBtnRow.appendChild(copyBtn)
+
+        if (parchImgUrl) {
+          var dlBtn = document.createElement('a')
+          dlBtn.textContent = '⬇ Télécharger l\'image'
+          dlBtn.href = parchImgUrl
+          dlBtn.target = '_blank'
+          dlBtn.rel = 'noopener'
+          dlBtn.download = 'parchemin.jpg'
+          dlBtn.style.cssText = 'flex:1;padding:9px;border-radius:9px;border:1px solid rgba(123,92,255,0.3);background:rgba(123,92,255,0.1);color:var(--t2);font-family:Outfit,sans-serif;font-size:13px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center'
+          parchBtnRow.appendChild(dlBtn)
+        }
+
+        parchWrap.appendChild(parchBtnRow)
+        wrapper.appendChild(parchWrap)
+      }
+
+      if (imgDesc) {
+        var imgWrap = document.createElement('div'); imgWrap.className = 'msg-img-wrap'
+        var loader = document.createElement('div'); loader.className = 'msg-img-loader'
+        loader.innerHTML = '<div class="msg-img-spinner"></div>🎨 Génération en cours...'
+        imgWrap.appendChild(loader); wrapper.appendChild(imgWrap)
+
+        var cleanDesc = imgDesc.replace(/\n/g, ' ').substring(0, 300).trim()
+        var seed = Math.floor(Math.random() * 999999)
+        var primaryUrl = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(cleanDesc + ', high quality, detailed, coherent composition') + '?width=768&height=768&model=flux&seed=' + seed + '&private=true'
+
+        var img = document.createElement('img'); img.alt = cleanDesc; img.crossOrigin = 'anonymous'
+        var hasRetried = false
+
+        img.onload = function() {
+          loader.remove()
+          imgWrap.style.background = 'none'; imgWrap.style.border = 'none'
+          imgWrap.appendChild(img)
+          requestAnimationFrame(function() { img.classList.add('loaded') })
+          msgs.scrollTop = msgs.scrollHeight
+        }
+
+        img.onerror = function() {
+          if (!hasRetried) {
+            hasRetried = true
+            var fallbackUrl = 'https://image.pollinations.ai/prompt/' + encodeURIComponent(cleanDesc.substring(0, 100)) + '?width=768&height=768&seed=' + seed + '&private=true'
+            img.src = fallbackUrl
+          } else {
+            loader.innerHTML = '⚠️ Erreur de génération — réessaie'
+          }
+        }
+        img.src = primaryUrl
+      }
+
+      var bs = 'padding:2px 9px;border-radius:50px;border:1px solid rgba(123,92,255,0.15);background:rgba(123,92,255,0.04);color:var(--t4);font-family:Outfit,sans-serif;font-size:11px;cursor:pointer;transition:all .15s'
+      var acts = document.createElement('div'); acts.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;margin-top:2px'
+      var textForSpeak = textWithoutImg || text
+
+      var spk = document.createElement('button'); spk.style.cssText = bs; spk.textContent = '🔊 Écouter'
+      spk.addEventListener('click', function() { speakMsg(spk, textForSpeak) }); acts.appendChild(spk)
+
+      var cpy = document.createElement('button'); cpy.style.cssText = bs; cpy.textContent = '📋 Copier'
+      cpy.addEventListener('click', function() { navigator.clipboard.writeText(text).then(function() { cpy.textContent = '✓'; setTimeout(function() { cpy.textContent = '📋 Copier' }, 2000) }) }); acts.appendChild(cpy)
+
+      var ret = document.createElement('button'); ret.style.cssText = bs; ret.textContent = '↺ Réessayer'
+      ret.addEventListener('click', function() {
+        var hist = chatHistories[msgAgent]
+        var last = hist.filter(function(m) { return m.role === 'user' }).pop()
+        if (last) {
+          if (hist[hist.length - 1].role === 'assistant') hist.pop()
+          div.remove()
+          if (_currentAgent !== msgAgent) switchToAgentContainer(msgAgent)
+          sendMessageText(last.content)
+        }
+      }); acts.appendChild(ret)
+
+      var pdfBtn = document.createElement('button'); pdfBtn.style.cssText = bs; pdfBtn.textContent = '⬇ PDF'
+      pdfBtn.addEventListener('click', function() { var w = window.open('', '_blank'); if (!w) return; var body = '<h2 style="color:#7B5CFF">NyXia IA</h2>' + escHtml(text).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>'); w.document.write('<!DOCTYPE html><html><head><title>NyXia</title><style>body{font-family:Georgia,serif;max-width:760px;margin:48px auto;line-height:1.85}</style></head><body>' + body + '</body></html>'); w.document.close(); setTimeout(function() { w.print() }, 300) }); acts.appendChild(pdfBtn)
+
+      wrapper.appendChild(acts)
+      div.innerHTML = avatarHtmlFor(msgAgent)
+      div.appendChild(wrapper)
+      msgs.appendChild(div); msgs.scrollTop = msgs.scrollHeight
+    }
+
+    function addUserMessage(text) {
+      var msgs = currentMsgsEl()
+      var div = document.createElement('div'); div.className = 'msg user'
+      var initial = clientName.charAt(0).toUpperCase()
+      div.innerHTML = '<div class="msg-bubble">' + escHtml(text) + '</div><div class="msg-avatar" style="background:linear-gradient(135deg,#7B5CFF,#5A6CFF);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:13px;border-radius:50%;width:32px;height:32px;flex-shrink:0">' + initial + '</div>'
+      msgs.appendChild(div); msgs.scrollTop = msgs.scrollHeight
+    }
+
+    function addTyping() {
+      var msgs = currentMsgsEl()
+      var div = document.createElement('div'); div.className = 'msg bot'; div.id = 'typing-indicator'
+      div.style.cssText = 'display:flex;gap:10px;align-items:flex-start'
+      div.innerHTML = avatarHtmlFor(_currentAgent) + '<div class="msg-bubble"><span class="nx-dots"><i></i><i></i><i></i></span></div>'
+      msgs.appendChild(div); msgs.scrollTop = msgs.scrollHeight
+    }
+
+    function removeTyping() { var t = document.getElementById('typing-indicator'); if (t) t.remove() }
+
+    /* ═══════ TTS ═══════ */
+    function stopSpeakBtn(btn) {
+      btn._nxSpeaking = false; btn.textContent = '🔊 Écouter'; btn.style.borderColor = 'rgba(123,92,255,0.15)'; btn.style.color = 'var(--t4)'; btn.style.background = 'rgba(123,92,255,0.04)'
+      if (btn._nxAudio) { btn._nxAudio.pause(); btn._nxAudio = null }
+    }
+
+    function speakMsg(btn, text) {
+      if (btn._nxSpeaking) { window.speechSynthesis && window.speechSynthesis.cancel(); stopSpeakBtn(btn); return }
+      window.speechSynthesis && window.speechSynthesis.cancel()
+      document.querySelectorAll('.msg button').forEach(function(b) { if (b._nxSpeaking) stopSpeakBtn(b) })
+
+      speakViaHeyGen(btn, text, _currentAgent)
+    }
+
+    // Voix serveur du personnage actif via le Worker : identités ElevenLabs du portail Léna.
+    // Aucun repli navigateur pour préserver l'identité sonore de la marque (règle NyXia).
+    function speakViaHeyGen(btn, text, agentKey) {
+      var clean = cleanForSpeech(text)
+      if (!clean) return
+      btn._nxSpeaking = true; btn.textContent = '⏳ Un instant...'; btn.style.borderColor = 'rgba(0,230,118,0.4)'; btn.style.color = '#00E676'; btn.style.background = 'rgba(0,230,118,0.08)'
+
+      fetch('/api/tts/nyxia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: sessionToken, text: clean, agent: agentKey }) })
+      .then(function(r) { return r.json() })
+      .then(function(data) {
+        if (!data.success || !data.proxyUrl) throw new Error(data.error || 'Pas de voix HeyGen pour cet agent')
+        var audio = new Audio(data.proxyUrl)
+        btn._nxAudio = audio
+        btn.textContent = '⏹ Arrêter'
+        audio.play()
+        audio.onended = audio.onerror = function() { stopSpeakBtn(btn) }
+      })
+      .catch(function(err) { console.error('🔊 Voix (' + agentKey + ') : ' + err.message); btn.title = err.message; btn.textContent = '⚠️ Voix indisponible'; setTimeout(function(){ stopSpeakBtn(btn) }, 2500) })
+    }
+
+    function speakViaBrowser(btn, clean, agentKey) {
+      if (!window.speechSynthesis) { stopSpeakBtn(btn); return }
+      btn.textContent = '⏹ Arrêter'
+      var utt = new SpeechSynthesisUtterance(clean); utt.lang = 'fr-FR'; utt.rate = 0.92; utt.pitch = 1.1; utt.volume = 1
+      function doSpeak() { var voice = pickBestFrenchVoice(window.speechSynthesis.getVoices(), agentKey); if (voice) utt.voice = voice; window.speechSynthesis.speak(utt) }
+      utt.onend = utt.onerror = function() { stopSpeakBtn(btn) }
+      setTimeout(doSpeak, 200)
+    }
+
+    var _msgDiane = null;
+    var AGENT_WELCOME_AUDIO = {
+      nyxia: '/AccueilNyXiaClientes.mp3',
+      diane: '/Bienvenue_Diane.mp3',
+      selena: '', daphnee: '', alexandra: '', gabrielle: '', fripouille: '', melusine: '', abime: ''
+    }
+
+    // Les futures vidéos universelles peuvent être ajoutées ici, personnage par personnage.
+    var AGENT_WELCOME_VIDEO = {}
+
+    function jouerMessageDiane() {
+      var btn = document.getElementById('btn-speak');
+      if (_msgDiane && !_msgDiane.paused) {
+        _msgDiane.pause(); _msgDiane.currentTime = 0;
+        btn.textContent = '🔊 Message d\'accueil'; btn.classList.remove('speaking');
+        return;
+      }
+      var src = AGENT_WELCOME_AUDIO[_currentAgent] || AGENT_WELCOME_AUDIO.nyxia;
+      _msgDiane = new Audio(src);
+      _msgDiane.play();
+      btn.textContent = '⏸ Arrêter'; btn.classList.add('speaking');
+      _msgDiane.onended  = function() { btn.textContent = '🔊 Message d\'accueil'; btn.classList.remove('speaking'); };
+      _msgDiane.onerror  = function() { btn.textContent = '🔊 Message d\'accueil'; btn.classList.remove('speaking'); };
+    }
+
+    function speakText(text) {
+      if (!window.speechSynthesis) return; window.speechSynthesis.cancel()
+      var clean = cleanForSpeech(text)
+      if (!clean) return
+      var utt = new SpeechSynthesisUtterance(clean); utt.lang = 'fr-FR'; utt.rate = 0.92; utt.pitch = 1.1; utt.volume = 1
+      function trySpeak() { var voice = pickBestFrenchVoice(window.speechSynthesis.getVoices(), _currentAgent); if (voice) utt.voice = voice; window.speechSynthesis.speak(utt) }
+      utt.onend = function() { var btn = document.getElementById('btn-speak'); if (btn) { btn.textContent = '🔊 Écouter NyXia'; btn.classList.remove('speaking') } isSpeaking = false }
+      utt.onerror = function() { isSpeaking = false }
+      setTimeout(trySpeak, 200)
+    }
+
+    if (window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = function() {
+        var voices = window.speechSynthesis.getVoices()
+        pickBestFrenchVoice(voices, 'nyxia')
+      }
+      pickBestFrenchVoice(window.speechSynthesis.getVoices(), 'nyxia')
+    }
+
+    /* ═══════ FILE UPLOAD ═══════ */
+    document.addEventListener('DOMContentLoaded', function() {
+      var fi = document.getElementById('chat-file')
+      if (fi) fi.addEventListener('change', function() {
+        var f = this.files[0]; if (!f) return
+        var size = f.size > 1048576 ? (f.size / 1048576).toFixed(1) + 'MB' : Math.round(f.size / 1024) + 'KB'
+        _currentAttachment = { name: f.name, type: f.type, data: null }
+        var bar = document.getElementById('attach-bar'), nm = document.getElementById('attach-name'), sendBtn = document.getElementById('btn-send')
+        if (bar) bar.style.display = 'flex'
+        if (nm) nm.innerHTML = '<strong>' + f.name + '</strong> (' + size + ') — ⏳ Chargement...'
+        if (sendBtn) sendBtn.disabled = true
+        var reader = new FileReader()
+        reader.onload = function(e) { _currentAttachment.data = e.target.result.split(',')[1]; if (nm) nm.innerHTML = '<strong>' + f.name + '</strong> (' + size + ') — ✅ Prêt'; if (sendBtn) sendBtn.disabled = false }
+        reader.onerror = function() { _currentAttachment = null; if (nm) nm.innerHTML = '❌ Erreur'; if (sendBtn) sendBtn.disabled = false }
+        reader.readAsDataURL(f)
+      })
+      var ca = document.getElementById('btn-clear-attach')
+      if (ca) ca.addEventListener('click', function() { _currentAttachment = null; var bar = document.getElementById('attach-bar'), fi2 = document.getElementById('chat-file'); if (bar) bar.style.display = 'none'; if (fi2) fi2.value = '' })
+    })
+
+    var chatInput = document.getElementById('chat-input')
+    if (chatInput) {
+      chatInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 120) + 'px' })
+      chatInput.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } })
+    }
+
+    function cleanMarkdown(str) {
+      return str
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" style="color:#c4b5fd;text-decoration:underline">$1</a>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '$1')
+        .replace(/^---+$/gm, '')
+        .replace(/^#{1,6}\s+/gm, '')
+        .replace(/^[-*]\s+/gm, '')
+        .replace(/^>+\s*/gm, '')
+        .replace(/`([^`]+)`/g, '$1')
+        .trim()
+    }
+    function cleanForSpeech(str) {
+      return str
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/\*(.*?)\*/g, '$1')
+        .replace(/---+/g, '')
+        .replace(/#{1,6}\s+/g, '')
+        .replace(/^>+\s*/gm, '')
+        .replace(/\[IMAGE[\s\S]*?\]/gi, '')
+        .replace(/[✦💜🚀💎🌐📱⭐✓►▶🪞🌿🕯️🌙✨💎📖]/gu, '')
+        .replace(/<br>/g, ' ')
+        .replace(/<[^>]+>/g, '')
+        .replace(/`([^`]+)`/g, '$1')
+        .trim()
+    }
+    function escHtml(str) { var d = document.createElement('div'); d.textContent = str; return d.innerHTML }
+  
+</script>
+<div id="nxg-corner" class="nxg-corner" hidden></div>
+<script src="/js/nyxia-game.js"></script>
+</body>
+</html>
