@@ -13,6 +13,15 @@ function cleanGameTools(d){
   return {id:String(x?.id||('outil-'+i)).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,80)||('outil-'+i),name:String(x?.name||'Outil').trim().slice(0,100)||'Outil',icon:String(x?.icon||'🧰').slice(0,8),path:path.slice(0,700)};
  }).filter(Boolean);
 }
+function cleanGameOvilus(d){
+ const raw=d?.gameOvilus&&typeof d.gameOvilus==='object'?d.gameOvilus:{};
+ const spirits=(Array.isArray(raw.spirits)?raw.spirits:[]).slice(0,40).map((s,i)=>({id:String(s?.id||('esprit-'+(i+1))).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,80)||('esprit-'+(i+1)),active:s?.active!==false,name:String(s?.name||'').trim().slice(0,140),personality:String(s?.personality||'').trim().slice(0,5000),knowledge:String(s?.knowledge||'').trim().slice(0,12000),responseStyle:String(s?.responseStyle||'').trim().slice(0,5000),instructions:String(s?.instructions||'').trim().slice(0,8000)})).filter(s=>s.name);
+ const min=Math.max(0,Math.min(5000,Number(raw.responseDelayMinMs)||450)),max=Math.max(min,Math.min(8000,Number(raw.responseDelayMaxMs)||950));
+ return {active:raw.active===true,responseDelayMinMs:min,responseDelayMaxMs:max,context:String(raw.context||'').slice(0,24000),instructions:String(raw.instructions||'').slice(0,16000),spirits};
+}
+function allGameTools(d){const generic=cleanGameTools(d).filter(x=>x.path!=='/ovilus.html'&&x.id!=='ovilus'),ov=cleanGameOvilus(d);return ov.active?[{id:'ovilus',name:'Ovilus',icon:'🔮',path:'/ovilus.html'},...generic]:generic}
+function utf8B64(value){const bytes=new TextEncoder().encode(String(value||''));let bin='';for(const b of bytes)bin+=String.fromCharCode(b);return btoa(bin)}
+
 function check(){
  const t=timeline();if(!t?.scenes?.length)throw Error('Prépare le Cahier Média et clique « Synchroniser les diapositives » avant la compilation.');
  const bad=t.scenes.flatMap(s=>(s.slots||[]).filter(m=>m.required&&!allowedMedia(m.url)).map(m=>(s.title||s.id)+' : '+(m.label||m.kind)));
@@ -22,7 +31,7 @@ function check(){
  return {t,id};
 }
 window.gamePackage=function(d){
- const t=timeline(),id=publishId(),scenes=t?.scenes||[],needed=scenes.flatMap(s=>s.slots||[]).filter(m=>m.required&&!allowedMedia(m.url)),urls=scenes.reduce((n,s)=>n+(s.slots||[]).filter(m=>allowedMedia(m.url)).length,0),gameTools=cleanGameTools(d);
+ const t=timeline(),id=publishId(),scenes=t?.scenes||[],needed=scenes.flatMap(s=>s.slots||[]).filter(m=>m.required&&!allowedMedia(m.url)),urls=scenes.reduce((n,s)=>n+(s.slots||[]).filter(m=>allowedMedia(m.url)).length,0),gameTools=allGameTools(d),gameOvilus=cleanGameOvilus(d);
  return '<h4>📦 Compilation ZIP — NyXia Game configuré</h4>'+
  '<div class="game-note">La coque complète de NyXia Game est incluse. Même CASHFLOW_KV, même D1, même Vectorize. Les règles MJ et les cerveaux des PNJ sont publiés séparément dans la KV centrale, jamais en fichiers publics sur GitHub.</div>'+
  '<div class="game-status-grid"><div class="game-status '+(scenes.length?'ready':'')+'"><strong>'+scenes.length+' scène(s)</strong> issues du Cahier Média</div><div class="game-status '+(!needed.length&&urls?'ready':'')+'"><strong>'+urls+' URL médias</strong>'+needed.length+' URL(s) requise(s) manquante(s)</div><div class="game-status '+(gameTools.length?'ready':'')+'"><strong>'+gameTools.length+' outil(s)</strong> propre(s) à ce jeu</div><div class="game-status"><strong>Identifiant unique</strong>'+escAttr(id||'non disponible')+'</div></div>'+
@@ -96,8 +105,15 @@ window.nyxCompileGame=async function(){
   status('Enregistrement de la configuration de CE jeu dans CASHFLOW_KV…');await publishForCompilation(id);
   await personalizeShell(zip,currentProject.title);
 
+  const gameOvilus=cleanGameOvilus(d);
+  const workerFile=zip.file('_worker.js');
+  let workerSource=await workerFile.async('string');
+  if(!workerSource.includes('__NYXIA_GAME_OVILUS_CONFIG_B64__'))throw Error('La coque Ovilus NyXia Game est incomplète : marqueur de configuration absent.');
+  workerSource=workerSource.replace('__NYXIA_GAME_OVILUS_CONFIG_B64__',utf8B64(JSON.stringify(gameOvilus)));
+  zip.file('_worker.js',workerSource);
+
   const all=t.scenes.flatMap(s=>(s.slots||[]).filter(m=>allowedMedia(m.url)).map(m=>({sceneId:s.id,kind:m.kind,id:m.id,label:m.label,url:m.url,trigger:m.trigger,playback:m.playback,source:m.source,sourceUrl:m.sourceUrl,credit:m.credit,license:m.license})));
-  const gameTools=cleanGameTools(d);
+  const gameTools=allGameTools(d);
   zip.file('game-tools.json',JSON.stringify({schemaVersion:1,gameId:id,tools:gameTools},null,2));
   zip.file('game-manifest.json',JSON.stringify({schemaVersion:2,gameId:id,title:currentProject.title,description:d.packageSubtitle||'',mediaMode:'external-url',mediaFiles:[],mediaCount:all.length,compiledAt:new Date().toISOString()},null,2));
   zip.file('data/game.json',JSON.stringify({gameId:id,title:currentProject.title,description:d.packageSubtitle||'',version:d.productVersion||'1.0',mediaMode:'external-url'},null,2));
@@ -116,7 +132,7 @@ window.nyxCompileGame=async function(){
   if(currentProject.id!==projectId)throw Error('Le projet a changé. La compilation est annulée.');
   status('Compression et préparation du téléchargement…');const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:5}});
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='NyXiaGame-'+name(currentProject.title)+'.zip';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
-  status('ZIP prêt : '+all.length+' URL médias, '+gameTools.length+' outil(s) du jeu et coque universelle mise à jour.');
+  status('ZIP prêt : '+all.length+' URL médias, '+gameTools.length+' outil(s) du jeu'+(gameOvilus.active?' · Ovilus actif':' · Ovilus inactif')+' et coque universelle mise à jour.');
  }catch(err){status('COMPILATION NON TERMINÉE : '+err.message);alert('Compilation interrompue : '+err.message+'\nAucun ZIP incomplet n’est présenté comme terminé.');}
 };
 window.nyxPublishGame=async function(){
