@@ -5,6 +5,14 @@ const escAttr=v=>esc(String(v==null?'':v)).replace(/"/g,'&quot;');
 const allowedMedia=u=>{try{const x=new URL(u);return x.protocol==='https:'&&!x.username&&!x.password&&!x.port}catch(_){return false}};
 function timeline(){const d=currentProject?.data||{};try{const t=JSON.parse(d.mediaTimelineJson||'{}');return t.projectId===currentProject.id&&Array.isArray(t.scenes)?t:null}catch(_){return null}}
 function publishId(){const raw=String(currentProject?.data?.publishedProductId||currentProject?.id||'');return /^[a-zA-Z0-9_-]{1,120}$/.test(raw)?raw:'';}
+function cleanGameTools(d){
+ const list=Array.isArray(d?.gameTools)?d.gameTools:[];
+ return list.slice(0,24).map((x,i)=>{
+  const path=String(x?.path||'').trim();
+  if(!/^\/(?!\/)/.test(path)||path.includes('..')||/^[a-z]+:/i.test(path))return null;
+  return {id:String(x?.id||('outil-'+i)).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,80)||('outil-'+i),name:String(x?.name||'Outil').trim().slice(0,100)||'Outil',icon:String(x?.icon||'🧰').slice(0,8),path:path.slice(0,700)};
+ }).filter(Boolean);
+}
 function check(){
  const t=timeline();if(!t?.scenes?.length)throw Error('Prépare le Cahier Média et clique « Synchroniser les diapositives » avant la compilation.');
  const bad=t.scenes.flatMap(s=>(s.slots||[]).filter(m=>m.required&&!allowedMedia(m.url)).map(m=>(s.title||s.id)+' : '+(m.label||m.kind)));
@@ -14,16 +22,16 @@ function check(){
  return {t,id};
 }
 window.gamePackage=function(d){
- const t=timeline(),id=publishId(),scenes=t?.scenes||[],needed=scenes.flatMap(s=>s.slots||[]).filter(m=>m.required&&!allowedMedia(m.url)),urls=scenes.reduce((n,s)=>n+(s.slots||[]).filter(m=>allowedMedia(m.url)).length,0);
- return '<h4>📦 Compilation ZIP — NyXia Game configuré</h4>'+ 
- '<div class="game-note">La coque complète de NyXia Game est incluse. Même CASHFLOW_KV, même D1, même Vectorize. Les règles MJ et les cerveaux des PNJ sont publiés séparément dans la KV centrale, jamais en fichiers publics sur GitHub.</div>'+ 
- '<div class="game-status-grid"><div class="game-status '+(scenes.length?'ready':'')+'"><strong>'+scenes.length+' scène(s)</strong> issues du Cahier Média</div><div class="game-status '+(!needed.length&&urls?'ready':'')+'"><strong>'+urls+' URL médias</strong>'+needed.length+' URL(s) requise(s) manquante(s)</div><div class="game-status"><strong>Identifiant unique</strong>'+escAttr(id||'non disponible')+'</div></div>'+ 
- '<div class="row" style="margin-top:14px"><div class="field"><label>Sous-domaine du jeu (sans https://)</label><input id="game-zip-domain" value="'+escAttr(d.gameZipDomain||'')+'" placeholder="ex. reboot.nyxia.top" onchange="setData(\'gameZipDomain\',this.value.trim().toLowerCase())"></div><div class="field"><label>Couverture : URL HTTPS externe</label><input type="url" value="'+escAttr(d.coverUrl||'')+'" placeholder="https://.../couverture.jpg" onchange="setData(\'coverUrl\',this.value)"></div></div>'+ 
- '<div class="tools-line" style="margin:12px 0"><button class="btn primary" onclick="nyxCompileGame()"'+(!scenes.length||needed.length?' disabled':'')+'>📦 Télécharger le jeu ZIP</button></div>'+ 
- '<p class="tiny">Les images, sons et vidéos restent à leurs URL. Le ZIP conserve leurs adresses sans recopier les fichiers médias.</p>'+ 
- '<div id="zip-build-progress" role="status" class="game-note">Aucune compilation lancée.</div><div class="divider"></div>'+ 
- '<h4>🔄 Mettre à jour le jeu après la compilation</h4><p class="muted">Après avoir ajouté ou modifié un personnage, ce bouton met à jour les données du même jeu sans toucher à sa coque.</p>'+ 
- '<button class="btn gold" onclick="nyxPublishGame()"'+(!scenes.length||needed.length?' disabled':'')+'>🔄 Mettre à jour les données du jeu</button>'+ 
+ const t=timeline(),id=publishId(),scenes=t?.scenes||[],needed=scenes.flatMap(s=>s.slots||[]).filter(m=>m.required&&!allowedMedia(m.url)),urls=scenes.reduce((n,s)=>n+(s.slots||[]).filter(m=>allowedMedia(m.url)).length,0),gameTools=cleanGameTools(d);
+ return '<h4>📦 Compilation ZIP — NyXia Game configuré</h4>'+
+ '<div class="game-note">La coque complète de NyXia Game est incluse. Même CASHFLOW_KV, même D1, même Vectorize. Les règles MJ et les cerveaux des PNJ sont publiés séparément dans la KV centrale, jamais en fichiers publics sur GitHub.</div>'+
+ '<div class="game-status-grid"><div class="game-status '+(scenes.length?'ready':'')+'"><strong>'+scenes.length+' scène(s)</strong> issues du Cahier Média</div><div class="game-status '+(!needed.length&&urls?'ready':'')+'"><strong>'+urls+' URL médias</strong>'+needed.length+' URL(s) requise(s) manquante(s)</div><div class="game-status '+(gameTools.length?'ready':'')+'"><strong>'+gameTools.length+' outil(s)</strong> propre(s) à ce jeu</div><div class="game-status"><strong>Identifiant unique</strong>'+escAttr(id||'non disponible')+'</div></div>'+
+ '<div class="row" style="margin-top:14px"><div class="field"><label>Sous-domaine du jeu (sans https://)</label><input id="game-zip-domain" value="'+escAttr(d.gameZipDomain||'')+'" placeholder="ex. reboot.nyxia.top" onchange="setData(\'gameZipDomain\',this.value.trim().toLowerCase())"></div><div class="field"><label>Couverture : URL HTTPS externe</label><input type="url" value="'+escAttr(d.coverUrl||'')+'" placeholder="https://.../couverture.jpg" onchange="setData(\'coverUrl\',this.value)"></div></div>'+
+ '<div class="tools-line" style="margin:12px 0"><button class="btn primary" onclick="nyxCompileGame()"'+(!scenes.length||needed.length?' disabled':'')+'>📦 Télécharger le jeu ZIP</button></div>'+
+ '<p class="tiny">Images, MP3 Google Drive, vidéos YouTube et présentations Canva restent à leurs URL. La coque affiche ces médias sans les copier dans KV ou D1.</p>'+
+ '<div id="zip-build-progress" role="status" class="game-note">Aucune compilation lancée.</div><div class="divider"></div>'+
+ '<h4>🔄 Mettre à jour le jeu après la compilation</h4><p class="muted">Après avoir ajouté ou modifié un personnage, ce bouton met à jour les données du même jeu sans toucher à sa coque.</p>'+
+ '<button class="btn gold" onclick="nyxPublishGame()"'+(!scenes.length||needed.length?' disabled':'')+'>🔄 Mettre à jour les données du jeu</button>'+
  '<div class="tools-line" style="margin-top:14px"><button class="btn" onclick="setGameTab(\'media\')">← Revenir aux médias</button><button class="btn" onclick="setGameTab(\'live\')">🎥 Live (existant)</button><button class="btn" onclick="setGameTab(\'control\')">🧠 Contrôle (existant)</button><button class="btn" onclick="exportGamePDF()">⬇ Dossier PDF MJ</button></div>';
 };
 function status(msg){const el=document.getElementById('zip-build-progress');if(el)el.textContent=msg}
@@ -60,6 +68,14 @@ async function personalizeShell(zip,title){
   zip.file(path,html);
  }
 }
+async function applyShellOverrides(zip){
+ const files=[['/game-shell-overrides/jeu.html','jeu.html','NYXIA_GAME_EMBEDS_V1'],['/game-shell-overrides/js/nyxia-game.js','js/nyxia-game.js','NYXIA_GAME_CUSTOM_TOOLS_V1']];
+ for(const [url,path,marker] of files){
+  const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw Error('Correctif de coque absent : '+url);
+  const txt=await r.text();if(!txt.includes(marker))throw Error('Correctif de coque invalide : '+url);
+  zip.file(path,txt);
+ }
+}
 window.nyxCompileGame=async function(){
  if(!window.JSZip)return alert('JSZip indisponible.');
  let validated;try{validated=check()}catch(err){return alert(err.message)}
@@ -76,10 +92,13 @@ window.nyxCompileGame=async function(){
   const shellNpcChat=zip.file('chat-pnj.html')?await zip.file('chat-pnj.html').async('string'):'';
   const shellDash=zip.file('dashbord.html')?await zip.file('dashbord.html').async('string'):'';
   if(!shellWorker.includes('NYXIA_MJ_SCOPED_BRAIN_V1')||!shellWorker.includes('NYXIA_GAME_NPC_SCOPED_BRAIN_V1')||!shellNpcChat.includes('loadNpcIdentity')||!shellDash.includes('npcMeta'))throw Error('La coque modèle n’est pas encore à jour pour les personnages IA. Remplace _worker.js, dashbord.html et chat-pnj.html dans game-shell-template.zip avec le correctif fourni.');
+  await applyShellOverrides(zip);
   status('Enregistrement de la configuration de CE jeu dans CASHFLOW_KV…');await publishForCompilation(id);
   await personalizeShell(zip,currentProject.title);
 
   const all=t.scenes.flatMap(s=>(s.slots||[]).filter(m=>allowedMedia(m.url)).map(m=>({sceneId:s.id,kind:m.kind,id:m.id,label:m.label,url:m.url,trigger:m.trigger,playback:m.playback,source:m.source,sourceUrl:m.sourceUrl,credit:m.credit,license:m.license})));
+  const gameTools=cleanGameTools(d);
+  zip.file('game-tools.json',JSON.stringify({schemaVersion:1,gameId:id,tools:gameTools},null,2));
   zip.file('game-manifest.json',JSON.stringify({schemaVersion:2,gameId:id,title:currentProject.title,description:d.packageSubtitle||'',mediaMode:'external-url',mediaFiles:[],mediaCount:all.length,compiledAt:new Date().toISOString()},null,2));
   zip.file('data/game.json',JSON.stringify({gameId:id,title:currentProject.title,description:d.packageSubtitle||'',version:d.productVersion||'1.0',mediaMode:'external-url'},null,2));
   zip.file('data/media-urls.json',JSON.stringify({gameId:id,scenes:t.scenes.map(s=>({id:s.id,act:s.act,title:s.title,media:(s.slots||[]).filter(m=>allowedMedia(m.url)).map(m=>({id:m.id,kind:m.kind,url:m.url,label:m.label,trigger:m.trigger,playback:m.playback}))}))},null,2));
@@ -93,11 +112,11 @@ window.nyxCompileGame=async function(){
   if(!cfg.includes('GAME_ID = "'+id+'"')||!cfg.includes('pattern = "'+host+'"'))throw Error('La configuration Cloudflare n’a pas pu être adaptée intégralement.');
   zip.file('wrangler.toml',cfg);
   const pdf=await makePdf(currentProject);zip.file('documents/cahier-du-joueur.pdf',pdf);
-  zip.file('INSTALLATION.txt','NyXia Game — '+currentProject.title+'\n\nSous-domaine : '+host+'\nIdentifiant jeu : '+id+'\n\n1. Déployer cette coque dans le dépôt de CE jeu (sans modifier les bindings CASHFLOW_KV et DB).\n2. La compilation a déjà enregistré la configuration privée de CE jeu dans CASHFLOW_KV; aucun deuxième bouton n’est nécessaire pour la première mise en ligne.\n3. Configurer domaine et vérifier la connexion et les droits acheteur sur ce sous-domaine.\n4. Tester toutes les scènes, tous les lecteurs et le bouton Reprendre.\n\nLes médias restent à leurs URL externes. Le ZIP contient leurs adresses, sans intégrer les fichiers multimédias.\n\nNe jamais diffuser un ZIP contenant des secrets de maître de jeu.\n');
+  zip.file('INSTALLATION.txt','NyXia Game — '+currentProject.title+'\n\nSous-domaine : '+host+'\nIdentifiant jeu : '+id+'\n\nLa compilation a déjà enregistré la configuration privée du jeu et intégré les correctifs universels YouTube, Canva, Google Drive et Outils du jeu.\n\nLes médias restent à leurs URL externes. Aucun média lourd n’est enregistré dans KV ou D1.\n');
   if(currentProject.id!==projectId)throw Error('Le projet a changé. La compilation est annulée.');
   status('Compression et préparation du téléchargement…');const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:5}});
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='NyXiaGame-'+name(currentProject.title)+'.zip';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
-  status('ZIP prêt : configuration enregistrée, coque préparée et '+all.length+' URL médias. Aucun fichier média externe téléchargé. Déploiement et test réel encore nécessaires.');
+  status('ZIP prêt : '+all.length+' URL médias, '+gameTools.length+' outil(s) du jeu et coque universelle mise à jour.');
  }catch(err){status('COMPILATION NON TERMINÉE : '+err.message);alert('Compilation interrompue : '+err.message+'\nAucun ZIP incomplet n’est présenté comme terminé.');}
 };
 window.nyxPublishGame=async function(){
