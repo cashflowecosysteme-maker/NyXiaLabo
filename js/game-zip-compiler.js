@@ -1,4 +1,4 @@
-/* NyXia Game — compilation de la coque réutilisable ; aucun secret dans les ressources statiques. */
+/* NyXia Game — compilation depuis UN SEUL game-shell-template.zip officiel. Aucun dossier d'override. */
 (function(){
 'use strict';
 const escAttr=v=>esc(String(v==null?'':v)).replace(/"/g,'&quot;');
@@ -68,14 +68,6 @@ async function personalizeShell(zip,title){
   zip.file(path,html);
  }
 }
-async function applyShellOverrides(zip){
- const files=[['/game-shell-overrides/jeu.html','jeu.html','NYXIA_GAME_EMBEDS_V1'],['/game-shell-overrides/js/nyxia-game.js','js/nyxia-game.js','NYXIA_GAME_CUSTOM_TOOLS_V1']];
- for(const [url,path,marker] of files){
-  const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw Error('Correctif de coque absent : '+url);
-  const txt=await r.text();if(!txt.includes(marker))throw Error('Correctif de coque invalide : '+url);
-  zip.file(path,txt);
- }
-}
 window.nyxCompileGame=async function(){
  if(!window.JSZip)return alert('JSZip indisponible.');
  let validated;try{validated=check()}catch(err){return alert(err.message)}
@@ -91,8 +83,16 @@ window.nyxCompileGame=async function(){
   const shellWorker=await zip.file('_worker.js').async('string');
   const shellNpcChat=zip.file('chat-pnj.html')?await zip.file('chat-pnj.html').async('string'):'';
   const shellDash=zip.file('dashbord.html')?await zip.file('dashbord.html').async('string'):'';
-  if(!shellWorker.includes('NYXIA_MJ_SCOPED_BRAIN_V1')||!shellWorker.includes('NYXIA_GAME_NPC_SCOPED_BRAIN_V1')||!shellNpcChat.includes('loadNpcIdentity')||!shellDash.includes('npcMeta'))throw Error('La coque modèle n’est pas encore à jour pour les personnages IA. Remplace _worker.js, dashbord.html et chat-pnj.html dans game-shell-template.zip avec le correctif fourni.');
-  await applyShellOverrides(zip);
+  const shellGame=await zip.file('jeu.html').async('string');
+  const shellPortal=zip.file('js/nyxia-game.js')?await zip.file('js/nyxia-game.js').async('string'):'';
+  if(!shellWorker.includes('NYXIA_MJ_SCOPED_BRAIN_V1')||
+     !shellWorker.includes('NYXIA_GAME_NPC_SCOPED_BRAIN_V1')||
+     !shellNpcChat.includes('loadNpcIdentity')||
+     !shellDash.includes('npcMeta')||
+     !shellGame.includes('NYXIA_GAME_EMBEDS_V2')||
+     !shellPortal.includes('NYXIA_GAME_CUSTOM_TOOLS_V1')){
+    throw Error('game-shell-template.zip est incomplet ou ancien. Remplace uniquement le fichier game-shell-template.zip officiel par la version fournie avec ce correctif.');
+  }
   status('Enregistrement de la configuration de CE jeu dans CASHFLOW_KV…');await publishForCompilation(id);
   await personalizeShell(zip,currentProject.title);
 

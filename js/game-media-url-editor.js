@@ -1,7 +1,7 @@
 /* NyXia Game — Montage URL par acte et scène. Aucun média binaire n'est enregistré dans le projet. */
 (function(){
 'use strict';
-const KINDS={image:'🖼️ Image',audio:'🎵 Son / MP3',video:'🎥 Vidéo'};
+const KINDS={image:'🖼️ Image',audio:'🎵 Son / MP3',video:'🎥 Vidéo',presentation:'🖥️ Présentation Canva'};
 const PROVIDERS={
  image:[
   {id:'pollinations',label:'Pollinations · compte requis, coût à vérifier',provider:'external',url:'https://enter.pollinations.ai/',rank:0},
@@ -22,13 +22,31 @@ let selection={project:'',scene:0,slot:0,results:[],searchMessage:'',preview:nul
 const e=s=>esc(s==null?'':String(s)).replace(/"/g,'&quot;');
 const safeUrl=s=>{try{let u=new URL(String(s||''));return u.protocol==='https:'&&!!u.hostname&&!u.username&&!u.password&&u.port===''&&s.length<2000}catch(_){return false}};
 const kindOf=s=>KINDS[s]||s;
+const isCanvaUrl=raw=>{try{const u=new URL(String(raw||''));const h=u.hostname.replace(/^www\./,'').toLowerCase();return h==='canva.com'||h==='canva.link'}catch(_){return false}};
+const canvaEmbedUrl=raw=>{try{
+ const u=new URL(String(raw||''));const h=u.hostname.replace(/^www\./,'').toLowerCase();
+ if(h==='canva.link')return u.href;
+ if(h!=='canva.com'||!/^\/design\//i.test(u.pathname))return '';
+ u.hash='';
+ if(/\/(edit|view)\/?$/i.test(u.pathname))u.pathname=u.pathname.replace(/\/(edit|view)\/?$/i,'/view');
+ else u.pathname=u.pathname.replace(/\/$/,'')+'/view';
+ u.searchParams.set('embed','1');
+ return u.href;
+}catch(_){return ''}};
 const titleOf=(s,i)=>String(s?.title||'Scène '+(i+1)).slice(0,180);
 const blankSlot=(kind,n,extra={})=>Object.assign({id:'m-'+Math.random().toString(36).slice(2,10),kind,label:kindOf(kind),url:'',trigger:'début',playback:'complet',order:n,required:false,source:'personnel',credit:'',license:'',sourceUrl:'',notes:''},extra);
-function read(d){try{let obj=JSON.parse(d.mediaTimelineJson||'{}');return obj&&obj.projectId===currentProject.id&&Array.isArray(obj.scenes)?obj:null}catch(_){return null}}
+function read(d){try{
+ let obj=JSON.parse(d.mediaTimelineJson||'{}');
+ if(!(obj&&obj.projectId===currentProject.id&&Array.isArray(obj.scenes)))return null;
+ return {...obj,scenes:obj.scenes.map((scene,i)=>normalizeScene(scene,i))};
+}catch(_){return null}}
 function normalizeScene(scene,i){
  const id=String(scene?.id||'scene-'+String(i+1).padStart(3,'0')).replace(/[^\w-]/g,'').slice(0,90)||'scene-'+(i+1);
  const act=String(scene?.act||scene?.phase||'Acte 1').slice(0,100);
- let slots=Array.isArray(scene?.slots)?scene.slots.filter(x=>x&&KINDS[x.kind]).slice(0,48).map((s,n)=>blankSlot(s.kind,n,{...s,id:String(s.id||'m-'+i+'-'+n).replace(/[^\w-]/g,''),url:safeUrl(s.url)?s.url:'',order:n})):[];
+ let slots=Array.isArray(scene?.slots)?scene.slots.filter(x=>x&&(KINDS[x.kind]||isCanvaUrl(x.url))).slice(0,48).map((slot,n)=>{
+  const kind=isCanvaUrl(slot.url)?'presentation':slot.kind;
+  return blankSlot(kind,n,{...slot,kind,id:String(slot.id||'m-'+i+'-'+n).replace(/[^\w-]/g,''),url:safeUrl(slot.url)?slot.url:'',order:n,label:isCanvaUrl(slot.url)?(slot.label&& !/vid[eé]o/i.test(slot.label)?slot.label:'Présentation Canva'):(slot.label||kindOf(kind))});
+ }):[];
  for(const k of ['audio','image','video'])if(!slots.some(x=>x.kind===k))slots.push(blankSlot(k,slots.length));
  const media=scene?.media&&typeof scene.media==='object'?scene.media:{};
  const showText=scene?.showText===true||media.showText===true;
@@ -75,7 +93,8 @@ window.nyxMediaSelect=function(scene,slot){selection.scene=scene;selection.slot=
 window.nyxMediaSet=function(scene,slot,field,value){
  const t=state(),s=t.scenes[scene],m=s?.slots[slot];if(!m)return;
  if(field==='url'){
-  value=String(value||'').trim();if(value&&!safeUrl(value)){alert('Entre une URL HTTPS directe, sans identifiant ni mot de passe dans le lien.');renderGame();return}
+  value=String(value||'').trim();if(value&&!safeUrl(value)){alert('Entre une URL HTTPS, sans identifiant ni mot de passe dans le lien.');renderGame();return}
+  if(isCanvaUrl(value)){m.kind='presentation';if(!m.label||/vid[eé]o/i.test(m.label)||m.label===kindOf('video'))m.label='Présentation Canva'}
  }
  if(!['url','label','trigger','playback','notes'].includes(field))return;
  m[field]=String(value||'').slice(0,field==='url'?2000:field==='notes'?3200:300);
@@ -195,11 +214,20 @@ window.nyxMediaMake=async function(type){
   selection.preview={kind:type,url:output};selection.searchMessage='Résultat temporaire disponible : télécharge, héberge à l’extérieur puis colle son URL permanente. Aucun média généré n’est stocké dans la KV.';renderGame();
  }catch(err){selection.searchMessage='Génération interrompue : '+err.message+'. Vérifie la facture avant toute relance.';renderGame();}
 };
-function tag(slot){const temporaryImage=slot.previewTemporary&&slot.kind==='image'&&/^data:image\/(?:png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(String(slot.url||''))&&slot.url.length<10000000;if(!safeUrl(slot.url)&&!temporaryImage)return '<small style="color:#d5a2ad">URL manquante</small>';let src=e(slot.url),label=e(slot.label||kindOf(slot.kind));return slot.kind==='image'?'<img loading="lazy" alt="'+label+'" src="'+src+'" style="max-width:100%;max-height:160px;object-fit:contain">':slot.kind==='audio'?'<audio controls preload="none" src="'+src+'" style="max-width:100%;width:100%"></audio>':'<video controls preload="metadata" src="'+src+'" style="max-width:100%;max-height:180px"></video>'}
+function tag(slot){
+ const temporaryImage=slot.previewTemporary&&slot.kind==='image'&&/^data:image\/(?:png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(String(slot.url||''))&&slot.url.length<10000000;
+ if(!safeUrl(slot.url)&&!temporaryImage)return '<small style="color:#d5a2ad">URL manquante</small>';
+ let src=e(slot.url),label=e(slot.label||kindOf(slot.kind));
+ if(slot.kind==='presentation'||isCanvaUrl(slot.url)){
+  const embed=canvaEmbedUrl(slot.url);
+  return embed?'<iframe src="'+e(embed)+'" title="'+label+'" loading="lazy" allowfullscreen allow="fullscreen" style="width:100%;height:310px;border:0;border-radius:10px;background:#050812"></iframe>':'<small style="color:#d5a2ad">Lien Canva non reconnu</small>';
+ }
+ return slot.kind==='image'?'<img loading="lazy" alt="'+label+'" src="'+src+'" style="max-width:100%;max-height:160px;object-fit:contain">':slot.kind==='audio'?'<audio controls preload="none" src="'+src+'" style="max-width:100%;width:100%"></audio>':'<video controls preload="metadata" src="'+src+'" style="max-width:100%;max-height:180px"></video>';
+}
 function slotHtml(s,si,m,mi,t){const chosen=selection.scene===si&&selection.slot===mi,options=t.scenes.map((dest,i)=>'<option value="'+i+'"'+(i===si?' selected':'')+'>'+e(dest.act+' / '+dest.title)+'</option>').join('');return '<div style="padding:12px;border:1px solid '+(chosen?'#f4c56a':'rgba(167,139,250,.28)')+';border-radius:12px;margin:9px 0;background:#080d20">'+
  '<div class="tools-line" style="align-items:center"><b>'+e(kindOf(m.kind))+'</b><button type="button" class="btn gold" onclick="nyxMediaSelect('+si+','+mi+')">'+(chosen?'✓ Sélectionné':'Choisir pour rechercher / créer')+'</button><button class="btn" onclick="nyxSlotMove('+si+','+mi+',-1)"'+(mi===0?' disabled':'')+'>↑</button><button class="btn" onclick="nyxSlotMove('+si+','+mi+',1)"'+(mi===s.slots.length-1?' disabled':'')+'>↓</button><button class="btn danger" onclick="nyxSlotRemove('+si+','+mi+')">✕</button></div>'+ 
  '<div class="field"><label>Nom de ce média</label><input value="'+e(m.label)+'" onchange="nyxMediaSet('+si+','+mi+',\'label\',this.value)"></div>'+ 
- '<div class="field"><label>URL HTTPS directe (aucun fichier vers Cloudflare)</label><input type="url" placeholder="https://mon-hebergeur.example/media/fichier.mp3" value="'+e(m.url)+'" onchange="nyxMediaSet('+si+','+mi+',\'url\',this.value)"></div>'+ 
+ '<div class="field"><label>'+(m.kind==='presentation'?'Lien Canva publié':'URL HTTPS directe (aucun fichier vers Cloudflare)')+'</label><input type="url" placeholder="'+(m.kind==='presentation'?'https://www.canva.com/design/.../view':'https://mon-hebergeur.example/media/fichier.mp3')+'" value="'+e(m.url)+'" onchange="nyxMediaSet('+si+','+mi+',\'url\',this.value)"></div>'+ 
  '<div class="row"><div class="field"><label>Déclenchement</label><select onchange="nyxMediaSet('+si+','+mi+',\'trigger\',this.value)">'+['début','bouton suivant','manuel'].map(v=>'<option'+(m.trigger===v?' selected':'')+'>'+v+'</option>').join('')+'</select></div><div class="field"><label>Lecture</label><select onchange="nyxMediaSet('+si+','+mi+',\'playback\',this.value)">'+['complet','boucle','manuel'].map(v=>'<option'+(m.playback===v?' selected':'')+'>'+v+'</option>').join('')+'</select></div></div>'+ 
  '<div class="field"><label>Déplacer dans une autre scène</label><select onchange="nyxSlotScene('+si+','+mi+',Number(this.value))">'+options+'</select></div>'+ 
  '<div class="tiny">'+(m.required?'Demandé dans le Cahier Média · ':'')+e(m.source==='personnel'?'URL personnelle':m.source)+(m.credit?' · Crédit : '+e(m.credit):'')+'</div>'+tag(m)+'</div>'}
@@ -220,5 +248,5 @@ window.gameMedia=function(d){const t=state(),ready=t.scenes.length,slot=pickSlot
  '<div class="panel"><h4>▶ Présentation « Le jeu »</h4><p class="tiny">'+t.scenes.length+' scène(s) = '+t.scenes.length+' slide(s). Tous les médias d’une même scène restent ensemble : image, son et vidéo peuvent jouer sur la même slide. Le texte joueur est facultatif et affiche uniquement ce que tu écris. Boutons Suivant, Précédent et Reprendre dans le portail.</p><button class="btn primary" onclick="nyxMediaCommit()"'+(!ready?' disabled':'')+'>✓ Synchroniser les diapositives</button><button class="btn gold" onclick="setGameTab(\'package\')">📦 Compilation ZIP →</button></div>';
 };
 // Exposed for deterministic regression checks; no API or persistent data outside existing project.
-window.NyXiaMediaUrl={parseText,normalizeScene,fromNotebook,fromGuide,safeUrl,providers:PROVIDERS};
+window.NyXiaMediaUrl={parseText,normalizeScene,fromNotebook,fromGuide,safeUrl,isCanvaUrl,canvaEmbedUrl,providers:PROVIDERS};
 })();

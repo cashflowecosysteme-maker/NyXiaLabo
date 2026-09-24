@@ -1,5 +1,5 @@
 /* NyXiaLabo — extensions légères pour NyXia Game.
- * - Présentation Canva / Embed comme média de scène (stockée comme vidéo compatible avec le Worker existant)
+ * - Les présentations Canva sont maintenant un vrai type de média géré par game-media-url-editor.js.
  * - Outils internes propres à chaque jeu, injectés automatiquement à la compilation.
  */
 (function(){
@@ -34,32 +34,7 @@ function toolsPanel(){
   + rows
   + '<button class="btn gold" type="button" onclick="nyxGameToolAdd()">+ Ajouter un outil au jeu</button></div>';
 }
-function presentationButton(sceneIndex){
- return '<button class="btn gold" type="button" onclick="nyxPresentationAdd('+sceneIndex+')">+ 🖥️ Présentation Canva / Embed</button>';
-}
-window.nyxPresentationAdd=function(si){
- if(typeof nyxSlotAdd!=='function')return alert('Le montage média n’est pas prêt.');
- nyxSlotAdd(si,'video');
- setTimeout(function(){
-  try{
-   var d=currentProject&&currentProject.data||{},t=JSON.parse(d.mediaTimelineJson||'{}'),scene=t.scenes&&t.scenes[si],mi=scene&&scene.slots?scene.slots.length-1:-1;
-   if(mi>=0&&typeof nyxMediaSet==='function'){
-    nyxMediaSet(si,mi,'label','Présentation Canva / Embed');
-    nyxMediaSet(si,mi,'notes','Colle ici le lien Canva publié en mode présentation / view. NyXia Game l’affichera dans la slide.');
-   }
-  }catch(_){}
- },0)
-}
-function patchMediaHtml(html){
- return String(html||'').replace(/(<button class="btn" onclick="nyxSlotAdd\((\d+),'video'\)">\+ 🎥 Vidéo<\/button>)/g,function(all,videoBtn,si){
-   return videoBtn+presentationButton(Number(si));
- });
-}
 function install(){
- if(typeof window.gameMedia==='function'&&!window.gameMedia.__nyxiaEmbedWrapped){
-  var originalMedia=window.gameMedia;
-  var wrappedMedia=function(d){return patchMediaHtml(originalMedia(d))};wrappedMedia.__nyxiaEmbedWrapped=true;window.gameMedia=wrappedMedia;
- }
  if(typeof window.gamePackage==='function'&&!window.gamePackage.__nyxiaToolsWrapped){
   var originalPackage=window.gamePackage;
   var wrappedPackage=function(d){return toolsPanel()+originalPackage(d)};wrappedPackage.__nyxiaToolsWrapped=true;window.gamePackage=wrappedPackage;
