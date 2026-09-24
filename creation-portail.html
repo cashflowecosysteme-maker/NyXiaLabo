@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NyXia — Création de Portail</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{--bg:#060a18;--panel:#0f1c3f;--p:#7B5CFF;--p2:#5A6CFF;--lav:#a78bfa;--gold:#F4C842;--t:#fff;--t2:#d6d9f0;--t3:#8891b8;--green:#00e676}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,rgba(123,92,255,.16),transparent 38%),var(--bg);color:var(--t2);font-family:Arial,sans-serif;min-height:100vh}
+header{padding:20px 28px;border-bottom:1px solid rgba(123,92,255,.18);background:rgba(6,10,24,.88);position:sticky;top:0;z-index:5;backdrop-filter:blur(14px)}
+h1{margin:0;color:#fff;font-size:24px}header p{margin:6px 0 0;color:var(--t3);font-size:13px}
+main{max-width:1100px;margin:0 auto;padding:26px}.card{background:rgba(15,28,63,.72);border:1px solid rgba(123,92,255,.2);border-radius:18px;padding:20px;margin-bottom:18px;box-shadow:0 16px 40px rgba(0,0,0,.18)}
+h2{margin:0 0 14px;color:#fff;font-size:18px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:flex;flex-direction:column;gap:6px}.field.full{grid-column:1/-1}
+label{font-size:12px;font-weight:700;color:var(--t2)}input,textarea,select{width:100%;border:1px solid rgba(123,92,255,.22);background:rgba(6,10,24,.62);color:#fff;border-radius:11px;padding:11px 12px;font:14px Arial;outline:none}textarea{min-height:100px;resize:vertical}
+.agents{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.agent{border:1px solid rgba(123,92,255,.2);background:rgba(6,10,24,.5);border-radius:13px;padding:12px}.agent strong{color:#fff}.agent small{display:block;color:var(--t3);margin-top:4px;line-height:1.35}.agent.locked{border-color:rgba(244,200,66,.38)}
+.row{display:flex;gap:10px;align-items:center}.row>*{flex:1}.toggle{display:flex;align-items:center;gap:8px;margin-bottom:6px}.toggle input{width:auto}
+.tool{border:1px dashed rgba(167,139,250,.35);border-radius:13px;padding:14px;margin-top:10px}
+button{border:none;border-radius:12px;padding:12px 18px;font-weight:700;cursor:pointer}.primary{background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;box-shadow:0 0 22px rgba(123,92,255,.3)}.secondary{background:rgba(123,92,255,.1);border:1px solid rgba(123,92,255,.25);color:var(--t2)}
+.actions{display:flex;gap:10px;align-items:center}.status{font-size:12px;color:var(--t3)}.ok{color:var(--green)}.note{font-size:12px;line-height:1.55;color:var(--t3);background:rgba(123,92,255,.06);border:1px solid rgba(123,92,255,.12);border-radius:12px;padding:12px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.agents{grid-template-columns:repeat(2,1fr)}.field.full{grid-column:auto}}
+</style>
+</head>
+<body>
+<header><h1>🪞 Création de Portail — NyXia</h1><p>Une seule coque officielle. Tu configures le portail; tu ne reconstruis pas l’écosystème.</p></header>
+<main>
+<div class="card">
+<h2>1 · Identité du portail</h2>
+<div class="grid">
+ <div class="field"><label>Nom complet</label><input id="title" placeholder="Portail Kael — Relations"></div>
+ <div class="field"><label>Nom court</label><input id="short" placeholder="Portail Kael"></div>
+ <div class="field"><label>Identifiant</label><input id="id" placeholder="kael"></div>
+ <div class="field"><label>Sous-domaine</label><input id="host" placeholder="portailkael.nyxia.top"></div>
+ <div class="field"><label>Icône</label><input id="icon" value="✦" maxlength="4"></div>
+ <div class="field"><label>Personnage principal / Formation Vivante</label><select id="trainer"></select></div>
+ <div class="field full"><label>Mission du portail</label><textarea id="mission" placeholder="Ce portail sert à..."></textarea></div>
+</div>
+</div>
+
+<div class="card">
+<h2>2 · Personnages de base</h2>
+<div class="note" style="margin-bottom:12px">NyXia et Diane sont verrouillées ACTIVES. Les autres sont activables. Leurs personnalités restent celles de l’univers NyXia déjà présentes dans le Worker de base.</div>
+<div class="agents" id="agents"></div>
+</div>
+
+<div class="card">
+<h2>3 · Outils spécialisés du portail</h2>
+<div class="note">Messagerie interne + Banque d’images, sons et vidéos sont déjà dans la coque et restent toujours présentes. Ici, tu peux ajouter jusqu’à 2 outils propres à la mission du portail.</div>
+<div id="tools"></div>
+<button class="secondary" type="button" onclick="addTool()">+ Ajouter un outil</button>
+</div>
+
+<div class="card">
+<h2>4 · Compilation</h2>
+<div class="note" style="margin-bottom:14px">
+Même CASHFLOW_KV · même D1 <b>nyxia-cercles-db</b> · même Vectorize <b>univers-livres</b>.<br>
+Aucune nouvelle KV et aucune architecture parallèle.
+</div>
+<div class="actions"><button class="primary" id="compile" onclick="compilePortal()">Créer le ZIP du portail</button><span class="status" id="status">Prêt.</span></div>
+</div>
+</main>
+<script>
+const AGENTS=[
+ {key:'nyxia',name:'NyXia',sub:'Orientation & technique',icon:'✦',image:'/NyXia.png',locked:true},
+ {key:'diane',name:'Diane',sub:'Créatrice & accompagnement',icon:'👑',image:'/Diane.png',locked:true},
+ {key:'eric',name:'Éric',sub:'Communication & CashFlow',icon:'💼',image:'',locked:false},
+ {key:'lena',name:'Léna',sub:'Spiritualité & intuition',icon:'🔮',image:'',locked:false},
+ {key:'alex',name:'Alex',sub:'Écriture & storytelling',icon:'✍️',image:'/Alex.png',locked:false},
+ {key:'selena',name:'Séléna',sub:'A.M.I.E. & croissance personnelle',icon:'🪞',image:'',locked:false},
+ {key:'kael',name:'Kael',sub:'Relations amoureuses',icon:'💜',image:'',locked:false}
+];
+let tools=[];
+function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function slug(s){return String(s||'portail').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'portail'}
+function renderAgents(){
+ const host=document.getElementById('agents');host.innerHTML='';
+ AGENTS.forEach(a=>{const d=document.createElement('div');d.className='agent'+(a.locked?' locked':'');d.innerHTML='<label class="toggle"><input type="checkbox" id="ag-'+a.key+'" '+(a.locked?'checked disabled':'')+'> <strong>'+a.icon+' '+a.name+'</strong></label><small>'+a.sub+'</small><div class="field" style="margin-top:8px"><label>Image (optionnel)</label><input id="img-'+a.key+'" value="'+esc(a.image)+'" placeholder="/'+a.name+'.png ou URL https"></div>';host.appendChild(d)});
+ refreshTrainer();
+ host.addEventListener('change',refreshTrainer);
+}
+function activeAgents(){return AGENTS.filter(a=>a.locked||document.getElementById('ag-'+a.key).checked)}
+function refreshTrainer(){const sel=document.getElementById('trainer'),prev=sel.value;sel.innerHTML=activeAgents().map(a=>'<option value="'+a.key+'">'+a.name+'</option>').join('');if([...sel.options].some(o=>o.value===prev))sel.value=prev}
+function addTool(){
+ if(tools.length>=2)return alert('Maximum 2 outils spécialisés par portail.');
+ const id=crypto.randomUUID().slice(0,8);tools.push(id);renderTools();
+}
+function removeTool(id){tools=tools.filter(x=>x!==id);renderTools()}
+function renderTools(){
+ const h=document.getElementById('tools');h.innerHTML=tools.map((id,i)=>`<div class="tool"><div class="row"><div class="field"><label>Icône</label><input id="tool-icon-${id}" value="🧰"></div><div class="field"><label>Nom</label><input id="tool-name-${id}" placeholder="Nom de l’outil"></div></div><div class="grid" style="margin-top:10px"><div class="field"><label>Fichier HTML</label><input id="tool-file-${id}" type="file" accept=".html,text/html"></div><div class="field"><label>Chemin final</label><input id="tool-path-${id}" value="/outil-${i+1}.html"></div></div><button class="secondary" style="margin-top:10px" onclick="removeTool('${id}')">Retirer</button></div>`).join('');
+}
+function cleanPath(v){v=String(v||'').trim();if(!/^\/[a-zA-Z0-9_.-]+\.html$/.test(v))throw Error('Le chemin d’un outil doit ressembler à /mon-outil.html');return v}
+function b64Utf8(s){const bytes=new TextEncoder().encode(s);let bin='';bytes.forEach(b=>bin+=String.fromCharCode(b));return btoa(bin)}
+function agentMeta(a){return{key:a.key,name:a.name,sub:a.sub,icon:a.icon,image:(document.getElementById('img-'+a.key).value||a.image||'').trim(),greeting:'Je suis là. Dis-moi ce que tu veux faire avancer dans ce portail.'}}
+function navHtml(list){
+ return list.map((a,i)=>`<div class="nav-item ${i===0?'active':''}" id="nav-${a.key}" onclick="openAgentTab('${a.key}')">${a.image?`<img class="nav-avatar" src="${esc(a.image)}" alt="${esc(a.name)}" onerror="this.style.display='none'">`:`<span class="nav-icon">${a.icon}</span>`}<span class="nav-text"><span class="nav-name">${esc(a.name)}</span><span class="nav-sub">${esc(a.sub)}</span></span><span class="nav-arrow">›</span></div>`).join('\\n');
+}
+async function compilePortal(){
+ const btn=document.getElementById('compile'),status=document.getElementById('status');btn.disabled=true;status.className='status';status.textContent='Chargement de la coque officielle…';
+ try{
+  const title=document.getElementById('title').value.trim();if(!title)throw Error('Nom du portail requis.');
+  const short=document.getElementById('short').value.trim()||title;
+  const id=slug(document.getElementById('id').value.trim()||short);
+  const host=document.getElementById('host').value.trim().toLowerCase();if(!/^[a-z0-9.-]+\.nyxia\.top$/.test(host))throw Error('Entre un sous-domaine NyXia valide, ex. portailkael.nyxia.top');
+  const icon=document.getElementById('icon').value.trim()||'✦',mission=document.getElementById('mission').value.trim();
+  const list=activeAgents().map(agentMeta),trainer=document.getElementById('trainer').value||'diane';
+  const resp=await fetch('/portail-shell-template.zip',{cache:'no-store'});if(!resp.ok)throw Error('portail-shell-template.zip introuvable.');
+  const zip=await JSZip.loadAsync(await resp.arrayBuffer());
+  const cfg={id,title,shortTitle:short,mission,icon,mode:(id==='alex'?'alex-writing':'standard'),formationAgent:trainer,activeAgents:list.map(x=>x.key),agents:list};
+
+  let dash=await zip.file('dashbord.html').async('string');
+  dash=dash.replaceAll('__PORTAL_TITLE__',title).replaceAll('__PORTAL_SHORT_TITLE__',short).replaceAll('__PORTAL_ICON__',icon).replaceAll('__PORTAL_DEFAULT_AGENT__',list[0].key);
+  dash=dash.replace('__PORTAL_AGENT_NAV__',navHtml(list));
+  const pages={};list.forEach(a=>pages[a.key]='/chat-'+a.key+'.html');
+  let special='';
+  for(const tid of tools){
+   const f=document.getElementById('tool-file-'+tid).files[0],name=document.getElementById('tool-name-'+tid).value.trim(),ico=document.getElementById('tool-icon-'+tid).value.trim()||'🧰',path=cleanPath(document.getElementById('tool-path-'+tid).value);
+   if(!f||!name)throw Error('Chaque outil spécialisé doit avoir un nom et un fichier HTML.');
+   zip.file(path.replace(/^\//,''),await f.text());
+   const key='tool-'+tid;
+   pages[key]=path;
+   special+=`<div class="nav-item" id="nav-${key}" onclick="openAgentTab('${key}')"><span class="nav-icon">${esc(ico)}</span><span class="nav-text"><span class="nav-name">${esc(name)}</span><span class="nav-sub">Outil spécialisé</span></span><span class="nav-arrow">›</span></div>\n`;
+  }
+  dash=dash.replace('__PORTAL_SPECIAL_TOOLS__',special).replace('__PORTAL_AGENT_PAGES__',JSON.stringify(pages));
+  zip.file('dashbord.html',dash);
+
+  const chatBase=await zip.file('chat-base.html').async('string');
+  for(const a of list){
+   let c=chatBase.replaceAll('__AGENT_NAME__',a.name).replaceAll('__AGENT_SUB__',a.sub).replace('__AGENT_JSON__',JSON.stringify(a));
+   zip.file('chat-'+a.key+'.html',c);
+  }
+  zip.remove('chat-base.html');
+
+  let worker=await zip.file('_worker.js').async('string');
+  if(!worker.includes('__PORTAL_CONFIG_B64__'))throw Error('Coque Worker invalide : marqueur portail absent.');
+  worker=worker.replace('__PORTAL_CONFIG_B64__',b64Utf8(JSON.stringify(cfg)));
+  zip.file('_worker.js',worker);
+
+  let wr=await zip.file('wrangler.toml').async('string');
+  wr=wr.replaceAll('__WORKER_NAME__',slug(short)).replaceAll('__HOST__',host).replaceAll('__PORTAL_ID__',id);
+  zip.file('wrangler.toml',wr);
+
+  zip.file('portal-manifest.json',JSON.stringify({schemaVersion:1,...cfg,host,compiledAt:new Date().toISOString(),sharedData:{kv:'CASHFLOW_KV',d1:'nyxia-cercles-db',vectorize:'univers-livres'}},null,2));
+  const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:5}});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Portail-'+slug(short)+'.zip';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+  status.textContent='ZIP prêt · '+list.length+' personnages actifs · '+tools.length+' outil(s) spécialisé(s).';status.className='status ok';
+ }catch(e){status.textContent='⚠ '+e.message;alert(e.message)}
+ finally{btn.disabled=false}
+}
+renderAgents();renderTools();
+</script>
+</body></html>
